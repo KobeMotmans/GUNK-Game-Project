@@ -3,9 +3,8 @@ from math import sin, cos, tan, pi
 
 pygame.init()
 
-# -----------------------------
-# MAP
-# -----------------------------
+
+# Map
 MAP = [
     [1,1,1,1,1,1,1,1,1,1],
     [1,0,0,0,0,0,0,0,0,1],
@@ -20,17 +19,14 @@ MAP = [
 MAP_W = len(MAP[0])
 MAP_H = len(MAP)
 
-# -----------------------------
-# SCREEN
-# -----------------------------
+
+# Screen
 WIDTH, HEIGHT = 800, 800
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 
 
-# -----------------------------
-# CONST
-# -----------------------------
+# Constants
 TILE_SIZE = 100
 FOV = pi / 2
 NUM_RAYS = 400
@@ -41,9 +37,7 @@ PROJ_DIST = (WIDTH/2) / tan(FOV/2)
 
 PLAYER_RADIUS = 10
 
-# -----------------------------
-# TEXTURE
-# -----------------------------
+# Textures
 wall_tex = pygame.image.load("assets/muur.jpeg").convert()
 wall_tex = pygame.transform.scale(wall_tex, (TILE_SIZE, TILE_SIZE))
 
@@ -55,6 +49,7 @@ weapon_img = pygame.image.load("assets/gun.jpg").convert_alpha()
 
 sign = lambda x : 1 if x >= 0 else -1
 
+# Vector Class
 class Vector:
     def __init__(self, x, y):
         self.x = x
@@ -77,9 +72,7 @@ class Vector:
     def __iter__(self):
         return iter((self.x,self.y))
 
-# -----------------------------
-# PLAYER
-# -----------------------------
+# Player
 player_pos = Vector(150, 150)
 player_angle = 0
 
