@@ -6,6 +6,8 @@ speed = 0.6
 running = True
 
 weapon_state = 0
+flash_time = 15
+recoil_time = 50
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -13,9 +15,8 @@ while running:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 weapon_state = 1
-        if event.type == pygame.MOUSEBUTTONUP:
-            if event.button == 1:
-                weapon_state = 0
+                temp_flash_time = flash_time
+                temp_recoil_time = recoil_time
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_DELETE]:
@@ -57,5 +58,13 @@ while running:
 
     screen.fill("black")
     dda(player_pos, player_angle)
+    if weapon_state != 0:
+        if temp_flash_time > 0:
+            temp_flash_time -= 1
+        elif temp_recoil_time > 0:
+            temp_recoil_time -= 1
+            weapon_state = 2
+        else:
+            weapon_state = 0
     draw_weapon(None, weapon_state)
     pygame.display.flip()

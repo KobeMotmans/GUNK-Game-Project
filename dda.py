@@ -1,9 +1,17 @@
 import pygame
 from math import sin, cos, tan, pi
+from PIL import Image
 
 pygame.init()
 
-
+def png_to_list_fast(path):
+    img = Image.open(path).convert("L")
+    w, h = img.size
+    data = list(img.getdata())
+    return [
+        [0 if data[y*w + x] > 127 else 1 for x in range(w)]
+        for y in range(h)
+    ]
 # Map
 MAP = [
     [1,1,1,1,1,1,1,1,1,1],
@@ -15,6 +23,8 @@ MAP = [
     [1,0,0,0,1,0,0,1,0,1],
     [1,1,1,1,1,1,1,1,1,1],
 ]
+MAP = png_to_list_fast("assets/map.png")
+print(MAP)
 
 MAP_W = len(MAP[0])
 MAP_H = len(MAP)
@@ -24,13 +34,14 @@ MAP_H = len(MAP)
 WIDTH, HEIGHT = 1200, 800
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
+clock.tick(30)
 
 
 # Constants
 TILE_SIZE = 100
 FOV = pi / 2
 NUM_RAYS = 400
-MAX_DEPTH = 500
+MAX_DEPTH = 1000
 DELTA_ANGLE = FOV / NUM_RAYS
 SCALE = WIDTH // NUM_RAYS
 PROJ_DIST = (WIDTH/2) / tan(FOV/2)
@@ -48,7 +59,10 @@ gun_1_rest = pygame.image.load("assets/Gun_sprite.png").convert_alpha()
 gun_1_rest = pygame.transform.scale(gun_1_rest, (300,300))
 weapon_rect = gun_1_rest.get_rect()
 
-gun_1_shoot = pygame.image.load("assets/Recoil.png").convert_alpha()
+gun_1_recoil = pygame.image.load("assets/Recoil.png").convert_alpha()
+gun_1_recoil = pygame.transform.scale(gun_1_recoil, (300,300))
+
+gun_1_shoot = pygame.image.load("assets/Gun_muzzleflash_sprite.png").convert_alpha()
 gun_1_shoot = pygame.transform.scale(gun_1_shoot, (300,300))
 
 
@@ -142,7 +156,7 @@ def draw_wall(p_pos, r_pos, player_angle, angle, ray):
     col_w = WIDTH // NUM_RAYS
     column_x = ray * col_w
 
-    shade = max(0, min(255,255-int(dist*0.7)))
+    shade = max(0, min(255,255-int(dist*255/MAX_DEPTH)))
     color = (shade,shade,shade)
 
     pygame.draw.rect(screen, color, (column_x, y, col_w, wall_height))
@@ -187,4 +201,6 @@ def draw_weapon(weapon, state):
     if state == 0:
         screen.blit(gun_1_rest, ((WIDTH-weapon_rect[2])//2, HEIGHT-weapon_rect[3]))
     elif state == 1:
-        screen.blit(gun_1_shoot, ((WIDTH - weapon_rect[2]) // 2+150, HEIGHT - weapon_rect[3]+50))
+        screen.blit(gun_1_shoot, ((WIDTH - weapon_rect[2]) // 2, HEIGHT - weapon_rect[3]))
+    elif state == 2:
+        screen.blit(gun_1_recoil, ((WIDTH - weapon_rect[2]) // 2+150, HEIGHT - weapon_rect[3]+50))
