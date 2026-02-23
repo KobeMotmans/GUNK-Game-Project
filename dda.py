@@ -21,7 +21,7 @@ MAP_H = len(MAP)
 
 
 # Screen
-WIDTH, HEIGHT = 800, 800
+WIDTH, HEIGHT = 1200, 800
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 
@@ -44,7 +44,12 @@ wall_tex = pygame.transform.scale(wall_tex, (TILE_SIZE, TILE_SIZE))
 floor_tex = pygame.image.load("assets/floor.jpeg").convert()
 floor_tex = pygame.transform.scale(floor_tex, (TILE_SIZE, TILE_SIZE))
 
-weapon_img = pygame.image.load("assets/gun.jpg").convert_alpha()
+gun_1_rest = pygame.image.load("assets/Gun_sprite.png").convert_alpha()
+gun_1_rest = pygame.transform.scale(gun_1_rest, (300,300))
+weapon_rect = gun_1_rest.get_rect()
+
+gun_1_shoot = pygame.image.load("assets/Recoil.png").convert_alpha()
+gun_1_shoot = pygame.transform.scale(gun_1_shoot, (300,300))
 
 
 sign = lambda x : 1 if x >= 0 else -1
@@ -177,3 +182,9 @@ def dda(player_pos, player_angle):
                 ray_pos = map_to_cord(ray_pos)
                 draw_wall(player_pos, ray_pos, player_angle, angle, ray)
                 break
+
+def draw_weapon(weapon, state):
+    if state == 0:
+        screen.blit(gun_1_rest, ((WIDTH-weapon_rect[2])//2, HEIGHT-weapon_rect[3]))
+    elif state == 1:
+        screen.blit(gun_1_shoot, ((WIDTH - weapon_rect[2]) // 2+150, HEIGHT - weapon_rect[3]+50))
