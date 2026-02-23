@@ -3,7 +3,6 @@ from math import sin, cos, tan, pi
 
 pygame.init()
 
-
 # Map
 MAP = [
     [1,1,1,1,1,1,1,1,1,1],
@@ -19,12 +18,11 @@ MAP = [
 MAP_W = len(MAP[0])
 MAP_H = len(MAP)
 
-
 # Screen
 WIDTH, HEIGHT = 1200, 800
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
-
+clock.tick(30)
 
 # Constants
 TILE_SIZE = 100
