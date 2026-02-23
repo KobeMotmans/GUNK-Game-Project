@@ -39,6 +39,8 @@ DELTA_ANGLE = FOV / NUM_RAYS
 SCALE = WIDTH // NUM_RAYS
 PROJ_DIST = (WIDTH/2) / tan(FOV/2)
 
+PLAYER_RADIUS = 10
+
 # -----------------------------
 # TEXTURE
 # -----------------------------
@@ -86,6 +88,30 @@ def gnc(a, sg): #Get Next Cell(cordinate, sign)
     else:
         return int(a)
 
+
+def will_collide(nx, ny):
+    check_positions = [
+        (nx - PLAYER_RADIUS, ny - PLAYER_RADIUS),
+        (nx + PLAYER_RADIUS, ny - PLAYER_RADIUS),
+        (nx - PLAYER_RADIUS, ny + PLAYER_RADIUS),
+        (nx + PLAYER_RADIUS, ny + PLAYER_RADIUS)
+    ]
+
+    for cx, cy in check_positions:
+        mx = int(cx // TILE_SIZE)
+        my = int(cy // TILE_SIZE)
+
+        # out of bounds = collision
+        if mx < 0 or my < 0 or mx >= MAP_W or my >= MAP_H:
+            return True
+
+        if MAP[my][mx] == 1:
+            return True
+
+    return False
+
+
+
 def cord_to_map(cord):
     return cord/TILE_SIZE
 
@@ -115,7 +141,10 @@ def draw_wall(p_pos, r_pos, player_angle, angle, ray):
     col_w = WIDTH // NUM_RAYS
     column_x = ray * col_w
 
-    pygame.draw.rect(screen, 'white', (column_x, y, col_w, wall_height))
+    shade = max(0, min(255,255-int(dist*0.7)))
+    color = (shade,shade,shade)
+
+    pygame.draw.rect(screen, color, (column_x, y, col_w, wall_height))
 
 def dda(player_pos, player_angle):
     for ray in range(NUM_RAYS):
@@ -154,27 +183,41 @@ def dda(player_pos, player_angle):
                 break
             
 
-speed = 0.8
+speed = 0.6
 running = True
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
     keys = pygame.key.get_pressed()
+    if keys[pygame.K_DELETE]:
+        pygame.quit()
+        exit()
     if keys[pygame.K_LEFT]:
         player_angle -= 0.02
     if keys[pygame.K_RIGHT]:
         player_angle += 0.02
+
     if keys[pygame.K_UP]:
         px, py = player_pos
-        px += cos(player_angle) * speed
-        py += sin(player_angle) * speed
+        nx = px + cos(player_angle) * speed
+        ny = py + sin(player_angle) * speed
+        if not will_collide(nx, py):
+            px = nx
+        if not will_collide(px, ny):
+            py = ny
         player_pos = Vector(px, py)
+
     if keys[pygame.K_DOWN]:
         px, py = player_pos
-        px -= cos(player_angle) * speed
-        py -= sin(player_angle) * speed
+        nx = px - cos(player_angle) * speed
+        ny = py - sin(player_angle) * speed
+        if not will_collide(nx, py):
+            px = nx
+        if not will_collide(px, ny):
+            py = ny
         player_pos = Vector(px, py)
+
     screen.fill("black")
     dda(player_pos, player_angle)
     pygame.display.flip()     
