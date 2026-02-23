@@ -36,7 +36,6 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 clock.tick(30)
 
-
 # Constants
 TILE_SIZE = 100
 FOV = pi / 2
