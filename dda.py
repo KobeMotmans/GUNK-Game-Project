@@ -1,0 +1,180 @@
+import pygame
+from math import sin, cos, tan, pi
+
+pygame.init()
+
+# -----------------------------
+# MAP
+# -----------------------------
+MAP = [
+    [1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,1],
+    [1,0,1,0,1,0,0,0,0,1],
+    [1,0,1,0,1,0,0,0,1,1],
+    [1,0,0,0,0,1,0,1,0,1],
+    [1,0,1,0,0,0,0,0,0,1],
+    [1,0,0,0,1,0,0,1,0,1],
+    [1,1,1,1,1,1,1,1,1,1],
+]
+
+MAP_W = len(MAP[0])
+MAP_H = len(MAP)
+
+# -----------------------------
+# SCREEN
+# -----------------------------
+WIDTH, HEIGHT = 800, 800
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+clock = pygame.time.Clock()
+
+
+# -----------------------------
+# CONST
+# -----------------------------
+TILE_SIZE = 100
+FOV = pi / 2
+NUM_RAYS = 300
+MAX_DEPTH = 500
+DELTA_ANGLE = FOV / NUM_RAYS
+SCALE = WIDTH // NUM_RAYS
+PROJ_DIST = (WIDTH/2) / tan(FOV/2)
+
+# -----------------------------
+# TEXTURE
+# -----------------------------
+wall_tex = pygame.image.load("assets/muur.jpeg").convert()
+wall_tex = pygame.transform.scale(wall_tex, (TILE_SIZE, TILE_SIZE))
+
+weapon_img = pygame.image.load("assets/gun.jpg").convert_alpha()
+
+
+sign = lambda x : 1 if x >= 0 else -1
+
+class Vector:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+    def __add__(self, other):
+        return Vector(self.x + other.x, self.y + other.y)
+    def __sub__(self, other):
+        return Vector(self.x - other.x, self.y - other.y)
+    def __mul__(self, other):
+        try:
+            return self.x * other.x + self.y * other.y
+        except:
+            return Vector(self.x * other, self.y * other)
+    def __truediv__(self, a):
+        return Vector(self.x / a , self.y / a)
+    def __len__(self):
+        return int((self.x**2 + self.y**2)**0.5)
+    def __str__(self):
+        return f"({self.x}, {self.y})"
+    def __iter__(self):
+        return iter((self.x,self.y))
+
+# -----------------------------
+# PLAYER
+# -----------------------------
+player_pos = Vector(150, 150)
+player_angle = 0
+
+def gnc(a, sg): #Get Next Cell(cordinate, sign)
+    if a % 1==0:
+        return a+sg
+    if sg == 1:
+        return int(a)+1
+    else:
+        return int(a)
+
+def cord_to_map(cord):
+    return cord/TILE_SIZE
+
+def map_to_cord(mapcord):
+    return mapcord*TILE_SIZE
+
+def hit_wall(pos):
+    if pos.x % 1 == 0:
+        x = int(pos.x)
+        y = int(pos.y)
+        if MAP[y][x-1] == 1 or MAP[y][x] == 1:
+            return True
+    elif pos.y % 1 == 0:
+        x = int(pos.x)
+        y = int(pos.y)
+        if MAP[y-1][x] == 1 or MAP[y][x] == 1:
+            return True
+    return False
+
+def draw_wall(p_pos, r_pos, player_angle, angle, ray):
+    dist = ((p_pos.x-r_pos.x)**2 + (p_pos.y-r_pos.y)**2)**0.5
+
+    dist *= cos(player_angle-angle)
+
+    wall_height = TILE_SIZE * PROJ_DIST / dist
+    y = HEIGHT/2 - wall_height/2
+    col_w = WIDTH // NUM_RAYS
+    column_x = ray * col_w
+
+    pygame.draw.rect(screen, 'white', (column_x, y, col_w, wall_height))
+
+def dda(player_pos, player_angle):
+    for ray in range(NUM_RAYS):
+        angle = player_angle - FOV/2 + (ray + 0.5) * DELTA_ANGLE
+        ray_pos = Vector(player_pos.x, player_pos.y)
+        sina = sin(angle)
+        cosa = cos(angle)
+        tana = tan(angle)
+        cota = 1/tan(angle)
+        s_x = sign(cosa)
+        s_y = sign(sina)
+        ray_pos = cord_to_map(ray_pos)
+        while True:
+            x = gnc(ray_pos.x, s_x)
+            y = gnc(ray_pos.y,s_y)
+            dx = x-ray_pos.x
+            dy = y-ray_pos.y
+            if cosa !=0 and sina !=0:
+                dnx = abs(dx/cosa) #Distance next x (on the grid)
+                dny = abs(dy/sina) #Distance next y (on the grid)
+                if dnx >= dny:
+                    dx = dy*cota
+                    x = ray_pos.x+dx
+                else:
+                    dy = dx*tana
+                    y = ray_pos.y+dy
+            else:
+                if cosa == 0:
+                    y = ray_pos.y
+                else:
+                    x = ray_pos.x
+            ray_pos = Vector(x,y)
+            if hit_wall(ray_pos):
+                ray_pos = map_to_cord(ray_pos)
+                draw_wall(player_pos, ray_pos, player_angle, angle, ray)
+                break
+            
+
+speed = 0.8
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT]:
+        player_angle -= 0.02
+    if keys[pygame.K_RIGHT]:
+        player_angle += 0.02
+    if keys[pygame.K_UP]:
+        px, py = player_pos
+        px += cos(player_angle) * speed
+        py += sin(player_angle) * speed
+        player_pos = Vector(px, py)
+    if keys[pygame.K_DOWN]:
+        px, py = player_pos
+        px -= cos(player_angle) * speed
+        py -= sin(player_angle) * speed
+        player_pos = Vector(px, py)
+    screen.fill("black")
+    dda(player_pos, player_angle)
+    pygame.display.flip()     
