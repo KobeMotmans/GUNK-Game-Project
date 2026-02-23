@@ -54,14 +54,14 @@ wall_tex = pygame.transform.scale(wall_tex, (TILE_SIZE, TILE_SIZE))
 floor_tex = pygame.image.load("assets/floor.jpeg").convert()
 floor_tex = pygame.transform.scale(floor_tex, (TILE_SIZE, TILE_SIZE))
 
-gun_1_rest = pygame.image.load("assets/Gun_sprite.png").convert_alpha()
+gun_1_rest = pygame.image.load("assets/Gun.png").convert_alpha()
 gun_1_rest = pygame.transform.scale(gun_1_rest, (300,300))
 weapon_rect = gun_1_rest.get_rect()
 
-gun_1_recoil = pygame.image.load("assets/Recoil.png").convert_alpha()
+gun_1_recoil = pygame.image.load("assets/GUN_recoil.png").convert_alpha()
 gun_1_recoil = pygame.transform.scale(gun_1_recoil, (300,300))
 
-gun_1_shoot = pygame.image.load("assets/Gun_muzzleflash_sprite.png").convert_alpha()
+gun_1_shoot = pygame.image.load("assets/GUN_muzzle.png").convert_alpha()
 gun_1_shoot = pygame.transform.scale(gun_1_shoot, (300,300))
 
 
@@ -198,8 +198,8 @@ def dda(player_pos, player_angle):
 
 def draw_weapon(weapon, state):
     if state == 0:
-        screen.blit(gun_1_rest, ((WIDTH-weapon_rect[2])//2, HEIGHT-weapon_rect[3]))
+        screen.blit(gun_1_rest, ((WIDTH-weapon_rect[2])//2+ WIDTH*0.04, HEIGHT-weapon_rect[3]))
     elif state == 1:
-        screen.blit(gun_1_shoot, ((WIDTH - weapon_rect[2]) // 2, HEIGHT - weapon_rect[3]))
+        screen.blit(gun_1_shoot, ((WIDTH - weapon_rect[2]) // 2+ WIDTH*0.04, HEIGHT - weapon_rect[3]))
     elif state == 2:
-        screen.blit(gun_1_recoil, ((WIDTH - weapon_rect[2]) // 2+150, HEIGHT - weapon_rect[3]+50))
+        screen.blit(gun_1_recoil, ((WIDTH - weapon_rect[2]) //2 + WIDTH*0.04 , HEIGHT - weapon_rect[3]))
