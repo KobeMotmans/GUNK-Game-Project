@@ -47,6 +47,9 @@ PLAYER_RADIUS = 10
 wall_tex = pygame.image.load("assets/muur.jpeg").convert()
 wall_tex = pygame.transform.scale(wall_tex, (TILE_SIZE, TILE_SIZE))
 
+floor_tex = pygame.image.load("assets/floor.jpeg").convert()
+floor_tex = pygame.transform.scale(floor_tex, (TILE_SIZE, TILE_SIZE))
+
 weapon_img = pygame.image.load("assets/gun.jpg").convert_alpha()
 
 
@@ -181,43 +184,3 @@ def dda(player_pos, player_angle):
                 ray_pos = map_to_cord(ray_pos)
                 draw_wall(player_pos, ray_pos, player_angle, angle, ray)
                 break
-            
-
-speed = 0.6
-running = True
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-    keys = pygame.key.get_pressed()
-    if keys[pygame.K_DELETE]:
-        pygame.quit()
-        exit()
-    if keys[pygame.K_LEFT]:
-        player_angle -= 0.02
-    if keys[pygame.K_RIGHT]:
-        player_angle += 0.02
-
-    if keys[pygame.K_UP]:
-        px, py = player_pos
-        nx = px + cos(player_angle) * speed
-        ny = py + sin(player_angle) * speed
-        if not will_collide(nx, py):
-            px = nx
-        if not will_collide(px, ny):
-            py = ny
-        player_pos = Vector(px, py)
-
-    if keys[pygame.K_DOWN]:
-        px, py = player_pos
-        nx = px - cos(player_angle) * speed
-        ny = py - sin(player_angle) * speed
-        if not will_collide(nx, py):
-            px = nx
-        if not will_collide(px, ny):
-            py = ny
-        player_pos = Vector(px, py)
-
-    screen.fill("black")
-    dda(player_pos, player_angle)
-    pygame.display.flip()     
