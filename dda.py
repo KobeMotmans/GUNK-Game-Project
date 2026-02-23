@@ -33,7 +33,7 @@ clock = pygame.time.Clock()
 # -----------------------------
 TILE_SIZE = 100
 FOV = pi / 2
-NUM_RAYS = 300
+NUM_RAYS = 400
 MAX_DEPTH = 500
 DELTA_ANGLE = FOV / NUM_RAYS
 SCALE = WIDTH // NUM_RAYS
