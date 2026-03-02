@@ -28,7 +28,7 @@ clock.tick(30)
 # Constants
 TILE_SIZE = 100
 FOV = pi / 2
-NUM_RAYS = WIDTH
+NUM_RAYS = WIDTH//4
 MAX_DEPTH = 1000
 DELTA_ANGLE = FOV / NUM_RAYS
 SCALE = WIDTH // NUM_RAYS
@@ -190,5 +190,7 @@ def draw_weapon(weapon, state):
         screen.blit(gun_1_rest, ((WIDTH-weapon_rect[2])//2+ WIDTH*0.04, HEIGHT-weapon_rect[3]))
     elif state == 1:
         screen.blit(gun_1_shoot, ((WIDTH - weapon_rect[2]) // 2+ WIDTH*0.04, HEIGHT - weapon_rect[3]))
+        pygame.mixer.music.load("assets/pew.mp3")
+        pygame.mixer.music.play()
     elif state == 2:
         screen.blit(gun_1_recoil, ((WIDTH - weapon_rect[2]) //2 + WIDTH*0.04 , HEIGHT - weapon_rect[3]))
