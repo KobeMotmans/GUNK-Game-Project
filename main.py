@@ -2,7 +2,7 @@ from dda import *
 import pygame
 from math import sin, cos
 
-speed = 0.6
+speed = 2
 running = True
 
 weapon_state = 0

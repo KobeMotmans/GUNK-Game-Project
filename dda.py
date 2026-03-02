@@ -12,19 +12,7 @@ def png_to_list_fast(path):
         [0 if data[y*w + x] > 127 else 1 for x in range(w)]
         for y in range(h)
     ]
-# Map
-MAP = [
-    [1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,0,0,0,1],
-    [1,0,1,0,1,0,0,0,0,1],
-    [1,0,1,0,1,0,0,0,1,1],
-    [1,0,0,0,0,1,0,1,0,1],
-    [1,0,1,0,0,0,0,0,0,1],
-    [1,0,0,0,1,0,0,1,0,1],
-    [1,1,1,1,1,1,1,1,1,1],
-]
 MAP = png_to_list_fast("assets/map.png")
-print(MAP)
 
 MAP_W = len(MAP[0])
 MAP_H = len(MAP)
