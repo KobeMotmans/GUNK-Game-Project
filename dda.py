@@ -19,7 +19,8 @@ MAP_H = len(MAP)
 
 
 # Screen
-WIDTH, HEIGHT = 1200, 800
+infoObject = pygame.display.Info()
+WIDTH, HEIGHT = infoObject.current_w, infoObject.current_h
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 clock.tick(30)
@@ -27,7 +28,7 @@ clock.tick(30)
 # Constants
 TILE_SIZE = 100
 FOV = pi / 2
-NUM_RAYS = 400
+NUM_RAYS = WIDTH
 MAX_DEPTH = 1000
 DELTA_ANGLE = FOV / NUM_RAYS
 SCALE = WIDTH // NUM_RAYS
