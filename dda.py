@@ -23,12 +23,12 @@ infoObject = pygame.display.Info()
 WIDTH, HEIGHT = infoObject.current_w, infoObject.current_h
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
-clock.tick(30)
+clock.tick(20)
 
 # Constants
 TILE_SIZE = 100
 FOV = pi / 2
-NUM_RAYS = WIDTH//4
+NUM_RAYS = WIDTH//6
 MAX_DEPTH = 1000
 DELTA_ANGLE = FOV / NUM_RAYS
 SCALE = WIDTH // NUM_RAYS
@@ -155,8 +155,12 @@ def dda(player_pos, player_angle):
         ray_pos = Vector(player_pos.x, player_pos.y)
         sina = sin(angle)
         cosa = cos(angle)
-        tana = tan(angle)
-        cota = 1/tan(angle)
+        if cosa != 0 and sina != 0:
+            tana = tan(angle)
+            cota = 1/tana
+        else:
+            tana = 0
+            cosa = 0
         s_x = sign(cosa)
         s_y = sign(sina)
         ray_pos = cord_to_map(ray_pos)
