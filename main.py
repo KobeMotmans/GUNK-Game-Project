@@ -2,6 +2,7 @@ from dda import *
 import pygame
 from math import sin, cos
 from guns import *
+from enemies import *
 
 speed = 2
 running = True
@@ -10,6 +11,7 @@ running = True
 pistol = Pistol()
 #bazooka = Bazooka()
 current_gun = pistol
+andrei = Andrei(230, 240)
 
 while running:
     for event in pygame.event.get():
@@ -25,8 +27,10 @@ while running:
         exit()
     if keys[pygame.K_LEFT]:
         player_angle -= 0.01
+        player_angle %= 2*pi
     if keys[pygame.K_RIGHT]:
         player_angle += 0.01
+        player_angle %= 2 * pi
 
     if keys[pygame.K_UP]:
         px, py = player_pos
@@ -59,5 +63,6 @@ while running:
 
     screen.fill("black")
     dda(player_pos, player_angle)
+    andrei.render(player_pos, player_angle)
     current_gun.shooting()
     pygame.display.flip()

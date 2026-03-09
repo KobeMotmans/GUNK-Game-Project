@@ -8,14 +8,14 @@ class Gun:
         self.flash_time = 20
         self.recoil_time = self.flash_time * 1.5
 
-        self.gun_rest = pygame.image.load("assets/" + guntype + "/GUN.png").convert_alpha()
+        self.gun_rest = pygame.image.load("assets/weapons/" + guntype + "/GUN.png").convert_alpha()
         self.gun_rest = pygame.transform.scale(self.gun_rest, (300, 300))
         self.weapon_rect = self.gun_rest.get_rect()
 
-        self.gun_recoil = pygame.image.load("assets/" + guntype + "/GUN_recoil.png").convert_alpha()
+        self.gun_recoil = pygame.image.load("assets/weapons/" + guntype + "/GUN_recoil.png").convert_alpha()
         self.gun_recoil = pygame.transform.scale(self.gun_recoil, (300, 300))
 
-        self.gun_shoot = pygame.image.load("assets/" + guntype + "/GUN_muzzle.png").convert_alpha()
+        self.gun_shoot = pygame.image.load("assets/weapons/" + guntype + "/GUN_muzzle.png").convert_alpha()
         self.gun_shoot = pygame.transform.scale(self.gun_shoot, (300, 300))
     def shoot(self):
         if self.weapon_state == 0:

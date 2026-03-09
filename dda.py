@@ -89,6 +89,15 @@ def gnc(a, sg): #Get Next Cell(cordinate, sign)
         return int(a)
 
 
+def norm_angle(angle):
+    # Breng hoek binnen [-pi, pi]
+    angle %= (2 * pi)
+    if angle > pi:
+        angle -= 2 * pi
+    return angle
+
+
+
 def will_collide(nx, ny):
     check_positions = [
         (nx - PLAYER_RADIUS, ny - PLAYER_RADIUS),
