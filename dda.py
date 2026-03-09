@@ -28,7 +28,7 @@ clock.tick(20)
 # Constants
 TILE_SIZE = 100
 FOV = pi / 2
-NUM_RAYS = WIDTH//6
+NUM_RAYS = WIDTH//4
 MAX_DEPTH = 1000
 DELTA_ANGLE = FOV / NUM_RAYS
 SCALE = WIDTH // NUM_RAYS
@@ -43,18 +43,15 @@ wall_tex = pygame.transform.scale(wall_tex, (TILE_SIZE, TILE_SIZE))
 floor_tex = pygame.image.load("assets/floor.jpeg").convert()
 floor_tex = pygame.transform.scale(floor_tex, (TILE_SIZE, TILE_SIZE))
 
-gun_1_rest = pygame.image.load("assets/Gun.png").convert_alpha()
-gun_1_rest = pygame.transform.scale(gun_1_rest, (300,300))
-weapon_rect = gun_1_rest.get_rect()
 
-gun_1_recoil = pygame.image.load("assets/GUN_recoil.png").convert_alpha()
-gun_1_recoil = pygame.transform.scale(gun_1_recoil, (300,300))
 
-gun_1_shoot = pygame.image.load("assets/GUN_muzzle.png").convert_alpha()
-gun_1_shoot = pygame.transform.scale(gun_1_shoot, (300,300))
-
+#Sounds Init
+pygame.mixer.init()
+shoot_sound = pygame.mixer.Sound("assets/pew.mp3")
 
 sign = lambda x : 1 if x >= 0 else -1
+
+sound_played = False
 
 # Vector Class
 class Vector:
@@ -146,7 +143,6 @@ def draw_wall(p_pos, r_pos, player_angle, angle, ray):
 
     shade = max(0, min(255,255-int(dist*255/MAX_DEPTH)))
     color = (shade,shade,shade)
-
     pygame.draw.rect(screen, color, (column_x, y, col_w, wall_height))
 
 def dda(player_pos, player_angle):
@@ -160,7 +156,7 @@ def dda(player_pos, player_angle):
             cota = 1/tana
         else:
             tana = 0
-            cosa = 0
+            cota = 0
         s_x = sign(cosa)
         s_y = sign(sina)
         ray_pos = cord_to_map(ray_pos)
@@ -189,12 +185,15 @@ def dda(player_pos, player_angle):
                 draw_wall(player_pos, ray_pos, player_angle, angle, ray)
                 break
 
-def draw_weapon(weapon, state):
+def draw_weapon(weapon, state, rest, shoot, recoil, weapon_rect):
+    global sound_played
     if state == 0:
-        screen.blit(gun_1_rest, ((WIDTH-weapon_rect[2])//2+ WIDTH*0.04, HEIGHT-weapon_rect[3]))
+        screen.blit(rest, ((WIDTH-weapon_rect[2])//2+ WIDTH*0.04, HEIGHT-weapon_rect[3]))
     elif state == 1:
-        screen.blit(gun_1_shoot, ((WIDTH - weapon_rect[2]) // 2+ WIDTH*0.04, HEIGHT - weapon_rect[3]))
-        pygame.mixer.music.load("assets/pew.mp3")
-        pygame.mixer.music.play()
+        screen.blit(shoot, ((WIDTH - weapon_rect[2]) // 2+ WIDTH*0.04, HEIGHT - weapon_rect[3]))
+        if not sound_played:
+            shoot_sound.play()
+            sound_played = True
     elif state == 2:
-        screen.blit(gun_1_recoil, ((WIDTH - weapon_rect[2]) //2 + WIDTH*0.04 , HEIGHT - weapon_rect[3]))
+        screen.blit(recoil, ((WIDTH - weapon_rect[2]) //2 + WIDTH*0.04 , HEIGHT - weapon_rect[3]))
+        sound_played = False

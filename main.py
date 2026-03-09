@@ -1,23 +1,23 @@
 from dda import *
 import pygame
 from math import sin, cos
+from guns import *
 
 speed = 2
 running = True
 
-weapon_state = 0
-flash_time = 20
-recoil_time = flash_time*1.5
+#mg = Minigun()
+pistol = Pistol()
+#bazooka = Bazooka()
+current_gun = pistol
+
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
-                if weapon_state == 0:
-                    weapon_state = 1
-                    temp_flash_time = flash_time
-                    temp_recoil_time = recoil_time
+                current_gun.shoot()
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_DELETE]:
@@ -59,13 +59,5 @@ while running:
 
     screen.fill("black")
     dda(player_pos, player_angle)
-    if weapon_state != 0:
-        if temp_flash_time > 0:
-            temp_flash_time -= 1
-        elif temp_recoil_time > 0:
-            temp_recoil_time -= 1
-            weapon_state = 2
-        else:
-            weapon_state = 0
-    draw_weapon(None, weapon_state)
+    current_gun.shooting()
     pygame.display.flip()
