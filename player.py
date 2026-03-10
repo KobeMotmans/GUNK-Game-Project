@@ -1,0 +1,46 @@
+"""
+player.py - Speler klasse met movement en rotatie
+"""
+
+from math import sin, cos, pi
+
+from config import PLAYER_SPEED, PLAYER_ROT_SPEED
+from map_loader import will_collide
+from vector import Vector
+
+
+class Player:
+    def __init__(self, x=150, y=150):
+        self.pos = Vector(x, y)
+        self.angle = 0
+
+    def rotate(self, direction):
+        """
+        Roteer speler. direction: -1 voor links, 1 voor rechts
+        """
+        self.angle += direction * PLAYER_ROT_SPEED
+        self.angle %= 2 * pi
+
+    def move(self, direction, speed=PLAYER_SPEED):
+        """
+        Beweeg speler vooruit (1) of achteruit (-1)
+        Checkt collision per as (slide along walls)
+        """
+        dx = cos(self.angle) * speed * direction
+        dy = sin(self.angle) * speed * direction
+
+        # Probeer X beweging
+        new_x = self.pos.x + dx
+        if not will_collide(new_x, self.pos.y):
+            self.pos.x = new_x
+
+        # Probeer Y beweging
+        new_y = self.pos.y + dy
+        if not will_collide(self.pos.x, new_y):
+            self.pos.y = new_y
+
+    def get_pos(self):
+        return self.pos
+
+    def get_angle(self):
+        return self.angle
