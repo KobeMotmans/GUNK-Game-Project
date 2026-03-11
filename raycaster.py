@@ -42,12 +42,14 @@ def norm_angle(angle):
         angle -= 2 * pi
     return angle
 
-
-def draw_wall(p_pos, r_pos, player_angle, angle, ray):
+def append_z_index(p_pos, r_pos, player_angle, angle, ray, Z_index):
     """Teken een verticale muur slice op het scherm"""
     dist = ((p_pos.x - r_pos.x) ** 2 + (p_pos.y - r_pos.y) ** 2) ** 0.5
     dist *= cos(player_angle - angle)
+    Z_index.append({"type": "wall", "dist": dist, "arg": ray})
+    return Z_index
 
+def draw_wall(dist, ray):
     wall_height = TILE_SIZE * PROJ_DIST / dist
     y = HEIGHT / 2 - wall_height / 2
     col_w = WIDTH // NUM_RAYS
@@ -61,11 +63,13 @@ def draw_wall(p_pos, r_pos, player_angle, angle, ray):
 
 def dda(player_pos, player_angle):
     """
-    Digital Differential Analysis raycasting
-    Cast rays vanaf player positie en teken muren
+    Digital Differential Analysis raycasting.
+    Returnt lijst van muur afstanden per ray voor sprite sorting.
     """
+    wall_distances = []  # Alleen afstanden, geen dictionaries!
+
     for ray in range(NUM_RAYS):
-        angle = player_angle - pi / 4 + (ray + 0.5) * DELTA_ANGLE  # FOV/2 = pi/4
+        angle = player_angle - pi / 4 + (ray + 0.5) * DELTA_ANGLE
         ray_pos = Vector(player_pos.x, player_pos.y)
 
         sina = sin(angle)
@@ -89,8 +93,8 @@ def dda(player_pos, player_angle):
             dy = y - ray_pos.y
 
             if cosa != 0 and sina != 0:
-                dnx = abs(dx / cosa)  # Distance next x
-                dny = abs(dy / sina)  # Distance next y
+                dnx = abs(dx / cosa)
+                dny = abs(dy / sina)
 
                 if dnx >= dny:
                     dx = dy * cota
@@ -108,5 +112,15 @@ def dda(player_pos, player_angle):
 
             if hit_wall(ray_pos):
                 ray_pos = map_to_cord(ray_pos)
-                draw_wall(player_pos, ray_pos, player_angle, angle, ray)
+
+                # Bereken afstand
+                dist = ((player_pos.x - ray_pos.x) ** 2 +
+                        (player_pos.y - ray_pos.y) ** 2) ** 0.5
+                dist *= cos(player_angle - angle)  # Fisheye correctie
+
+                # Sla op voor sprite sorting, teken direct
+                wall_distances.append(dist)
+                draw_wall(dist, ray)
                 break
+
+    return wall_distances
