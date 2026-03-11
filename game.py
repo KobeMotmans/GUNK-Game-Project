@@ -71,52 +71,33 @@ class Game:
         self.current_gun.update()
 
     def render(self):
-        """Render alle game elementen met geoptimaliseerde Z-indexing"""
+        """Render alle game elementen"""
         SCREEN.fill(COLOR_BLACK)
 
-        # 1. Raycasting - muren direct tekenen, afstanden opslaan
-        wall_distances = dda(self.player.get_pos(), self.player.get_angle())
-        # wall_distances = [dist_ray0, dist_ray1, ..., dist_rayN]
+        player_pos = self.player.get_pos()
+        player_angle = self.player.get_angle()
 
-        # 2. Verzamel alleen zichtbare sprites met diepte
-        sprites = []  # Lijst van (dist, angle, enemy)
+        # 1. Raycasting - muren direct tekenen, afstanden opslaan
+        wall_distances = dda(player_pos, player_angle)
+
+        # 2. Verzamel zichtbare sprites
+        sprites = []  # (dist, screen_x, enemy)
 
         for enemy in self.enemies:
-            dist, angle = enemy.get_render_data(
-                self.player.get_pos(),
-                self.player.get_angle()
+            dist, screen_x, angle = enemy.get_render_data_fast(
+                player_pos, player_angle, wall_distances
             )
-            if dist is not None:  # Alleen toevoegen als zichtbaar
-                sprites.append((dist, angle, enemy))
+            if dist is not None:
+                sprites.append((dist, screen_x, enemy))
 
-        # 3. Sorteer alleen sprites (meestal < 50 items, vaak < 20)
-        # O(n log n) maar met kleine n = snel!
+        # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
 
-        # 4. Merge render: sprites tussen muren in
-        # We lopen door de rays van links naar rechts
-        # Een sprite moet tussen de huidige muur en de vorige in
+        # 4. Render sprites
+        for dist, screen_x, enemy in sprites:
+            enemy.render_fast(dist, screen_x)
 
-        sprite_idx = 0
-        num_sprites = len(sprites)
-
-        for ray_num, wall_dist in enumerate(wall_distances):
-            # Render alle sprites die VERDER zijn dan deze muur
-            # (dus achter deze muur, moeten eerst getekend worden)
-            while sprite_idx < num_sprites and sprites[sprite_idx][0] > wall_dist:
-                dist, angle, enemy = sprites[sprite_idx]
-                enemy.render(dist, angle)
-                sprite_idx += 1
-
-            # Deze muur is al getekend door dda(), geen actie nodig
-
-        # 5. Resterende sprites (dichterbij dan de verste muur)
-        while sprite_idx < num_sprites:
-            dist, angle, enemy = sprites[sprite_idx]
-            enemy.render(dist, angle)
-            sprite_idx += 1
-
-        # 6. Wapen laatst (altijd voorste laag)
+        # 5. Wapen laatst
         self.current_gun.draw()
 
         pygame.display.flip()
