@@ -11,12 +11,11 @@ from weapons import Pistol, Minigun, Bazooka
 from enemies import Andrei
 from player import Player
 
-
 class Game:
     def __init__(self):
         pygame.init()
         self.clock = pygame.time.Clock()
-        self.running = True
+        self.running = False
 
         # Init speler
         self.player = Player(150, 150)
@@ -52,7 +51,7 @@ class Game:
         keys = pygame.key.get_pressed()
 
         if keys[pygame.K_DELETE]:
-            self.running = False
+            self.game_running = False
 
         if keys[pygame.K_LEFT]:
             self.player.rotate(-1)
@@ -81,23 +80,23 @@ class Game:
         wall_distances = dda(player_pos, player_angle)
 
         # 2. Verzamel zichtbare sprites
-        sprites = []  # (dist, screen_x, enemy)
+        sprites = []  # (dist, SCREEN_x, enemy)
 
         for enemy in self.enemies:
             enemy.find_path(self.player.get_pos())
             #print(enemy.is_player_los(player_pos))
-            dist, screen_x, angle = enemy.get_render_data_fast(
+            dist, SCREEN_x, angle = enemy.get_render_data_fast(
                 player_pos, player_angle, wall_distances
             )
             if dist is not None:
-                sprites.append((dist, screen_x, enemy))
+                sprites.append((dist, SCREEN_x, enemy))
 
         # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
 
         # 4. Render sprites
-        for dist, screen_x, enemy in sprites:
-            enemy.render_fast(dist, screen_x)
+        for dist, SCREEN_x, enemy in sprites:
+            enemy.render_fast(dist, SCREEN_x)
 
         # 5. Wapen laatst
         self.current_gun.draw()
@@ -106,15 +105,59 @@ class Game:
 
     def run(self):
         """Hoofd game loop"""
-        while self.running:
+        self.game_running = False
+        self.menu_running = True
+        while self.menu_running:
+            mouse = pygame.mouse.get_pos() 
+            bg_color = (0,0,0)
+            SCREEN.fill(bg_color) 
+            qw = 140
+            qh = 60
+            sw = 200
+            sh = 100
+            smallfont = pygame.font.SysFont('Corbel', 40, True) 
+            text_quit = smallfont.render('Quit' , True , 'white') 
+            text_start = smallfont.render('PLAY' , True , 'white') 
+            keys = pygame.key.get_pressed()
+            button_color = (60, 30, 30)
+            button_hover_color = (100, 100, 100)
+            for ev in pygame.event.get(): 
+                if ev.type == pygame.MOUSEBUTTONDOWN: 
+                    if (WIDTH/2-qw/2 <= mouse[0] <= WIDTH/2+qw/2 and HEIGHT/2-qh/2+HEIGHT/4 <= mouse[1] <= HEIGHT/2+qh/2+HEIGHT/4):  
+                        pygame.quit() 
+                    if (WIDTH/2-sw/2 <= mouse[0] <= WIDTH/2+sw/2 and HEIGHT/2-sh/2 <= mouse[1] <= HEIGHT/2+sh/2): 
+                        self.game_running = True
+                        self.menu_running = False
+            # Quit button builder
+            if (WIDTH/2-qw/2 <= mouse[0] <= WIDTH/2+qw/2 and HEIGHT/2-qh/2+HEIGHT/4 <= mouse[1] <= HEIGHT/2+qh/2+HEIGHT/4): 
+                pygame.draw.rect(SCREEN,button_hover_color,[WIDTH/2-qw/2,HEIGHT/2-qh/2+HEIGHT/4,qw,qh])
+                SCREEN.blit(text_quit,(WIDTH/2-qw/4,HEIGHT/2+HEIGHT/4-qh/4)) 
+            else: 
+                pygame.draw.rect(SCREEN,button_color,[WIDTH/2-qw/2,HEIGHT/2-qh/2+HEIGHT/4,qw,qh])
+                SCREEN.blit(text_quit,(WIDTH/2-qw/4,HEIGHT/2+HEIGHT/4-qh/4)) 
+            
+            #Start button builder
+            if (WIDTH/2-sw/2 <= mouse[0] <= WIDTH/2+sw/2 and HEIGHT/2-sh/2 <= mouse[1] <= HEIGHT/2+sh/2): 
+                pygame.draw.rect(SCREEN,button_hover_color,[WIDTH/2-sw/2,HEIGHT/2-sh/2,sw,sh])
+                SCREEN.blit(text_start,(WIDTH/2-sw/4,HEIGHT/2-sh/4)) 
+            else: 
+                pygame.draw.rect(SCREEN,button_color,[WIDTH/2-sw/2,HEIGHT/2-sh/2,sw,sh])
+                SCREEN.blit(text_start,(WIDTH/2-sw/4,HEIGHT/2-sh/4))
+            pygame.display.flip()
+           
+            if keys[pygame.K_DELETE]:
+                self.game_running = False
+                self.menu_running = False
+            
+        while self.game_running:
             self.clock.tick(60)
             self.handle_events()
             self.handle_input()
             self.update()
             self.render()
-            print(self.clock.get_fps())
-
+            print(self.clock.get_fps())  
         pygame.quit()
+            
 
 
 if __name__ == "__main__":
