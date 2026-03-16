@@ -5,7 +5,7 @@ game.py - Hoofd game loop en initialisatie
 import pygame
 from math import pi
 
-from config import SCREEN, WIDTH, HEIGHT, COLOR_BLACK, MAX_DEPTH
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH
 from raycaster import dda, draw_wall
 from weapons import Pistol, Minigun, Bazooka
 from enemies import Andrei
@@ -72,7 +72,7 @@ class Game:
 
     def render(self):
         """Render alle game elementen"""
-        SCREEN.fill(COLOR_BLACK)
+        SCREEN.fill('black')
 
         player_pos = self.player.get_pos()
         player_angle = self.player.get_angle()

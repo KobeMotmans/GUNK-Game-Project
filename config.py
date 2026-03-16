@@ -37,6 +37,3 @@ SPRITE_SIZE = 50
 # Wapen instellingen
 WEAPON_SIZE = (300, 300)
 WEAPON_OFFSET_X = 0.04  # 4% van schermbreedte
-
-# Kleuren
-COLOR_BLACK = "black"
