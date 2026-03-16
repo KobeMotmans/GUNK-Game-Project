@@ -42,7 +42,6 @@ class Player:
             dx += cos(self.angle+pi/2) * direction
             dy += sin(self.angle+pi/2) * direction
         normalised = Vector(dx, dy).normalize() * speed
-        print(normalised.norm())
         dx, dy = normalised.x, normalised.y
 
         # Probeer X beweging

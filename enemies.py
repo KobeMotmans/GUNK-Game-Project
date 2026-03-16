@@ -118,7 +118,6 @@ class Enemy:
 
     def find_path(self, player_pos):
         is_los = self.is_player_los(player_pos)
-        print(is_los)
         if is_los:
             self.move_towards(player_pos)
 
