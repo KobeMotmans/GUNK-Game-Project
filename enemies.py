@@ -88,6 +88,7 @@ class Enemy:
         draw_y = HEIGHT / 2 - sprite_h / 2
 
         SCREEN.blit(self._cached_scale, (draw_x, draw_y))
+
     def is_player_los(self, player_pos):
         # Vector van enemy naar speler
         dx = player_pos.x - self.pos.x
@@ -118,7 +119,6 @@ class Enemy:
 
     def find_path(self, player_pos):
         is_los = self.is_player_los(player_pos)
-        print(is_los)
         if is_los:
             self.move_towards(player_pos)
 
@@ -126,5 +126,5 @@ class Enemy:
 
 
 class Andrei(Enemy):
-    def __init__(self, x, y, health=10, speed=1):
+    def __init__(self, x, y, health=10, speed=1.5):
         super().__init__(health, speed, "andrei", x, y)

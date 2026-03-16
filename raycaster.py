@@ -12,13 +12,6 @@ from config import (
 from map_loader import cord_to_map, map_to_cord, hit_wall, MAP
 from vector import Vector
 
-# Texture loading
-wall_tex = pygame.image.load("assets/muur.jpeg").convert()
-wall_tex = pygame.transform.scale(wall_tex, (TILE_SIZE, TILE_SIZE))
-
-floor_tex = pygame.image.load("assets/floor.jpeg").convert()
-floor_tex = pygame.transform.scale(floor_tex, (TILE_SIZE, TILE_SIZE))
-
 sign = lambda x: 1 if x >= 0 else -1
 
 
@@ -33,21 +26,6 @@ def gnc(a, sg):
         return int(a) + 1
     else:
         return int(a)
-
-
-def norm_angle(angle):
-    """Normaliseer hoek naar [-pi, pi] bereik"""
-    angle %= (2 * pi)
-    if angle > pi:
-        angle -= 2 * pi
-    return angle
-
-def append_z_index(p_pos, r_pos, player_angle, angle, ray, Z_index):
-    """Teken een verticale muur slice op het scherm"""
-    dist = ((p_pos.x - r_pos.x) ** 2 + (p_pos.y - r_pos.y) ** 2) ** 0.5
-    dist *= cos(player_angle - angle)
-    Z_index.append({"type": "wall", "dist": dist, "arg": ray})
-    return Z_index
 
 def draw_wall(dist, ray):
     wall_height = TILE_SIZE * PROJ_DIST / dist
