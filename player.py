@@ -26,8 +26,24 @@ class Player:
         Beweeg speler vooruit (1) of achteruit (-1)
         Checkt collision per as (slide along walls)
         """
-        dx = cos(self.angle) * speed * direction
-        dy = sin(self.angle) * speed * direction
+        dx, dy = 0, 0
+        if direction == "up" or direction == "down":
+            if direction == "up":
+                direction = 1
+            else:
+                direction = -1
+            dx += cos(self.angle) * direction
+            dy += sin(self.angle) * direction
+        if direction == "left" or direction == "right":
+            if direction == "left":
+                direction = -1
+            else:
+                direction = 1
+            dx += cos(self.angle+pi/2) * direction
+            dy += sin(self.angle+pi/2) * direction
+        normalised = Vector(dx, dy).normalize() * speed
+        print(normalised.norm())
+        dx, dy = normalised.x, normalised.y
 
         # Probeer X beweging
         new_x = self.pos.x + dx

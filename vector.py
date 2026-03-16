@@ -27,6 +27,12 @@ class Vector:
 
     def __len__(self):
         return int((self.x ** 2 + self.y ** 2) ** 0.5)
+    def norm(self):
+        return (self.x ** 2 + self.y ** 2) ** 0.5
+
+    def normalize(self):
+        norm = self.norm()
+        return Vector(self.x / norm, self.y / norm)
 
     def __str__(self):
         return f"({self.x}, {self.y})"

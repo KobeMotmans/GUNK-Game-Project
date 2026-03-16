@@ -34,7 +34,7 @@ class Game:
         """Maak een lijst van test vijanden"""
         enemies = []
         for i in range(2):
-            enemies.append(Andrei(100 + 40 * i, 200))
+            enemies.append(Andrei(400 + 40 * i, 200))
         return enemies
 
     def handle_events(self):
@@ -54,17 +54,19 @@ class Game:
         if keys[pygame.K_DELETE]:
             self.running = False
 
-        if keys[pygame.K_LEFT]:
-            self.player.rotate(-1)
+        self.player.rotate(pygame.mouse.get_rel()[0])
+        pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
+        pygame.mouse.get_rel()
+        if keys[pygame.K_UP] or keys[pygame.K_z]:
+            self.player.move("up")
+        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            self.player.move("down")
 
-        if keys[pygame.K_RIGHT]:
-            self.player.rotate(1)
+        if keys[pygame.K_LEFT] or keys[pygame.K_q]:
+            self.player.move("left")
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            self.player.move("right")
 
-        if keys[pygame.K_UP]:
-            self.player.move(1)
-
-        if keys[pygame.K_DOWN]:
-            self.player.move(-1)
 
     def update(self):
         """Update game state"""
@@ -85,7 +87,6 @@ class Game:
 
         for enemy in self.enemies:
             enemy.find_path(self.player.get_pos())
-            #print(enemy.is_player_los(player_pos))
             dist, screen_x, angle = enemy.get_render_data_fast(
                 player_pos, player_angle, wall_distances
             )
@@ -112,7 +113,6 @@ class Game:
             self.handle_input()
             self.update()
             self.render()
-            print(self.clock.get_fps())
 
         pygame.quit()
 

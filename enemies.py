@@ -95,22 +95,20 @@ class Enemy:
 
         # Bereken hoek naar player in wereldcoordinaten
         world_angle = atan2(dy, dx)
-
-
         # Echte afstand (hypot)
         dist = hypot(dx, dy)
 
         # Te ver weg
         if dist > MAX_DEPTH:
-            return 'Te Ver'
+            return False
         i = 0
         while i<dist:
-            i += 3
+            i += 2
             ray_pos = Vector(self.pos.x + i*cos(world_angle), self.pos.y + i*sin(world_angle))
             r_pos_m = cord_to_map(ray_pos)
             if is_in_wall(r_pos_m):
-                return 'Achter Muur'
-        return 'In LOS'
+                return False
+        return True
 
     def move_towards(self, pos):
         dx = pos.x - self.pos.x
@@ -119,7 +117,9 @@ class Enemy:
         self.pos += Vector(self.speed * cos(angle), self.speed * sin(angle))
 
     def find_path(self, player_pos):
-        if self.is_player_los(player_pos):
+        is_los = self.is_player_los(player_pos)
+        print(is_los)
+        if is_los:
             self.move_towards(player_pos)
 
 
