@@ -9,10 +9,6 @@ from math import pi
 pygame.init()
 infoObject = pygame.display.Info()
 
-# Andere init dingen voor de muis
-pygame.mouse.set_visible(False)
-pygame.event.set_grab(True)
-
 # Scherm instellingen
 WIDTH = infoObject.current_w
 HEIGHT = infoObject.current_h

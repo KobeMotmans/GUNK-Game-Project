@@ -129,6 +129,8 @@ class Game:
                     if (WIDTH/2-qw/2 <= mouse[0] <= WIDTH/2+qw/2 and HEIGHT/2-qh/2+HEIGHT/4 <= mouse[1] <= HEIGHT/2+qh/2+HEIGHT/4):
                         pygame.quit()
                     if (WIDTH/2-sw/2 <= mouse[0] <= WIDTH/2+sw/2 and HEIGHT/2-sh/2 <= mouse[1] <= HEIGHT/2+sh/2):
+                        pygame.mouse.set_visible(False)
+                        pygame.event.set_grab(True)
                         self.game_running = True
                         self.menu_running = False
             # Quit button builder
