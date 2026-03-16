@@ -27,6 +27,7 @@ class Vector:
 
     def __len__(self):
         return int((self.x ** 2 + self.y ** 2) ** 0.5)
+
     def norm(self):
         return (self.x ** 2 + self.y ** 2) ** 0.5
 

@@ -15,6 +15,8 @@ from player import Player
 class Game:
     def __init__(self):
         pygame.init()
+        pygame.mixer.init()
+        self.main_music = pygame.mixer.Sound("assets/Soundtrack.mp3")
         self.clock = pygame.time.Clock()
         self.running = False
 
@@ -30,6 +32,9 @@ class Game:
         # Init vijanden
         self.enemies = self.create_enemies()
 
+        self.game_running = False
+        self.menu_running = True
+
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
         enemies = []
@@ -41,7 +46,7 @@ class Game:
         """Verwerk pygame events"""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                self.running = False
+                self.game_running = False
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Links klik
@@ -60,12 +65,6 @@ class Game:
                 pygame.event.set_grab(False)
                 self.paused = True
                 self.game_running = False
-        
-            elif self.paused and not self.game_running:
-                pygame.mouse.set_visible(False)
-                pygame.event.set_grab(True)
-                self.paused = False
-                self.game_running = True
 
         
         self.player.rotate(pygame.mouse.get_rel()[0])
@@ -80,7 +79,6 @@ class Game:
             self.player.move("left")
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.player.move("right")
-
 
     def update(self):
         """Update game state"""
@@ -221,6 +219,39 @@ class Game:
                     self.game_running = False
                     self.menu_running = False
                     self.paused = False
+
+        while self.menu_running:
+            mouse = pygame.mouse.get_pos()
+            bg_color = (0,0,0)
+            SCREEN.fill(bg_color)
+            qw = 140
+            qh = 60
+            sw = 200
+            sh = 100
+            smallfont = pygame.font.SysFont('Corbel', 40, True)
+            text_quit = smallfont.render('Quit' , True , 'white')
+            text_start = smallfont.render('PLAY' , True , 'white')
+            keys = pygame.key.get_pressed()
+            button_color = (60, 30, 30)
+            button_hover_color = (100, 100, 100)
+            for ev in pygame.event.get():
+                if ev.type == pygame.MOUSEBUTTONDOWN:
+                    if (WIDTH/2-qw/2 <= mouse[0] <= WIDTH/2+qw/2 and HEIGHT/2-qh/2+HEIGHT/4 <= mouse[1] <= HEIGHT/2+qh/2+HEIGHT/4):
+                        pygame.quit()
+                    if (WIDTH/2-sw/2 <= mouse[0] <= WIDTH/2+sw/2 and HEIGHT/2-sh/2 <= mouse[1] <= HEIGHT/2+sh/2):
+                        pygame.mouse.set_visible(False)
+                        pygame.event.set_grab(True)
+                        self.game_running = True
+                        self.menu_running = False
+                        self.main_music.play()
+            # Quit button builder
+            if (WIDTH/2-qw/2 <= mouse[0] <= WIDTH/2+qw/2 and HEIGHT/2-qh/2+HEIGHT/4 <= mouse[1] <= HEIGHT/2+qh/2+HEIGHT/4):
+                pygame.draw.rect(SCREEN,button_hover_color,[WIDTH/2-qw/2,HEIGHT/2-qh/2+HEIGHT/4,qw,qh])
+                SCREEN.blit(text_quit,(WIDTH/2-qw/4,HEIGHT/2+HEIGHT/4-qh/4))
+            else:
+                pygame.draw.rect(SCREEN,button_color,[WIDTH/2-qw/2,HEIGHT/2-qh/2+HEIGHT/4,qw,qh])
+                SCREEN.blit(text_quit,(WIDTH/2-qw/4,HEIGHT/2+HEIGHT/4-qh/4))
+
 
         pygame.quit()
 

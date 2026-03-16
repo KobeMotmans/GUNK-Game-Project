@@ -11,7 +11,7 @@ infoObject = pygame.display.Info()
 
 # Scherm instellingen
 WIDTH = infoObject.current_w
-HEIGHT = infoObject.current_h
+HEIGHT = infoObject.current_h - 50
 SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
 # Map instellingen
