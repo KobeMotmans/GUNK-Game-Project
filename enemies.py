@@ -11,7 +11,7 @@ from map_loader import map_to_cord, cord_to_map, is_in_wall
 
 
 class Enemy:
-    def __init__(self, health, speed, enemy_type, x, y):
+    def __init__(self, health, speed, enemy_type, x, y, size):
         self.health = health
         self.speed = speed
         self.pos = Vector(x, y)
@@ -22,6 +22,8 @@ class Enemy:
         # Cache voor sprite scaling
         self._cached_scale = None
         self._cached_dist = -1
+
+        self.size = size
 
     def get_render_data_fast(self, player_pos, player_angle, wall_distances):
         """
@@ -122,9 +124,22 @@ class Enemy:
         if is_los:
             self.move_towards(player_pos)
 
+    def is_hit(self, pos):
+        dist = (self.pos - pos).norm()
+        if dist < self.size:
+            return True
+        return False
+
+    def take_dmg(self,dmg):
+        self.health -= dmg
+
+
+
+
+
 
 
 
 class Andrei(Enemy):
-    def __init__(self, x, y, health=10, speed=1.5):
-        super().__init__(health, speed, "andrei", x, y)
+    def __init__(self, x, y, health=10, speed=1.5, size=40):
+        super().__init__(health, speed, "andrei", x, y, size)
