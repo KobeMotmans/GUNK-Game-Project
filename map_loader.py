@@ -70,3 +70,10 @@ def will_collide(nx, ny, radius=10):
             return True
 
     return False
+
+
+def is_in_wall(pos):
+    pos = pos // 1
+    if MAP[pos.y][pos.x] == 1:
+        return True
+    return False

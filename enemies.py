@@ -7,6 +7,7 @@ from math import atan2, hypot, cos, sin, tan, pi
 
 from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS
 from vector import Vector
+from map_loader import map_to_cord, cord_to_map, is_in_wall
 
 
 class Enemy:
@@ -87,8 +88,43 @@ class Enemy:
         draw_y = HEIGHT / 2 - sprite_h / 2
 
         SCREEN.blit(self._cached_scale, (draw_x, draw_y))
+    def is_player_los(self, player_pos):
+        # Vector van enemy naar speler
+        dx = player_pos.x - self.pos.x
+        dy = player_pos.y - self.pos.y
+
+        # Bereken hoek naar player in wereldcoordinaten
+        world_angle = atan2(dy, dx)
+
+
+        # Echte afstand (hypot)
+        dist = hypot(dx, dy)
+
+        # Te ver weg
+        if dist > MAX_DEPTH:
+            return 'Te Ver'
+        i = 0
+        while i<dist:
+            i += 3
+            ray_pos = Vector(self.pos.x + i*cos(world_angle), self.pos.y + i*sin(world_angle))
+            r_pos_m = cord_to_map(ray_pos)
+            if is_in_wall(r_pos_m):
+                return 'Achter Muur'
+        return 'In LOS'
+
+    def move_towards(self, pos):
+        dx = pos.x - self.pos.x
+        dy = pos.y - self.pos.y
+        angle = atan2(dy, dx)
+        self.pos += Vector(self.speed * cos(angle), self.speed * sin(angle))
+
+    def find_path(self, player_pos):
+        if self.is_player_los(player_pos):
+            self.move_towards(player_pos)
+
+
 
 
 class Andrei(Enemy):
-    def __init__(self, x, y, health=10, speed=10):
+    def __init__(self, x, y, health=10, speed=1):
         super().__init__(health, speed, "andrei", x, y)

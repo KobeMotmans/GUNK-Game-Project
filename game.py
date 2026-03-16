@@ -33,7 +33,7 @@ class Game:
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
         enemies = []
-        for i in range(20):
+        for i in range(2):
             enemies.append(Andrei(100 + 40 * i, 200))
         return enemies
 
@@ -84,6 +84,8 @@ class Game:
         sprites = []  # (dist, screen_x, enemy)
 
         for enemy in self.enemies:
+            enemy.find_path(self.player.get_pos())
+            #print(enemy.is_player_los(player_pos))
             dist, screen_x, angle = enemy.get_render_data_fast(
                 player_pos, player_angle, wall_distances
             )
@@ -104,12 +106,13 @@ class Game:
 
     def run(self):
         """Hoofd game loop"""
-        self.clock.tick(120)
         while self.running:
+            self.clock.tick(60)
             self.handle_events()
             self.handle_input()
             self.update()
             self.render()
+            print(self.clock.get_fps())
 
         pygame.quit()
 

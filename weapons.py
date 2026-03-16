@@ -9,7 +9,6 @@ from config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X
 pygame.mixer.init()
 shoot_sound = pygame.mixer.Sound("assets/pew.mp3")
 
-
 class Gun:
     def __init__(self, damage, reload_speed, guntype):
         self.damage = damage
@@ -18,6 +17,8 @@ class Gun:
 
         self.flash_time = 20
         self.recoil_time = self.flash_time * 1.5
+
+        self.played_sound = False
 
         # Load textures
         base_path = f"assets/weapons/{guntype}/"
@@ -54,12 +55,14 @@ class Gun:
         """Teken het wapen op scherm volgens huidige staat"""
         x_pos = (WIDTH - self.weapon_rect[2]) // 2 + WIDTH * WEAPON_OFFSET_X
         y_pos = HEIGHT - self.weapon_rect[3]
-
         if self.weapon_state == 0:
             SCREEN.blit(self.gun_rest, (x_pos, y_pos))
+            self.played_sound = False
         elif self.weapon_state == 1:
             SCREEN.blit(self.gun_shoot, (x_pos, y_pos))
-            shoot_sound.play()
+            if not self.played_sound:
+                shoot_sound.play()
+                self.played_sound = True
         elif self.weapon_state == 2:
             SCREEN.blit(self.gun_recoil, (x_pos, y_pos))
 
