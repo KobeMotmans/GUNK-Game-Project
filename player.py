@@ -4,7 +4,7 @@ player.py - Speler klasse met movement en rotatie
 
 from math import sin, cos, pi
 
-from config import PLAYER_SPEED, PLAYER_ROT_SPEED
+from config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH
 from map_loader import will_collide
 from vector import Vector
 
@@ -42,7 +42,6 @@ class Player:
             dx += cos(self.angle+pi/2) * direction
             dy += sin(self.angle+pi/2) * direction
         normalised = Vector(dx, dy).normalize() * speed
-        print(normalised.norm())
         dx, dy = normalised.x, normalised.y
 
         # Probeer X beweging
@@ -60,3 +59,4 @@ class Player:
 
     def get_angle(self):
         return self.angle
+

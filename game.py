@@ -38,7 +38,7 @@ class Game:
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
         enemies = []
-        for i in range(2):
+        for i in range(1):
             enemies.append(Andrei(400 + 40 * i, 200))
         return enemies
 
@@ -50,7 +50,7 @@ class Game:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Links klik
-                    self.current_gun.shoot()
+                    self.current_gun.shoot(self.player.pos, self.player.angle, self.enemies)
 
     def handle_input(self):
         """Verwerk toetsenbord input"""
@@ -97,6 +97,8 @@ class Game:
             )
             if dist is not None:
                 sprites.append((dist, SCREEN_x, enemy))
+            if enemy.health <= 0:
+                self.enemies.remove(enemy)
 
         # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
