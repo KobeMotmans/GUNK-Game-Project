@@ -179,10 +179,10 @@ class Game:
             if self.state == "menu":
                 bg_color = (70,70,70)
                 SCREEN.fill(bg_color)
-                Start_knop = Button(-100, 200, 100, "START", 40, "black", 'white', 'white', 'black', self, "game", False)
+                Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "game", False)
                 Start_knop.draw_button(events)
 
-                Quit_button = Button(200, 140, 60, "Quit", 20,"black", 'white', 'white', 'black', self, "Stop", False)
+                Quit_button = Button(100, 140, 60, "Quit", 40,"black", 'white', 'white', 'black', self, "Stop", False)
                 Quit_button.draw_button(events)
 
             if self.state == "game":
@@ -192,10 +192,10 @@ class Game:
                 self.render()
 
             if self.state == "paused":
-                Restart_knop = Button(0, 200, 100, "Resume", 20, "black", 'white', 'white', 'black', self, "game", False)
+                Restart_knop = Button(0, 200, 100, "Resume", 30, "black", 'white', 'white', 'black', self, "game", False)
                 Restart_knop.draw_button(events)
 
-                Menu_button = Button(200, 140, 60, "MENU", 60, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
 
             pygame.display.flip()
