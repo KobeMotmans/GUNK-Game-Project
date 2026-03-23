@@ -43,6 +43,7 @@ class Game:
         self.menu_running = True
 
 
+
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
         enemies = []
@@ -95,7 +96,7 @@ class Game:
                 pygame.mouse.set_visible(True)
                 pygame.event.set_grab(False)
                 self.state = "paused"
-                print("paused")
+                pygame.mixer.stop()
 
             self.player.rotate(pygame.mouse.get_rel()[0])
             pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
@@ -165,10 +166,18 @@ class Game:
         pygame.display.flip()
 
     def reset_game(self):
-        self.player = Player(150, 150)
-        self.pistol = Pistol()
+        # Init speler
+        self.player = Player(SPAWNS["player"][0], SPAWNS["player"][1])
+
+        # Init wapens
         self.current_gun = self.pistol
-        self.enemies = self.create_enemies()
+        self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
+
+        # Init objects
+        self.objects = self.create_objects()
+
+        self.game_running = False
+        self.menu_running = True
 
     def run(self):
         self.running = True
@@ -198,13 +207,13 @@ class Game:
 
                 Menu_button = Button(200, 140, 60, "MENU", 60, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
-
+            if keys[pygame.K_DELETE]:
+                self.running = False
+                self.state = None
+                pygame.quit()
             pygame.display.flip()
 
-        if keys[pygame.K_DELETE]:
-            self.running = False
-            self.state = None
-            pygame.quit()
+
         pygame.quit()
 
 

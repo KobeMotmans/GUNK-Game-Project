@@ -27,8 +27,11 @@ class Button:
                     if self.state_change == "menu":
                         self.GAME.reset_game()
                     if self.state_change == "Stop":
+                        pygame.mixer.stop()
                         self.GAME.running = False
                         self.GAME.state = None
+                    if self.state_change == "game":
+                        self.GAME.main_music.play()
                 
         color = self.button_hov_color if hovering else self.button_color
         text_color = self.text_hov_color if hovering else self.text_color
