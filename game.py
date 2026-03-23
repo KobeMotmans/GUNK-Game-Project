@@ -7,7 +7,7 @@ from math import pi
 
 from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH
 from raycaster import dda, draw_wall
-from weapons import Pistol, Minigun, Bazooka
+from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei
 from player import Player
 
@@ -26,9 +26,9 @@ class Game:
         # Init wapens
         self.pistol = Pistol()
         self.minigun = Minigun()
-        self.bazooka = Bazooka()
+        self.rifle = Rifle()
         self.current_gun = self.pistol
-        self.unlocked_guns = [self.pistol, self.minigun, self.bazooka]
+        self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
 
         # Init vijanden
         self.enemies = self.create_enemies()

@@ -12,7 +12,7 @@ pygame.mixer.init()
 shoot_sound = pygame.mixer.Sound("assets/pew.mp3")
 
 class Gun:
-    def __init__(self, damage, recoil_speed, shoot_speed, guntype):
+    def __init__(self, damage, recoil_speed, shoot_speed, ammo_weight, guntype):
         self.damage = damage
         self.recoil_speed = recoil_speed
         self.weapon_state = 0  # 0=rust, 1=schieten, 2=recoil
@@ -80,18 +80,19 @@ class Gun:
                 self.played_sound = True
         elif self.weapon_state == 2:
             SCREEN.blit(self.gun_recoil, (x_pos, y_pos))
+            
 
 
 class Pistol(Gun):
-    def __init__(self, damage=1, recoil_speed=1, shoot_speed=10):
-        super().__init__(damage, recoil_speed, shoot_speed, "pistol")
+    def __init__(self, damage=1, recoil_speed=1, shoot_speed=10, ammo_weight=1):
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol")
 
 
-class Bazooka(Gun):
-    def __init__(self, damage=5, recoil_speed=5, shoot_speed=15):
-        super().__init__(damage, recoil_speed, shoot_speed, "bazooka")
+class Rifle(Gun):
+    def __init__(self, damage=5, recoil_speed=5, shoot_speed=15, ammo_weight=5):
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "rifle")
 
 
 class Minigun(Gun):
-    def __init__(self, damage=0.2, recoil_speed=0.1, shoot_speed=1):
-        super().__init__(damage, recoil_speed, shoot_speed, "minigun")
+    def __init__(self, damage=0.2, recoil_speed=0.1, shoot_speed=1, ammo_weight=0.1):
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun")
