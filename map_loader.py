@@ -5,18 +5,51 @@ map_loader.py - Laadt en beheert de game map
 from PIL import Image
 from config import TILE_SIZE, MAP_PATH
 
+color_to_number = {
+    (255, 255, 255): 0, #Open space
+    (0,0,0): 1, # Wall
+    (255, 0, 0): 2, # Exit
+    (0, 255, 0): 3, #Enemy
+    (0,0,255): 4, #Player Spawn
+    (255, 255, 0): 5, #Keycard
+    (0, 255, 255): 6 #Ammo
+}
+
+
 def png_to_list_fast(path):
     """Converteer een PNG afbeelding naar een 2D grid (0 = leeg, 1 = muur)"""
-    img = Image.open(path).convert("L")
-    w, h = img.size  # <-- FIX: size is een property, niet van getdata()
-    data = list(img.getdata())
-    return [
-        [0 if data[y * w + x] > 127 else 1 for x in range(w)]
-        for y in range(h)
-    ]
+    img = Image.open(path).convert("RGB")
+    w, h = img.size
+    map_list = []
+    spawns = {
+        "player": (150,150), #Default location
+        "enemies": [],
+        "ammo": [],
+        "keycard": (0,0),
+        "end_point": (0,0)
+    }
+    for y in range(h):
+        map_list.append([])
+        for x in range(w):
+            number = color_to_number[img.getpixel((x, y))]
+            map_list[y].append(number)
+            x_center = x + TILE_SIZE/2 #Center object in tile
+            y_center = y + TILE_SIZE/2
+            if number == 2:
+                spawns["end_point"] = (x_center,y_center)
+            elif number == 3:
+                spawns["enemies"].append((x_center,y_center))
+            elif number == 4:
+                spawns["player"] = (x_center,y_center)
+            elif number == 5:
+                spawns["keycard"]= (x_center,y_center)
+            elif number == 6:
+                spawns["ammo"].append((x_center,y_center))
+
+    return map_list, spawns
 
 # Laad de map bij startup
-MAP = png_to_list_fast(MAP_PATH)
+MAP ,SPAWNS = png_to_list_fast(MAP_PATH)
 MAP_W = len(MAP[0])
 MAP_H = len(MAP)
 

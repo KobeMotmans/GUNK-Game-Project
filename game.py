@@ -10,6 +10,7 @@ from raycaster import dda, draw_wall
 from weapons import Pistol, Minigun, Bazooka
 from enemies import Andrei
 from player import Player
+from map_loader import SPAWNS
 
 
 class Game:
@@ -21,7 +22,7 @@ class Game:
         self.running = False
 
         # Init speler
-        self.player = Player(150, 150)
+        self.player = Player(SPAWNS["player"].x, )
 
         # Init wapens
         self.pistol = Pistol()
@@ -34,6 +35,7 @@ class Game:
 
         self.game_running = False
         self.menu_running = True
+
 
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
@@ -245,11 +247,11 @@ class Game:
                     if (WIDTH/2-qw/2 <= mouse[0] <= WIDTH/2+qw/2 and HEIGHT/2-qh/2+HEIGHT/4 <= mouse[1] <= HEIGHT/2+qh/2+HEIGHT/4):
                         pygame.quit()
                     if (WIDTH/2-sw/2 <= mouse[0] <= WIDTH/2+sw/2 and HEIGHT/2-sh/2 <= mouse[1] <= HEIGHT/2+sh/2):
+                        self.main_music.play()
                         pygame.mouse.set_visible(False)
                         pygame.event.set_grab(True)
                         self.game_running = True
                         self.menu_running = False
-                        self.main_music.play()
             # Quit button builder
             if (WIDTH/2-qw/2 <= mouse[0] <= WIDTH/2+qw/2 and HEIGHT/2-qh/2+HEIGHT/4 <= mouse[1] <= HEIGHT/2+qh/2+HEIGHT/4):
                 pygame.draw.rect(SCREEN,button_hover_color,[WIDTH/2-qw/2,HEIGHT/2-qh/2+HEIGHT/4,qw,qh])
