@@ -72,20 +72,14 @@ class Game:
             if self.state == "game":
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:  # Links klik
-                        self.current_gun.shoot(self.player.pos, self.player.angle, self.enemies)
+                        self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"])
 
-
-
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:  # Links klik
-                    self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"])
-
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_a:
-                    if self.current_gun == self.unlocked_guns[-1]:
-                        self.current_gun = self.unlocked_guns[0]
-                    else:
-                        self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_a:
+                        if self.current_gun == self.unlocked_guns[-1]:
+                            self.current_gun = self.unlocked_guns[0]
+                        else:
+                            self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
         return events
     def handle_input(self):
         """Verwerk toetsenbord input (continuous events)"""
