@@ -75,6 +75,7 @@ class Game:
     def update(self):
         """Update game state"""
         self.current_gun.update()
+        self.player.tick()
 
     def render(self):
         """Render alle game elementen"""
@@ -90,7 +91,7 @@ class Game:
         sprites = []  # (dist, SCREEN_x, enemy)
 
         for enemy in self.enemies:
-            enemy.find_path(self.player.get_pos())
+            enemy.find_path(self.player)
             #print(enemy.is_player_los(player_pos))
             dist, SCREEN_x, angle = enemy.get_render_data_fast(
                 player_pos, player_angle, wall_distances
@@ -165,8 +166,6 @@ class Game:
             self.handle_input()
             self.update()
             self.render()
-
-            print(self.clock.get_fps())
         pygame.quit()
 
 

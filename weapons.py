@@ -41,19 +41,19 @@ class Gun:
             self.weapon_state = 1
             self.temp_flash_time = self.flash_time
             self.temp_recoil_time = self.recoil_time
-        ray_pos = pos
-        dx = cos(angle)
-        dy = sin(angle)
-        enemy_hit = False
-        while (ray_pos - pos).norm() < MAX_DEPTH:
-            ray_pos = Vector(ray_pos.x + dx, ray_pos.y + dy)
-            for enemy in enemies:
-                if enemy.is_hit(ray_pos):
-                    enemy.take_dmg(self.damage)
-                    enemy_hit = True
+            ray_pos = pos
+            dx = cos(angle)
+            dy = sin(angle)
+            enemy_hit = False
+            while (ray_pos - pos).norm() < MAX_DEPTH:
+                ray_pos = Vector(ray_pos.x + dx, ray_pos.y + dy)
+                for enemy in enemies:
+                    if enemy.is_hit(ray_pos):
+                        enemy.take_dmg(self.damage)
+                        enemy_hit = True
+                        break
+                if enemy_hit:
                     break
-            if enemy_hit:
-                break
 
     def update(self):
         """Update wapen staat (animatie timing)"""

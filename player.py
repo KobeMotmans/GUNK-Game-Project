@@ -10,9 +10,11 @@ from vector import Vector
 
 
 class Player:
-    def __init__(self, x=150, y=150):
+    def __init__(self, x=150, y=150, health=10):
         self.pos = Vector(x, y)
         self.angle = 0
+        self.health = health
+        self.inv_time = 0
 
     def rotate(self, direction):
         """
@@ -59,4 +61,15 @@ class Player:
 
     def get_angle(self):
         return self.angle
+
+    def take_damage(self, damage):
+        if self.inv_time == 0:
+            self.inv_time = 60
+            self.health -= damage
+            print("Player hp:", self.health, "Damage", damage)
+
+    def tick(self):
+        if self.inv_time > 0:
+            self.inv_time -= 1
+
 

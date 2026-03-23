@@ -5,16 +5,17 @@ enemies.py - Vijand klassen en rendering
 import pygame
 from math import atan2, hypot, cos, sin, tan, pi
 
-from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS
+from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS, MIN_DIST
 from vector import Vector
 from map_loader import map_to_cord, cord_to_map, is_in_wall
 
 
 class Enemy:
-    def __init__(self, health, speed, enemy_type, x, y, size):
+    def __init__(self, health, damage, speed, enemy_type, x, y, size):
         self.health = health
         self.speed = speed
         self.pos = Vector(x, y)
+        self.damage = damage
 
         sprite_path = f"assets/enemies/{enemy_type}.png"
         self.sprite = pygame.image.load(sprite_path).convert_alpha()
@@ -54,7 +55,7 @@ class Enemy:
         dist = hypot(dx, dy)
 
         # Te ver weg
-        if dist > MAX_DEPTH:
+        if dist > MAX_DEPTH or dist < MIN_DIST:
             return None, None, None
 
         # Projectie: screen_x = center + tan(rel_angle) * PROJ_DIST
@@ -103,15 +104,15 @@ class Enemy:
 
         # Te ver weg
         if dist > MAX_DEPTH:
-            return False
+            return False, dist
         i = 0
         while i<dist:
             i += 2
             ray_pos = Vector(self.pos.x + i*cos(world_angle), self.pos.y + i*sin(world_angle))
             r_pos_m = cord_to_map(ray_pos)
             if is_in_wall(r_pos_m):
-                return False
-        return True
+                return False, dist
+        return True, dist
 
     def move_towards(self, pos):
         dx = pos.x - self.pos.x
@@ -119,10 +120,14 @@ class Enemy:
         angle = atan2(dy, dx)
         self.pos += Vector(self.speed * cos(angle), self.speed * sin(angle))
 
-    def find_path(self, player_pos):
-        is_los = self.is_player_los(player_pos)
-        if is_los:
+    def find_path(self, player):
+        player_pos = player.pos
+        is_los, dist = self.is_player_los(player_pos)
+        if is_los and dist >= MIN_DIST:
             self.move_towards(player_pos)
+        elif dist < MIN_DIST:
+            player.take_damage(self.damage)
+
 
     def is_hit(self, pos):
         dist = (self.pos - pos).norm()
@@ -132,14 +137,10 @@ class Enemy:
 
     def take_dmg(self,dmg):
         self.health -= dmg
-
-
-
-
-
+        print("Took",dmg, "damage. Has health:", self.health)
 
 
 
 class Andrei(Enemy):
-    def __init__(self, x, y, health=10, speed=1.5, size=40):
-        super().__init__(health, speed, "andrei", x, y, size)
+    def __init__(self, x, y, health=10, damage=1, speed=1.5, size=40):
+        super().__init__(health, damage, speed, "andrei", x, y, size)
