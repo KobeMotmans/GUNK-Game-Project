@@ -16,6 +16,15 @@ color_to_number = {
 }
 
 
+def cord_to_map(cord):
+    """Converteer pixel coördinaat naar map grid coördinaat"""
+    return cord / TILE_SIZE
+
+
+def map_to_cord(mapcord):
+    """Converteer map grid coördinaat naar pixel coördinaat"""
+    return mapcord * TILE_SIZE
+
 def png_to_list_fast(path):
     """Converteer een PNG afbeelding naar een 2D grid (0 = leeg, 1 = muur)"""
     img = Image.open(path).convert("RGB")
@@ -33,8 +42,8 @@ def png_to_list_fast(path):
         for x in range(w):
             number = color_to_number[img.getpixel((x, y))]
             map_list[y].append(number)
-            x_center = x + TILE_SIZE/2 #Center object in tile
-            y_center = y + TILE_SIZE/2
+            x_center = map_to_cord(x) + TILE_SIZE/2 #Center object in tile
+            y_center = map_to_cord(y) + TILE_SIZE/2
             if number == 2:
                 spawns["end_point"] = (x_center,y_center)
             elif number == 3:
@@ -52,16 +61,6 @@ def png_to_list_fast(path):
 MAP ,SPAWNS = png_to_list_fast(MAP_PATH)
 MAP_W = len(MAP[0])
 MAP_H = len(MAP)
-
-
-def cord_to_map(cord):
-    """Converteer pixel coördinaat naar map grid coördinaat"""
-    return cord / TILE_SIZE
-
-
-def map_to_cord(mapcord):
-    """Converteer map grid coördinaat naar pixel coördinaat"""
-    return mapcord * TILE_SIZE
 
 
 def hit_wall(pos):

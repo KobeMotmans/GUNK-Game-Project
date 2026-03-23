@@ -4,16 +4,16 @@ from math import atan2, hypot, cos, sin, tan, pi
 from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS, MIN_DIST
 from vector import Vector
 
-class RenderInteractObject:
-    def __init__(self, x, y, sprite_path, size):
+class RenderObject:
+    def __init__(self, type, x, y):
         self.pos = Vector(x, y)
-        sprite_path = sprite_path
+        sprite_path = f"assets/{type}.png"
         self.sprite = pygame.image.load(sprite_path).convert_alpha()
         # Cache voor sprite scaling
         self._cached_scale = None
         self._cached_dist = -1
 
-        self.size = size
+        self.size = SPRITE_SIZE
     def get_render_data_fast(self, player_pos, player_angle, wall_distances):
         """
         World-to-camera transformatie.
@@ -81,6 +81,6 @@ class RenderInteractObject:
         SCREEN.blit(self._cached_scale, (draw_x, draw_y))
 
 
-class PickupObject(RenderInteractObject):
-    def __init__(self, x, y):
-        super().__init__(x, y)
+class PickupObject(RenderObject):
+    def __init__(self, type, x, y):
+        super().__init__(type, x, y)

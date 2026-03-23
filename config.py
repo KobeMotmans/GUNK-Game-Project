@@ -32,7 +32,7 @@ PLAYER_SPEED = 3
 PLAYER_ROT_SPEED = 0.001
 
 # Sprite instellingen
-SPRITE_SIZE = 50
+SPRITE_SIZE = 40
 MIN_DIST = 40
 
 # Wapen instellingen

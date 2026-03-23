@@ -8,18 +8,15 @@ from math import atan2, hypot, cos, sin, tan, pi
 from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS, MIN_DIST
 from vector import Vector
 from map_loader import map_to_cord, cord_to_map, is_in_wall
-from objects import RenderInteractObject
+from objects import RenderObject
 
 
-class Enemy(RenderInteractObject):
-    def __init__(self, health, damage, speed, enemy_type, x, y, size):
-        sprite_path = f"assets/enemies/{enemy_type}.png"
-        super().__init__(x, y, sprite_path, size)
+class Enemy(RenderObject):
+    def __init__(self, health, damage, speed, enemy_type, x, y):
+        super().__init__(f"enemies/{enemy_type}", x, y)
         self.health = health
         self.speed = speed
         self.damage = damage
-
-        self.sprite = pygame.image.load(sprite_path).convert_alpha()
 
     def is_player_los(self, player_pos):
         # Vector van enemy naar speler
@@ -71,5 +68,5 @@ class Enemy(RenderInteractObject):
 
 
 class Andrei(Enemy):
-    def __init__(self, x, y, health=10, damage=1, speed=1.5, size=40):
-        super().__init__(health, damage, speed, "andrei", x, y, size)
+    def __init__(self, x, y, health=10, damage=1, speed=1.5):
+        super().__init__(health, damage, speed, "andrei", x, y)

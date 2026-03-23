@@ -11,6 +11,7 @@ from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei
 from player import Player
 from map_loader import SPAWNS
+from objects import PickupObject
 
 
 class Game:
@@ -22,7 +23,9 @@ class Game:
         self.running = False
 
         # Init speler
-        self.player = Player(150,150)
+        print(SPAWNS["player"][0], SPAWNS["player"][1])
+        self.player = Player(SPAWNS["player"][0], SPAWNS["player"][1])
+
 
         # Init wapens
         self.pistol = Pistol()
@@ -31,8 +34,8 @@ class Game:
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
 
-        # Init vijanden
-        self.enemies = self.create_enemies()
+        # Init objects
+        self.objects = self.create_objects()
 
         self.game_running = False
         self.menu_running = True
@@ -41,9 +44,22 @@ class Game:
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
         enemies = []
-        for i in range(1):
-            enemies.append(Andrei(400 + 40 * i, 200))
+        for enemy_pos in SPAWNS["enemies"]:
+            enemies.append(Andrei(enemy_pos[0], enemy_pos[1]))
         return enemies
+
+    def create_objects(self):
+        objects = {
+            "enemies": self.create_enemies(),
+            "ammo": [],
+            "keycard": PickupObject("objects/keycard", SPAWNS["keycard"][0], SPAWNS["keycard"][1]),
+            "exit": PickupObject("objects/exit", SPAWNS["end_point"][0], SPAWNS["end_point"][1])
+        }
+        for ammo_pos in SPAWNS["ammo"]:
+            objects["ammo"].append(PickupObject("objects/ammo", ammo_pos[0], ammo_pos[1]))
+        return objects
+
+
 
     def handle_events(self):
         """Verwerk pygame events (single events)"""
@@ -53,7 +69,7 @@ class Game:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Links klik
-                    self.current_gun.shoot(self.player.pos, self.player.angle, self.enemies)
+                    self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"])
                 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_a:
@@ -61,7 +77,6 @@ class Game:
                         self.current_gun = self.unlocked_guns[0]
                     else:
                         self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
-            
 
     def handle_input(self):
         """Verwerk toetsenbord input (continuous events)"""
@@ -109,16 +124,32 @@ class Game:
         # 2. Verzamel zichtbare sprites
         sprites = []  # (dist, SCREEN_x, enemy)
 
-        for enemy in self.enemies:
-            enemy.find_path(self.player)
-            #print(enemy.is_player_los(player_pos))
-            dist, SCREEN_x, angle = enemy.get_render_data_fast(
-                player_pos, player_angle, wall_distances
-            )
-            if dist is not None:
-                sprites.append((dist, SCREEN_x, enemy))
-            if enemy.health <= 0:
-                self.enemies.remove(enemy)
+        for obj in self.objects.keys():
+            if obj == "enemies":
+                for enemy in self.objects[obj]:
+                    enemy.find_path(self.player)
+                    #print(enemy.is_player_los(player_pos))
+                    dist, SCREEN_x, angle = enemy.get_render_data_fast(
+                        player_pos, player_angle, wall_distances
+                    )
+                    if dist is not None:
+                        sprites.append((dist, SCREEN_x, enemy))
+                    if enemy.health <= 0:
+                        self.objects["enemies"].remove(enemy)
+            elif obj == "ammo":
+                for item in self.objects["ammo"]:
+                    dist, SCREEN_x, angle = item.get_render_data_fast(
+                        player_pos, player_angle, wall_distances
+                    )
+                    if dist is not None:
+                        sprites.append((dist, SCREEN_x, item))
+            else:
+                item = self.objects[obj]
+                dist, SCREEN_x, angle = item.get_render_data_fast(
+                    player_pos, player_angle, wall_distances
+                )
+                if dist is not None:
+                    sprites.append((dist, SCREEN_x, item))
 
         # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
