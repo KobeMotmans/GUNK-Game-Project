@@ -29,9 +29,9 @@ class Button:
                     if self.state_change == "Stop":
                         self.GAME.running = False
                         self.GAME.state = None
-                
+                        
         color = self.button_hov_color if hovering else self.button_color
         text_color = self.text_hov_color if hovering else self.text_color
         
         pygame.draw.rect(SCREEN,color,[WIDTH/2-self.w/2,HEIGHT/2-self.h/2+self.y_pos,self.w,self.h])
-        SCREEN.blit(pygame.font.SysFont('Corbel', self.text_size, True).render(self.text, True, text_color),(WIDTH/2-self.w/4,HEIGHT/2-self.h/4+self.y_pos))
+        SCREEN.blit(pygame.font.SysFont('Corbel', self.text_size, True).render(self.text, True, text_color),(WIDTH/2-self.w/3,HEIGHT/2-self.text_size/2+self.y_pos))
