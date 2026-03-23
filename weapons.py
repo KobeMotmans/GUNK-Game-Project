@@ -12,9 +12,9 @@ pygame.mixer.init()
 shoot_sound = pygame.mixer.Sound("assets/pew.mp3")
 
 class Gun:
-    def __init__(self, damage, reload_speed, shoot_speed, guntype):
+    def __init__(self, damage, recoil_speed, shoot_speed, guntype):
         self.damage = damage
-        self.reload_speed = reload_speed
+        self.recoil_speed = recoil_speed
         self.weapon_state = 0  # 0=rust, 1=schieten, 2=recoil
 
         self.flash_time = shoot_speed
@@ -83,15 +83,15 @@ class Gun:
 
 
 class Pistol(Gun):
-    def __init__(self, damage=1, reload_speed=1, shoot_speed=10):
-        super().__init__(damage, reload_speed, shoot_speed, "pistol")
+    def __init__(self, damage=1, recoil_speed=1, shoot_speed=10):
+        super().__init__(damage, recoil_speed, shoot_speed, "pistol")
 
 
 class Bazooka(Gun):
-    def __init__(self, damage=5, reload_speed=5):
-        super().__init__(damage, reload_speed, "bazooka")
+    def __init__(self, damage=5, recoil_speed=5, shoot_speed=15):
+        super().__init__(damage, recoil_speed, shoot_speed, "bazooka")
 
 
 class Minigun(Gun):
-    def __init__(self, damage=0.2, reload_speed=0.1):
-        super().__init__(damage, reload_speed, "minigun")
+    def __init__(self, damage=0.2, recoil_speed=0.1, shoot_speed=1):
+        super().__init__(damage, recoil_speed, shoot_speed, "minigun")

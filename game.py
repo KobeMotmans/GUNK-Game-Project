@@ -25,9 +25,10 @@ class Game:
 
         # Init wapens
         self.pistol = Pistol()
-        #self.minigun = Minigun()
-        #self.bazooka = Bazooka()
+        self.minigun = Minigun()
+        self.bazooka = Bazooka()
         self.current_gun = self.pistol
+        self.unlocked_guns = [self.pistol, self.minigun, self.bazooka]
 
         # Init vijanden
         self.enemies = self.create_enemies()
@@ -43,7 +44,7 @@ class Game:
         return enemies
 
     def handle_events(self):
-        """Verwerk pygame events"""
+        """Verwerk pygame events (single events)"""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.game_running = False
@@ -51,9 +52,17 @@ class Game:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Links klik
                     self.current_gun.shoot(self.player.pos, self.player.angle, self.enemies)
+                
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_a:
+                    if self.current_gun == self.unlocked_guns[-1]:
+                        self.current_gun = self.unlocked_guns[0]
+                    else:
+                        self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
+            
 
     def handle_input(self):
-        """Verwerk toetsenbord input"""
+        """Verwerk toetsenbord input (continuous events)"""
         keys = pygame.key.get_pressed()
 
         if keys[pygame.K_DELETE]:
@@ -79,7 +88,7 @@ class Game:
             self.player.move("left")
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.player.move("right")
-
+                
     def update(self):
         """Update game state"""
         self.current_gun.update()
