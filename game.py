@@ -39,8 +39,7 @@ class Game:
         # Init objects
         self.objects = self.create_objects()
 
-        self.game_running = False
-        self.menu_running = True
+        self.state = "menu"
 
 
     def create_enemies(self):
