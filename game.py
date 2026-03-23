@@ -22,7 +22,7 @@ class Game:
         self.running = False
 
         # Init speler
-        self.player = Player(SPAWNS["player"].x, )
+        self.player = Player(150,150)
 
         # Init wapens
         self.pistol = Pistol()
