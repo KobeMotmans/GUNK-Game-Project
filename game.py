@@ -64,8 +64,10 @@ class Game:
                 self.game_running = False
             if self.state == "game":
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:  # Links klik
-                        self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"])
+                    if event.button == 1 :
+                        if self.player.ammo >= self.current_gun.ammo_weight:  # Links klik
+                            self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"])
+                            self.player.ammo -= self.current_gun.ammo_weight
 
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_a:
@@ -128,6 +130,7 @@ class Game:
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, enemy))
                     if enemy.health <= 0:
+                        self.player.score += 1
                         self.objects["enemies"].remove(enemy)
             elif obj == "ammo":
                 for item in self.objects["ammo"]:
@@ -167,6 +170,8 @@ class Game:
         # Init objects
         self.objects = self.create_objects()
         self.state = "game"
+        self.player.score = 0
+        self.player.ammo = 100
         
     def run(self):
         self.running = True
@@ -187,14 +192,15 @@ class Game:
                 Quit_button.draw_button(events)
 
             if self.state == "game":
-                self.clock.tick(60)
+                self.clock.tick(100)
                 self.handle_events()
                 self.update()
                 self.render()
-                SCREEN.blit(pygame.font.SysFont('Corbel', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
-
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/10", True, 'red'),(WIDTH-300, 20))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/100", True, 'grey'),(20, HEIGHT-150))
             if self.state == "paused":
-                Restart_knop = Button(0, 200, 100, "Resume", 30, "black", 'white', 'white', 'black', self, "game", False)
+                Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
                 Restart_knop.draw_button(events)
 
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
@@ -204,6 +210,7 @@ class Game:
                 SCREEN.fill((255,0,0))
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
                             
             if self.state == 'settings':
                 SCREEN.fill((70,70,70))
