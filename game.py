@@ -88,13 +88,12 @@ class Game:
             self.running = False
             self.state = None
             pygame.quit()
-
+        
         if self.state == "game":
             if keys[pygame.K_ESCAPE]:
                 pygame.mouse.set_visible(True)
                 pygame.event.set_grab(False)
-                self.state = "paused"
-                print("paused")
+                self.state = "paused"    
 
             self.player.rotate(pygame.mouse.get_rel()[0])
             pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
