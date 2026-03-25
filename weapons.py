@@ -85,14 +85,14 @@ class Gun:
 
 class Pistol(Gun):
     def __init__(self, damage=2, recoil_speed=10, shoot_speed=10, ammo_weight=1, shoot_sound = "assets/pew.mp3"):
-        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol")
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol", shoot_sound)
 
 
 class Rifle(Gun):
     def __init__(self, damage=5, recoil_speed=50, shoot_speed=15, ammo_weight=5, shoot_sound = "assets/pew.mp3"):
-        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "rifle")
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "rifle", shoot_sound)
 
 
 class Minigun(Gun):
     def __init__(self, damage=0.5, recoil_speed=0, shoot_speed=1, ammo_weight=0.1, shoot_sound = "assets/pew.mp3"):
-        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun")
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", shoot_sound)
