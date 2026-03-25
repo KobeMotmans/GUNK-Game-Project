@@ -82,12 +82,12 @@ class Game:
             self.running = False
             self.state = None
             pygame.quit()
-
+        
         if self.state == "game":
             if keys[pygame.K_ESCAPE]:
                 pygame.mouse.set_visible(True)
                 pygame.event.set_grab(False)
-                self.state = "paused"
+                self.state = "paused"    
 
             self.player.rotate(pygame.mouse.get_rel()[0])
             pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
@@ -166,7 +166,7 @@ class Game:
         self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
         # Init objects
         self.objects = self.create_objects()
-        self.state = "menu"
+        self.state = "game"
         
     def run(self):
         self.running = True
@@ -177,7 +177,7 @@ class Game:
             keys = pygame.key.get_pressed()
             if self.state == "menu":
                 SCREEN.fill((70,70,70))
-                Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "game", False)
+                Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "reset", False)
                 Start_knop.draw_button(events)
                 
                 Settings_button = Button(150, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self, "settings", True)
@@ -191,6 +191,7 @@ class Game:
                 self.handle_events()
                 self.update()
                 self.render()
+                SCREEN.blit(pygame.font.SysFont('Corbel', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
 
             if self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 30, "black", 'white', 'white', 'black', self, "game", False)
@@ -208,9 +209,8 @@ class Game:
                 SCREEN.fill((70,70,70))
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
-
                 
-            if self.player.death:
+            if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"
             pygame.display.flip()
