@@ -28,7 +28,7 @@ PROJ_DIST = (WIDTH / 2) / (pi / 4)  # tan(FOV/2) = tan(pi/4) = 1
 
 # Speler instellingen
 PLAYER_RADIUS = 10
-PLAYER_SPEED = 3
+PLAYER_SPEED = 4
 PLAYER_ROT_SPEED = 0.001
 
 # Sprite instellingen
