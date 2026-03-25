@@ -18,7 +18,7 @@ class Gun:
         self.weapon_state = 0  # 0=rust, 1=schieten, 2=recoil
 
         self.flash_time = shoot_speed
-        self.recoil_time = self.flash_time * 1.5
+        self.recoil_time = recoil_speed
 
         self.played_sound = False
 
@@ -84,15 +84,15 @@ class Gun:
 
 
 class Pistol(Gun):
-    def __init__(self, damage=1, recoil_speed=1, shoot_speed=10, ammo_weight=1):
+    def __init__(self, damage=2, recoil_speed=10, shoot_speed=10, ammo_weight=1):
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol")
 
 
 class Rifle(Gun):
-    def __init__(self, damage=5, recoil_speed=5, shoot_speed=15, ammo_weight=5):
+    def __init__(self, damage=5, recoil_speed=50, shoot_speed=15, ammo_weight=5):
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "rifle")
 
 
 class Minigun(Gun):
-    def __init__(self, damage=0.2, recoil_speed=0.1, shoot_speed=1, ammo_weight=0.1):
+    def __init__(self, damage=0.5, recoil_speed=0, shoot_speed=1, ammo_weight=0.1):
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun")

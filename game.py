@@ -23,24 +23,18 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = False
         self.state = None
-
+        
         # Init speler
-        print(SPAWNS["player"][0], SPAWNS["player"][1])
         self.player = Player(SPAWNS["player"][0], SPAWNS["player"][1])
-
-
         # Init wapens
         self.pistol = Pistol()
         self.minigun = Minigun()
         self.rifle = Rifle()
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
-
         # Init objects
         self.objects = self.create_objects()
-
         self.state = "menu"
-
 
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
@@ -128,7 +122,6 @@ class Game:
             if obj == "enemies":
                 for enemy in self.objects[obj]:
                     enemy.find_path(self.player)
-                    #print(enemy.is_player_los(player_pos))
                     dist, SCREEN_x, angle = enemy.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
@@ -161,13 +154,20 @@ class Game:
         # 5. Wapen laatst
         self.current_gun.draw()
         pygame.display.flip()
-
+        
     def reset_game(self):
-        self.player = Player(150, 150)
+        # Init speler
+        self.player = Player(SPAWNS["player"][0], SPAWNS["player"][1])
+        # Init wapens
         self.pistol = Pistol()
+        self.minigun = Minigun()
+        self.rifle = Rifle()
         self.current_gun = self.pistol
-        self.enemies = self.create_enemies()
-
+        self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
+        # Init objects
+        self.objects = self.create_objects()
+        self.state = "menu"
+        
     def run(self):
         self.running = True
         self.state = "menu"
@@ -176,12 +176,14 @@ class Game:
             self.handle_input()
             keys = pygame.key.get_pressed()
             if self.state == "menu":
-                bg_color = (70,70,70)
-                SCREEN.fill(bg_color)
+                SCREEN.fill((70,70,70))
                 Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "game", False)
                 Start_knop.draw_button(events)
+                
+                Settings_button = Button(150, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self, "settings", True)
+                Settings_button.draw_button(events)
 
-                Quit_button = Button(100, 140, 60, "Quit", 40,"black", 'white', 'white', 'black', self, "Stop", False)
+                Quit_button = Button(250, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self, "Stop", False)
                 Quit_button.draw_button(events)
 
             if self.state == "game":
@@ -196,7 +198,21 @@ class Game:
 
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
+               
+            if self.state == 'dead':
+                SCREEN.fill((255,0,0))
+                Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button.draw_button(events)
+                            
+            if self.state == 'settings':
+                SCREEN.fill((70,70,70))
+                Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button.draw_button(events)
 
+                
+            if self.player.death:
+                pygame.mouse.set_visible(True)
+                self.state = "dead"
             pygame.display.flip()
 
         if keys[pygame.K_DELETE]:
