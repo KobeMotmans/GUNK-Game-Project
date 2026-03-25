@@ -16,6 +16,7 @@ class Player:
         self.health = health
         self.inv_time = 0
         self.death = False
+        self.score = 0
 
     def rotate(self, direction):
         """

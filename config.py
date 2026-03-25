@@ -20,7 +20,7 @@ MAP_PATH = "assets/map.png"
 
 # Raycasting instellingen
 FOV = pi / 2
-NUM_RAYS = WIDTH // 4
+NUM_RAYS = WIDTH // 6
 MAX_DEPTH = 1000
 DELTA_ANGLE = FOV / NUM_RAYS
 SCALE = WIDTH // NUM_RAYS
@@ -32,7 +32,7 @@ PLAYER_SPEED = 3
 PLAYER_ROT_SPEED = 0.001
 
 # Sprite instellingen
-SPRITE_SIZE = 40
+SPRITE_SIZE = 100
 MIN_DIST = 40
 
 # Wapen instellingen
