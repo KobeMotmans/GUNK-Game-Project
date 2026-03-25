@@ -38,3 +38,6 @@ MIN_DIST = 40
 # Wapen instellingen
 WEAPON_SIZE = (300, 300)
 WEAPON_OFFSET_X = 0.04  # 4% van schermbreedte
+
+START_AMMO = 100
+AMMO_CAP = 200

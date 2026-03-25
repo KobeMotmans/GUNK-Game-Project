@@ -5,7 +5,7 @@ game.py - Hoofd game loop en initialisatie
 import pygame
 from math import pi
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH, START_AMMO, AMMO_CAP
 from raycaster import dda, draw_wall
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei
@@ -171,7 +171,7 @@ class Game:
         self.objects = self.create_objects()
         self.state = "game"
         self.player.score = 0
-        self.player.ammo = 100
+        self.player.ammo = START_AMMO
         
     def run(self):
         self.running = True
@@ -198,7 +198,7 @@ class Game:
                 self.render()
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/10", True, 'red'),(WIDTH-300, 20))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/100", True, 'grey'),(20, HEIGHT-150))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-150))
             if self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
                 Restart_knop.draw_button(events)

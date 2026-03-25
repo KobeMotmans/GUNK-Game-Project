@@ -17,7 +17,7 @@ class Player:
         self.inv_time = 0
         self.death = False
         self.score = 0
-        self.ammo = 100
+        self.ammo = 0
 
     def rotate(self, direction):
         """

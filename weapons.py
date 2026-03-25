@@ -84,7 +84,7 @@ class Gun:
 
 
 class Pistol(Gun):
-    def __init__(self, damage=1.5, recoil_speed=10, shoot_speed=10, ammo_weight=5, shoot_sound = "assets/pistol.mp3"):
+    def __init__(self, damage=1.5, recoil_speed=10, shoot_speed=10, ammo_weight=3, shoot_sound = "assets/pistol.mp3"):
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol", shoot_sound)
 
 
