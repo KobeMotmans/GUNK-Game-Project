@@ -15,6 +15,9 @@ class Player:
         self.angle = 0
         self.health = health
         self.inv_time = 0
+        self.death = False
+        self.score = 0
+        self.ammo = 0
 
     def rotate(self, direction):
         """
@@ -67,6 +70,9 @@ class Player:
             self.inv_time = 60
             self.health -= damage
             print("Player hp:", self.health, "Damage", damage)
+            if self.health <= 0:
+                self.death = True
+                
 
     def tick(self):
         if self.inv_time > 0:

@@ -68,5 +68,5 @@ class Enemy(RenderObject):
 
 
 class Andrei(Enemy):
-    def __init__(self, x, y, health=10, damage=1, speed=1.5):
+    def __init__(self, x, y, health=10, damage=2, speed=3):
         super().__init__(health, damage, speed, "andrei", x, y)

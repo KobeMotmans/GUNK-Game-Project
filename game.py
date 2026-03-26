@@ -5,7 +5,7 @@ game.py - Hoofd game loop en initialisatie
 import pygame
 from math import pi
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH, START_AMMO, AMMO_CAP
 from raycaster import dda, draw_wall
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei
@@ -25,7 +25,6 @@ class Game:
         self.state = None
 
         # Init speler
-        print(SPAWNS["player"][0], SPAWNS["player"][1])
         self.player = Player(SPAWNS["player"][0], SPAWNS["player"][1])
 
 
@@ -40,7 +39,6 @@ class Game:
         self.objects = self.create_objects()
 
         self.state = "menu"
-
 
 
     def create_enemies(self):
@@ -71,8 +69,10 @@ class Game:
                 self.game_running = False
             if self.state == "game":
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:  # Links klik
-                        self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"])
+                    if event.button == 1 :
+                        if self.player.ammo >= self.current_gun.ammo_weight:  # Links klik
+                            self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"])
+                            self.player.ammo -= self.current_gun.ammo_weight
 
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_a:
@@ -137,6 +137,7 @@ class Game:
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, enemy))
                     if enemy.health <= 0:
+                        self.player.score += 1
                         self.objects["enemies"].remove(enemy)
             elif obj == "ammo":
                 for item in self.objects["ammo"]:
@@ -167,16 +168,17 @@ class Game:
     def reset_game(self):
         # Init speler
         self.player = Player(SPAWNS["player"][0], SPAWNS["player"][1])
-
         # Init wapens
+        self.pistol = Pistol()
+        self.minigun = Minigun()
+        self.rifle = Rifle()
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
-
         # Init objects
         self.objects = self.create_objects()
-
-        self.game_running = False
-        self.menu_running = True
+        self.state = "game"
+        self.player.score = 0
+        self.player.ammo = START_AMMO
 
     def run(self):
         self.running = True
@@ -186,12 +188,11 @@ class Game:
             self.handle_input()
             keys = pygame.key.get_pressed()
             if self.state == "menu":
-                bg_color = (70,70,70)
-                SCREEN.fill(bg_color)
-                Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "game", False)
+                SCREEN.fill((70,70,70))
+                Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "reset", False)
                 Start_knop.draw_button(events)
 
-                Quit_button = Button(100, 140, 60, "Quit", 40,"black", 'white', 'white', 'black', self, "Stop", False)
+                Quit_button = Button(250, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self, "Stop", False)
                 Quit_button.draw_button(events)
 
             if self.state == "game":
@@ -199,20 +200,39 @@ class Game:
                 self.handle_events()
                 self.update()
                 self.render()
-
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/10", True, 'red'),(WIDTH-300, 20))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-150))
             if self.state == "paused":
-                Restart_knop = Button(0, 200, 100, "Resume", 30, "black", 'white', 'white', 'black', self, "game", False)
+                Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
                 Restart_knop.draw_button(events)
 
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
-            if keys[pygame.K_DELETE]:
-                self.running = False
-                self.state = None
-                pygame.quit()
+
+            if self.state == 'dead':
+                SCREEN.fill((255,0,0))
+                Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button.draw_button(events)
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+
+            if self.state == 'settings':
+                SCREEN.fill((70,70,70))
+                Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button.draw_button(events)
+
+                _button = Button(100, 140, 60, "Silly mode", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button.draw_button(events)
+
+            if self.player.death and self.state == "game":
+                pygame.mouse.set_visible(True)
+                self.state = "dead"
             pygame.display.flip()
 
-
+        if keys[pygame.K_DELETE]:
+            self.running = False
+            self.state = None
+            pygame.quit()
         pygame.quit()
 
 
