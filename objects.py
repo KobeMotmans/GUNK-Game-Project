@@ -7,11 +7,13 @@ from vector import Vector
 class RenderObject:
     def __init__(self, type, x, y):
         self.pos = Vector(x, y)
+        self.type = type
         sprite_path = f"assets/{type}.png"
         self.sprite = pygame.image.load(sprite_path).convert_alpha()
         # Cache voor sprite scaling
         self._cached_scale = None
         self._cached_dist = -1
+        self.dist = 100000000
 
         self.size = SPRITE_SIZE
     def get_render_data_fast(self, player_pos, player_angle, wall_distances):
@@ -35,16 +37,19 @@ class RenderObject:
         while rel_angle < -pi:
             rel_angle += 2 * pi
 
+        # Echte afstand (hypot)
+        self.dist = hypot(dx, dy)
+        is_hit = False
+        if self.dist < MIN_DIST:
+            is_hit = True
+
         # Niet zichtbaar buiten FOV
         if abs(rel_angle) > FOV / 2:
-            return None, None, None
-
-        # Echte afstand (hypot)
-        dist = hypot(dx, dy)
+            return None, None, None, is_hit
 
         # Te ver weg
-        if dist > MAX_DEPTH or dist < MIN_DIST:
-            return None, None, None
+        if self.dist > MAX_DEPTH or self.dist < MIN_DIST:
+            return None, None, None, is_hit
 
         # Projectie: screen_x = center + tan(rel_angle) * PROJ_DIST
         screen_x = WIDTH / 2 + tan(rel_angle) * PROJ_DIST
@@ -54,13 +59,13 @@ class RenderObject:
 
         # Bounds check
         if ray_num < 0 or ray_num >= NUM_RAYS:
-            return None, None, None
+            return None, None, None, is_hit
 
         # Check of sprite voor de muur staat op deze ray
-        if dist >= wall_distances[ray_num]:
-            return None, None, None
+        if self.dist >= wall_distances[ray_num]:
+            return None, None, None, is_hit
 
-        return dist, screen_x, rel_angle
+        return self.dist, screen_x, rel_angle, is_hit
 
     def render_fast(self, dist, screen_x):
         """Render sprite op gegeven afstand en scherm x positie"""
@@ -80,7 +85,26 @@ class RenderObject:
 
         SCREEN.blit(self._cached_scale, (draw_x, draw_y))
 
+    def interact(self, player):
+        pass
 
 class PickupObject(RenderObject):
     def __init__(self, type, x, y):
         super().__init__(type, x, y)
+    def interact(self, player):
+        if self.type == "objects/ammo":
+            if player.ammo > 100:
+                player.ammo = 200
+            else:
+                player.ammo += 100
+        if self.type == "objects/keycard":
+            player.got_keycard = True
+        if self.type == "objects/exit":
+            if player.got_keycard:
+                player.level += 1
+                print("Level up")
+
+
+
+
+

@@ -10,7 +10,7 @@ from vector import Vector
 
 
 class Player:
-    def __init__(self, x=150, y=150, health=10):
+    def __init__(self, x=150, y=150, health=100):
         self.pos = Vector(x, y)
         self.angle = 0
         self.health = health
@@ -18,6 +18,8 @@ class Player:
         self.death = False
         self.score = 0
         self.ammo = 0
+        self.got_keycard = False
+        self.level = 0
 
     def rotate(self, direction):
         """

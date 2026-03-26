@@ -28,7 +28,7 @@ PROJ_DIST = (WIDTH / 2) / (pi / 4)  # tan(FOV/2) = tan(pi/4) = 1
 
 # Speler instellingen
 PLAYER_RADIUS = 10
-PLAYER_SPEED = 4
+PLAYER_SPEED = 6
 PLAYER_ROT_SPEED = 0.001
 
 # Sprite instellingen
@@ -42,4 +42,13 @@ WEAPON_OFFSET_X = 0.04  # 4% van schermbreedte
 START_AMMO = 100
 AMMO_CAP = 200
 
-DAMAGE_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
+SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
+DAMAGE_FLASH = SCREEN_FLASH.copy()
+DAMAGE_FLASH.fill((255,0,0), special_flags=pygame.BLEND_MULT)
+
+AMMO_FLASH = SCREEN_FLASH.copy()
+AMMO_FLASH.fill((255,215,0), special_flags=pygame.BLEND_MULT)
+
+KEYCARD_FLASH = SCREEN_FLASH.copy()
+KEYCARD_FLASH.fill((0,0,255), special_flags=pygame.BLEND_MULT)
+

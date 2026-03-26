@@ -5,7 +5,7 @@ game.py - Hoofd game loop en initialisatie
 import pygame
 from math import pi
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH, START_AMMO, AMMO_CAP, DAMAGE_FLASH
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH
 from raycaster import dda, draw_wall
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei
@@ -39,6 +39,9 @@ class Game:
         self.objects = self.create_objects()
 
         self.state = "menu"
+
+        self.curr_flash = ""
+        self.flash_time = 0
 
 
     def create_enemies(self):
@@ -125,13 +128,12 @@ class Game:
 
         # 2. Verzamel zichtbare sprites
         sprites = []  # (dist, SCREEN_x, enemy)
-
         for obj in self.objects.keys():
             if obj == "enemies":
                 for enemy in self.objects[obj]:
                     enemy.find_path(self.player)
                     #print(enemy.is_player_los(player_pos))
-                    dist, SCREEN_x, angle = enemy.get_render_data_fast(
+                    dist, SCREEN_x, angle, _ = enemy.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
                     if dist is not None:
@@ -141,18 +143,29 @@ class Game:
                         self.objects["enemies"].remove(enemy)
             elif obj == "ammo":
                 for item in self.objects["ammo"]:
-                    dist, SCREEN_x, angle = item.get_render_data_fast(
+                    dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, item))
+                    if is_hit:
+                        self.curr_flash = "ammo"
+                        self.flash_time = 60
+                        item.interact(self.player)
+                        self.objects["ammo"].remove(item)
             else:
                 item = self.objects[obj]
-                dist, SCREEN_x, angle = item.get_render_data_fast(
-                    player_pos, player_angle, wall_distances
-                )
-                if dist is not None:
-                    sprites.append((dist, SCREEN_x, item))
+                if item is not None:
+                    dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
+                        player_pos, player_angle, wall_distances
+                    )
+                    if dist is not None:
+                        sprites.append((dist, SCREEN_x, item))
+                    if is_hit:
+                        item.interact(self.player)
+                        self.objects[obj] = None
+                        self.curr_flash = "keycard"
+                        self.flash_time = 60
 
         # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
@@ -162,6 +175,13 @@ class Game:
 
         if self.player.inv_time > 10:
             SCREEN.blit(DAMAGE_FLASH, (0,0))
+        if self.flash_time > 0:
+            self.flash_time -= 1
+            if self.curr_flash == "keycard":
+                SCREEN.blit(KEYCARD_FLASH, (0, 0))
+            elif self.curr_flash == "ammo":
+                print("ammo flash")
+                SCREEN.blit(AMMO_FLASH, (0, 0))
         # 5. Wapen laatst
         self.current_gun.draw()
 
