@@ -210,6 +210,9 @@ class Game:
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
                 
+                _button = Button(100, 140, 60, "Silly mode", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button.draw_button(events)
+                
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"
