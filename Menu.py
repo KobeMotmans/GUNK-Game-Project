@@ -37,4 +37,4 @@ class Button:
         text_color = self.text_hov_color if hovering else self.text_color
         
         pygame.draw.rect(SCREEN,color,[WIDTH/2-self.w/2+self.x_pos,HEIGHT/2-self.h/2+self.y_pos,self.w,self.h])
-        SCREEN.blit(pygame.font.SysFont('Corbel', self.text_size, True).render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
+        SCREEN.blit(pygame.font.SysFont('ocraextended', self.text_size, True).render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
