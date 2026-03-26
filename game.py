@@ -5,7 +5,7 @@ game.py - Hoofd game loop en initialisatie
 import pygame
 from math import pi
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH, START_AMMO, AMMO_CAP
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH, START_AMMO, AMMO_CAP, DAMAGE_FLASH
 from raycaster import dda, draw_wall
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei
@@ -116,6 +116,7 @@ class Game:
     def render(self):   #Render alle game elementen
         SCREEN.fill('black')
 
+
         player_pos = self.player.get_pos()
         player_angle = self.player.get_angle()
 
@@ -155,11 +156,12 @@ class Game:
 
         # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
-
         # 4. Render sprites
         for dist, SCREEN_x, enemy in sprites:
             enemy.render_fast(dist, SCREEN_x)
 
+        if self.player.inv_time > 10:
+            SCREEN.blit(DAMAGE_FLASH, (0,0))
         # 5. Wapen laatst
         self.current_gun.draw()
 

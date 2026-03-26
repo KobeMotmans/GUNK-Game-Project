@@ -41,3 +41,5 @@ WEAPON_OFFSET_X = 0.04  # 4% van schermbreedte
 
 START_AMMO = 100
 AMMO_CAP = 200
+
+DAMAGE_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
