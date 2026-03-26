@@ -5,7 +5,7 @@ game.py - Hoofd game loop en initialisatie
 import pygame
 from math import pi
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD
 from raycaster import dda, draw_wall
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei
@@ -235,7 +235,7 @@ class Game:
                 Menu_button.draw_button(events)
 
             if self.state == 'dead':
-                SCREEN.fill((255,0,0))
+                SCREEN.blit(SCREEN_DEAD, (0,0))
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))

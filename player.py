@@ -10,7 +10,7 @@ from vector import Vector
 
 
 class Player:
-    def __init__(self, x=150, y=150, health=100):
+    def __init__(self, x=150, y=150, health=10):
         self.pos = Vector(x, y)
         self.angle = 0
         self.health = health
