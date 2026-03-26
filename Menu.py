@@ -30,6 +30,7 @@ class Button:
                     if self.state_change == "Stop":
                         self.GAME.running = False
                         self.GAME.state = None
+                    
     
                 
         color = self.button_hov_color if hovering else self.button_color
