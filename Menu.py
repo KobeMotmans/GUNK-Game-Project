@@ -2,7 +2,7 @@ import pygame
 from config import HEIGHT, WIDTH, SCREEN
 
 class Button:
-    def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis):
+    def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0):
         self.y_pos = y_pos
         self.h = height
         self.w = width

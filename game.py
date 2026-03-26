@@ -71,8 +71,7 @@ class Game:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1 :
                         if self.player.ammo >= self.current_gun.ammo_weight:  # Links klik
-                            self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"])
-                            self.player.ammo -= self.current_gun.ammo_weight
+                            self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"], self.player, self.current_gun)
 
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_a:
@@ -163,7 +162,6 @@ class Game:
 
         # 5. Wapen laatst
         self.current_gun.draw()
-        pygame.display.flip()
 
     def reset_game(self):
         # Init speler
@@ -191,6 +189,10 @@ class Game:
                 SCREEN.fill((70,70,70))
                 Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "reset", False)
                 Start_knop.draw_button(events)
+
+                Settings_button = Button(150, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self,
+                                         "settings", True)
+                Settings_button.draw_button(events)
 
                 Quit_button = Button(250, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self, "Stop", False)
                 Quit_button.draw_button(events)
