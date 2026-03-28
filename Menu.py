@@ -1,8 +1,8 @@
 import pygame
-from config import HEIGHT, WIDTH, SCREEN
+from config import HEIGHT, WIDTH, SCREEN, NUM_RAYS
 
 class Button:
-    def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0):
+    def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0, function = None):
         self.y_pos = y_pos
         self.h = height
         self.w = width
@@ -18,7 +18,7 @@ class Button:
         self.x_pos = x_pos
     def draw_button(self, events):
         mouse = pygame.mouse.get_pos()
-        hovering = (WIDTH/2-self.w/2 <= mouse[0] <= WIDTH/2+self.w/2 and HEIGHT/2-self.h/2+self.y_pos <= mouse[1] <= HEIGHT/2+self.h/2+self.y_pos)
+        hovering = (WIDTH/2-self.w/2+self.x_pos <= mouse[0] <= WIDTH/2+self.w/2+self.x_pos and HEIGHT/2-self.h/2+self.y_pos <= mouse[1] <= HEIGHT/2+self.h/2+self.y_pos)
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
                 if hovering:
@@ -27,13 +27,19 @@ class Button:
                     self.GAME.state = self.state_change
                     if self.state_change == "reset":
                         self.GAME.reset_game()
+                        self.GAME.state = "game"
                     if self.state_change == "Stop":
                         pygame.mixer.stop()
                         self.GAME.running = False
                         self.GAME.state = None
                     if self.state_change == "game":
                         self.GAME.main_music.play()
-
+                        print("music?")
+                        self.GAME.state = "game"
+                    if self.state_change == "low_res":
+                        NUM_RAYS = WIDTH//7
+                    if self.state_change == "high_res":
+                        NUM_RAYS = WIDTH//3
 
 
         color = self.button_hov_color if hovering else self.button_color

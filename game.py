@@ -3,16 +3,16 @@ game.py - Hoofd game loop en initialisatie
 """
 
 import pygame
-from math import pi
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, MAP_PATH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL
 from raycaster import dda, draw_wall
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei
 from player import Player
 from Menu import Button
-from map_loader import SPAWNS
+from map_loader import SPAWNS, c_map
 from objects import PickupObject
+from vector import Vector
 
 
 class Game:
@@ -42,6 +42,7 @@ class Game:
 
         self.curr_flash = ""
         self.flash_time = 0
+        self.door_pos = 0
 
 
     def create_enemies(self):
@@ -162,10 +163,11 @@ class Game:
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, item))
                     if is_hit:
-                        item.interact(self.player)
-                        self.objects[obj] = None
-                        self.curr_flash = "keycard"
-                        self.flash_time = 60
+                        interaction = item.interact(self.player)
+                        if interaction == "succes":
+                            self.objects[obj] = None
+                            self.curr_flash = "keycard"
+                            self.flash_time = 60
 
         # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
@@ -212,8 +214,7 @@ class Game:
                 Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "reset", False)
                 Start_knop.draw_button(events)
 
-                Settings_button = Button(150, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self,
-                                         "settings", True)
+                Settings_button = Button(150, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self, "settings", True)
                 Settings_button.draw_button(events)
 
                 Quit_button = Button(250, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self, "Stop", False)
@@ -225,7 +226,7 @@ class Game:
                 self.update()
                 self.render()
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/10", True, 'red'),(WIDTH-300, 20))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-300, 20))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-150))
             if self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
@@ -242,12 +243,26 @@ class Game:
 
             if self.state == 'settings':
                 SCREEN.fill((70,70,70))
-                Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button = Button(400, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
+            if self.player.level%2 != 0:
+                if self.door_pos < WIDTH/2:
+                    pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
+                    pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-self.door_pos,0,self.door_pos,HEIGHT])
+                    if self.door_pos > WIDTH/2 - ELEV_SPEED:
+                        self.player.level += 0.5
+                        if self.player.level <= MAX_LEVEL:
+                            c_map.map_level += 1
+                            self.player.pos = Vector(SPAWNS["player"][0], SPAWNS["player"][1])
+                            self.player.angle = 0
+                        else:
+                            SCREEN.fill('blue')
+                if self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
+                    pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
+                    pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
+                self.door_pos += ELEV_SPEED
 
-                _button = Button(100, 140, 60, "Silly mode", 35, "black", 'white', 'white', 'black', self, "menu", True)
-                Menu_button.draw_button(events)
-
+                    
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"

@@ -4,13 +4,13 @@ player.py - Speler klasse met movement en rotatie
 
 from math import sin, cos, pi
 
-from config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH
+from config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH, START_HEALTH
 from map_loader import will_collide
 from vector import Vector
 
 
 class Player:
-    def __init__(self, x=150, y=150, health=10):
+    def __init__(self, x=150, y=150, health=START_HEALTH):
         self.pos = Vector(x, y)
         self.angle = 0
         self.health = health

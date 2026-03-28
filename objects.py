@@ -101,8 +101,14 @@ class PickupObject(RenderObject):
             player.got_keycard = True
         if self.type == "objects/exit":
             if player.got_keycard:
-                player.level += 1
+                player.level += 0.5
                 print("Level up")
+            else:
+                print('keycard needed')
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render("NO KEYCARD", True,'green'),(WIDTH/2-200,HEIGHT/2))
+                return "fail"
+        return "succes"
+                
 
 
 

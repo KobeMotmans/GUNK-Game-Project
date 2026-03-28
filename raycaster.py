@@ -9,11 +9,10 @@ from config import (
     SCREEN, WIDTH, HEIGHT, TILE_SIZE,
     NUM_RAYS, MAX_DEPTH, DELTA_ANGLE, PROJ_DIST, SCALE
 )
-from map_loader import cord_to_map, map_to_cord, hit_wall, MAP
+from map_loader import cord_to_map, map_to_cord, hit_wall
 from vector import Vector
 
 sign = lambda x: 1 if x >= 0 else -1
-
 
 def gnc(a, sg):
     """
@@ -102,3 +101,4 @@ def dda(player_pos, player_angle):
                 break
 
     return wall_distances
+        

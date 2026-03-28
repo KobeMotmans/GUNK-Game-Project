@@ -57,8 +57,15 @@ def png_to_list_fast(path):
 
     return map_list, spawns
 
+class mapclass:
+    def __init__(self, map_level = 0):
+        self.map_level = map_level
+        
+c_map = mapclass()
+
 # Laad de map bij startup
-MAP ,SPAWNS = png_to_list_fast(MAP_PATH)
+
+MAP,SPAWNS = png_to_list_fast(MAP_PATH[c_map.map_level])
 MAP_W = len(MAP[0])
 MAP_H = len(MAP)
 
