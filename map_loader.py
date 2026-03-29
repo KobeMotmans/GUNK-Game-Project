@@ -66,6 +66,7 @@ c_map = mapclass()
 # Laad de map bij startup
 
 MAP,SPAWNS = png_to_list_fast(MAP_PATH[c_map.map_level])
+
 MAP_W = len(MAP[0])
 MAP_H = len(MAP)
 

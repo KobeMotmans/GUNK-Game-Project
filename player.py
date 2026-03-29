@@ -12,7 +12,7 @@ from vector import Vector
 class Player:
     def __init__(self, x=150, y=150, health=START_HEALTH):
         self.pos = Vector(x, y)
-        self.angle = 0
+        self.angle = -0.1
         self.health = health
         self.inv_time = 0
         self.death = False

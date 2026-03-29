@@ -98,7 +98,7 @@ class Game:
                 pygame.mouse.set_visible(True)
                 pygame.event.set_grab(False)
                 self.state = "paused"
-                pygame.mixer.stop()
+                pygame.mixer.pause()
 
             self.player.rotate(pygame.mouse.get_rel()[0])
             pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
@@ -182,7 +182,6 @@ class Game:
             if self.curr_flash == "keycard":
                 SCREEN.blit(KEYCARD_FLASH, (0, 0))
             elif self.curr_flash == "ammo":
-                print("ammo flash")
                 SCREEN.blit(AMMO_FLASH, (0, 0))
         # 5. Wapen laatst
         self.current_gun.draw()
@@ -228,6 +227,9 @@ class Game:
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-300, 20))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-150))
+                if self.player.got_keycard:
+                    SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
+                    
             if self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
                 Restart_knop.draw_button(events)
@@ -254,7 +256,8 @@ class Game:
                         if self.player.level <= MAX_LEVEL:
                             c_map.map_level += 1
                             self.player.pos = Vector(SPAWNS["player"][0], SPAWNS["player"][1])
-                            self.player.angle = 0
+                            self.player.got_keycard = False
+                            self.player.angle = -0.1
                         else:
                             SCREEN.fill('blue')
                 if self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
@@ -270,6 +273,7 @@ class Game:
 
         if keys[pygame.K_DELETE]:
             self.running = False
+            pygame.mixer.stop()
             self.state = None
             pygame.quit()
         pygame.quit()

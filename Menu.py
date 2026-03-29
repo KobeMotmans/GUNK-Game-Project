@@ -27,19 +27,15 @@ class Button:
                     self.GAME.state = self.state_change
                     if self.state_change == "reset":
                         self.GAME.reset_game()
+                        self.GAME.main_music.play()
                         self.GAME.state = "game"
                     if self.state_change == "Stop":
                         pygame.mixer.stop()
                         self.GAME.running = False
                         self.GAME.state = None
                     if self.state_change == "game":
-                        self.GAME.main_music.play()
-                        print("music?")
+                        pygame.mixer.unpause()
                         self.GAME.state = "game"
-                    if self.state_change == "low_res":
-                        NUM_RAYS = WIDTH//7
-                    if self.state_change == "high_res":
-                        NUM_RAYS = WIDTH//3
 
 
         color = self.button_hov_color if hovering else self.button_color
