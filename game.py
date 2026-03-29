@@ -239,6 +239,25 @@ class Game:
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-150))
                 if self.player.got_keycard:
                     SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
+                
+                if self.player.level%1 != 0:
+                    if self.door_pos < WIDTH/2:
+                        pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
+                        pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-self.door_pos,0,self.door_pos,HEIGHT])
+                    if self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
+                        pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
+                        pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
+                        if self.door_pos <= WIDTH/2 + ELEV_SPEED:
+                            if self.player.level < MAX_LEVEL:
+                                self.level_up()
+                            else:
+                                SCREEN.fill('light blue')
+                                break
+                    if self.door_pos >= WIDTH:
+                        self.player.level += 0.5
+                        print(self.player.level)
+                        self.door_pos = 0
+                    self.door_pos += ELEV_SPEED
                     
             if self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
@@ -257,24 +276,6 @@ class Game:
                 SCREEN.fill((70,70,70))
                 Menu_button = Button(400, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
-                
-            if self.player.level%2 != 0:
-                if self.door_pos < WIDTH/2:
-                    pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
-                    pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-self.door_pos,0,self.door_pos,HEIGHT])
-                if self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
-                    pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
-                    pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
-                    if self.door_pos <= WIDTH/2 + ELEV_SPEED:
-                        if self.player.level < MAX_LEVEL:
-                            self.level_up()
-                        else:
-                            SCREEN.fill('light blue')
-                            break
-                    if self.door_pos >= WIDTH:
-                        self.player.level += 0.5
-                        self.door_pos = 0
-                self.door_pos += ELEV_SPEED
 
                     
             if self.player.death and self.state == "game":

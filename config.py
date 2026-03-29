@@ -17,9 +17,9 @@ SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 # Map instellingen
 TILE_SIZE = 100
 MAP_PATH = ["assets/map.png", "assets/map_level_2.png","assets/map.png"]
-MAX_LEVEL = len(MAP_PATH)-1
+MAX_LEVEL = len(MAP_PATH)
 START_ANGLES = [0, pi, 0]
-ELEV_SPEED = 10
+ELEV_SPEED = 5
 
 # Raycasting instellingen
 FOV = pi / 2
@@ -34,7 +34,7 @@ PLAYER_RADIUS = 10
 PLAYER_SPEED = 6
 PLAYER_ROT_SPEED = 0.001
 
-START_HEALTH = 100
+START_HEALTH = 10
 
 # Sprite instellingen
 SPRITE_SIZE = 100
