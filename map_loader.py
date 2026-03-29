@@ -3,7 +3,7 @@ map_loader.py - Laadt en beheert de game map
 """
 
 from PIL import Image
-from config import TILE_SIZE, MAP_PATH
+from config import TILE_SIZE, MAP_PATH, START_ANGLES
 
 color_to_number = {
     (255, 255, 255): 0, #Open space
@@ -60,18 +60,15 @@ def png_to_list_fast(path):
 class mapclass:
     def __init__(self, map_level = 0):
         self.map_level = map_level
+        self.MAP, self.SPAWNS = png_to_list_fast(MAP_PATH[self.map_level])
+        self.start_angle = START_ANGLES[self.map_level]
         
-c_map = mapclass()
+M = mapclass()
 
 # Laad de map bij startup
 
-MAP,SPAWNS = png_to_list_fast(MAP_PATH[c_map.map_level])
-
-MAP_W = len(MAP[0])
-MAP_H = len(MAP)
-
-
 def hit_wall(pos):
+    MAP = M.MAP
     """Check of een positie op een muur ligt"""
     if pos.x % 1 == 0:
         x = int(pos.x)
@@ -87,6 +84,9 @@ def hit_wall(pos):
 
 
 def will_collide(nx, ny, radius=10):
+    MAP = M.MAP
+    MAP_W = len(MAP[0])
+    MAP_H = len(MAP)
     """
     Check of een cirkel met gegeven radius botst met muren.
     Checkt 4 hoekpunten van de collision box.
@@ -113,6 +113,7 @@ def will_collide(nx, ny, radius=10):
 
 
 def is_in_wall(pos):
+    MAP = M.MAP
     pos = pos // 1
     if MAP[pos.y][pos.x] == 1:
         return True

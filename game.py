@@ -4,13 +4,13 @@ game.py - Hoofd game loop en initialisatie
 
 import pygame
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL
-from raycaster import dda, draw_wall
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES
+from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei
 from player import Player
 from Menu import Button
-from map_loader import SPAWNS, c_map
+from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector
 
@@ -25,7 +25,7 @@ class Game:
         self.state = None
 
         # Init speler
-        self.player = Player(SPAWNS["player"][0], SPAWNS["player"][1])
+        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
 
 
         # Init wapens
@@ -48,7 +48,7 @@ class Game:
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
         enemies = []
-        for enemy_pos in SPAWNS["enemies"]:
+        for enemy_pos in M.SPAWNS["enemies"]:
             enemies.append(Andrei(enemy_pos[0], enemy_pos[1]))
         return enemies
 
@@ -56,10 +56,10 @@ class Game:
         objects = {
             "enemies": self.create_enemies(),
             "ammo": [],
-            "keycard": PickupObject("objects/keycard", SPAWNS["keycard"][0], SPAWNS["keycard"][1]),
-            "exit": PickupObject("objects/exit", SPAWNS["end_point"][0], SPAWNS["end_point"][1])
+            "keycard": PickupObject("objects/keycard", M.SPAWNS["keycard"][0], M.SPAWNS["keycard"][1]),
+            "exit": PickupObject("objects/exit", M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1])
         }
-        for ammo_pos in SPAWNS["ammo"]:
+        for ammo_pos in M.SPAWNS["ammo"]:
             objects["ammo"].append(PickupObject("objects/ammo", ammo_pos[0], ammo_pos[1]))
         return objects
 
@@ -166,8 +166,9 @@ class Game:
                         interaction = item.interact(self.player)
                         if interaction == "succes":
                             self.objects[obj] = None
-                            self.curr_flash = "keycard"
-                            self.flash_time = 60
+                            if obj != 'exit':
+                                self.curr_flash = "keycard"
+                                self.flash_time = 60
 
         # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
@@ -188,7 +189,7 @@ class Game:
 
     def reset_game(self):
         # Init speler
-        self.player = Player(SPAWNS["player"][0], SPAWNS["player"][1])
+        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         # Init wapens
         self.pistol = Pistol()
         self.minigun = Minigun()
@@ -200,6 +201,15 @@ class Game:
         self.state = "game"
         self.player.score = 0
         self.player.ammo = START_AMMO
+        self.door_pos = 0
+        
+    def level_up(self):
+        M.map_level += 1
+        M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
+        self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
+        self.player.got_keycard = False
+        self.player.angle = START_ANGLES[M.map_level]
+        self.objects = self.create_objects()
 
     def run(self):
         self.running = True
@@ -247,22 +257,23 @@ class Game:
                 SCREEN.fill((70,70,70))
                 Menu_button = Button(400, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
+                
             if self.player.level%2 != 0:
                 if self.door_pos < WIDTH/2:
                     pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
                     pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-self.door_pos,0,self.door_pos,HEIGHT])
-                    if self.door_pos > WIDTH/2 - ELEV_SPEED:
-                        self.player.level += 0.5
-                        if self.player.level <= MAX_LEVEL:
-                            c_map.map_level += 1
-                            self.player.pos = Vector(SPAWNS["player"][0], SPAWNS["player"][1])
-                            self.player.got_keycard = False
-                            self.player.angle = -0.1
-                        else:
-                            SCREEN.fill('blue')
                 if self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
                     pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
                     pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
+                    if self.door_pos <= WIDTH/2 + ELEV_SPEED:
+                        if self.player.level < MAX_LEVEL:
+                            self.level_up()
+                        else:
+                            SCREEN.fill('light blue')
+                            break
+                    if self.door_pos >= WIDTH:
+                        self.player.level += 0.5
+                        self.door_pos = 0
                 self.door_pos += ELEV_SPEED
 
                     
