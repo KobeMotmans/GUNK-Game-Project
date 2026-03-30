@@ -3,6 +3,7 @@ game.py - Hoofd game loop en initialisatie
 """
 
 import pygame
+from math import pi
 
 from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES
 from raycaster import dda
@@ -183,6 +184,7 @@ class Game:
             if self.curr_flash == "keycard":
                 SCREEN.blit(KEYCARD_FLASH, (0, 0))
             elif self.curr_flash == "ammo":
+                print("ammo flash")
                 SCREEN.blit(AMMO_FLASH, (0, 0))
         # 5. Wapen laatst
         self.current_gun.draw()
@@ -201,8 +203,10 @@ class Game:
         self.state = "game"
         self.player.score = 0
         self.player.ammo = START_AMMO
+        self.main_music.play()
         self.door_pos = 0
-        
+        M.map_level = 0
+
     def level_up(self):
         M.map_level += 1
         M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
@@ -239,7 +243,7 @@ class Game:
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-150))
                 if self.player.got_keycard:
                     SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
-                
+
                 if self.player.level%1 != 0:
                     if self.door_pos < WIDTH/2:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
@@ -258,7 +262,7 @@ class Game:
                         print(self.player.level)
                         self.door_pos = 0
                     self.door_pos += ELEV_SPEED
-                    
+
             if self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
                 Restart_knop.draw_button(events)
@@ -277,7 +281,7 @@ class Game:
                 Menu_button = Button(400, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
 
-                    
+
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"
