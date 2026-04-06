@@ -23,7 +23,7 @@ ELEV_SPEED = 10
 
 # Raycasting instellingen
 FOV = pi / 2
-NUM_RAYS = WIDTH // 1
+NUM_RAYS = WIDTH // 4
 MAX_DEPTH = 1000
 DELTA_ANGLE = FOV / NUM_RAYS
 SCALE = WIDTH // NUM_RAYS

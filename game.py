@@ -3,6 +3,7 @@ game.py - Hoofd game loop en initialisatie
 """
 
 import pygame
+from math import pi
 
 from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES
 from raycaster import dda
@@ -201,6 +202,7 @@ class Game:
         self.state = "game"
         self.player.score = 0
         self.player.ammo = START_AMMO
+        self.main_music.play()
         self.door_pos = 0
         
     def level_up(self):
