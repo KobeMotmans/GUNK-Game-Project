@@ -267,7 +267,6 @@ class Game:
                         self.player.level += 0.5
                         self.door_pos = -ELEV_SPEED
                     self.door_pos += ELEV_SPEED
-                print(self.door_pos)
 
             if self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
