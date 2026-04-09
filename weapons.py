@@ -11,13 +11,14 @@ from vector import Vector
 pygame.mixer.init()
 
 class Gun:
-    def __init__(self, damage, recoil_speed, shoot_speed, ammo_weight, guntype, shoot_sound):
+    def __init__(self, damage, recoil_speed, shoot_speed, ammo_weight, guntype, shoot_sound, auto = False):
         self.damage = damage
         self.recoil_speed = recoil_speed
         self.weapon_state = 0  # 0=rust, 1=schieten, 2=recoil
         self.ammo_weight = ammo_weight
         self.flash_time = shoot_speed
         self.recoil_time = recoil_speed
+        self.auto = auto
 
         self.played_sound = False
 
@@ -95,5 +96,5 @@ class Rifle(Gun):
 
 
 class Minigun(Gun):
-    def __init__(self, damage=0.5, recoil_speed=0, shoot_speed=5, ammo_weight=1, shoot_sound = "assets/pistol.mp3"):
-        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", shoot_sound)
+    def __init__(self, damage=0.7, recoil_speed=0, shoot_speed=5, ammo_weight=1, shoot_sound = "assets/minigun.mp3", auto = True):
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", shoot_sound, auto)

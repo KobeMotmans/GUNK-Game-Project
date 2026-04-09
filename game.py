@@ -83,13 +83,13 @@ class Game:
                 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        if self.current_gun != self.minigun: #Click to shoot guns
+                        if self.current_gun.auto == False: #Click to shoot guns
                             if self.player.ammo >= self.current_gun.ammo_weight:
                                 self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun)
     
         if self.state == "game":
             mouse_buttons = pygame.mouse.get_pressed()
-            if self.current_gun == self.minigun: #Pressed to shoot
+            if self.current_gun.auto: #Pressed to shoot
                 if mouse_buttons[0] and self.current_gun.weapon_state == 0:
                     if self.player.ammo >= self.current_gun.ammo_weight:
                         self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun)
