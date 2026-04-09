@@ -71,20 +71,30 @@ class Game:
         events = pygame.event.get()
         for event in events:
             if event.type == pygame.QUIT:
-                self.game_running = False
+                self.running = False
+    
             if self.state == "game":
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1 :
-                        if self.player.ammo >= self.current_gun.ammo_weight:  # Links klik
-                            self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"], self.player, self.current_gun)
-
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_a:
-                        if self.current_gun == self.unlocked_guns[-1]:
-                            self.current_gun = self.unlocked_guns[0]
-                        else:
+                if event.type == pygame.KEYDOWN: #Switch guns
+                    if event.key == pygame.K_a: 
+                        if self.current_gun == self.unlocked_guns[-1]: 
+                            self.current_gun = self.unlocked_guns[0] 
+                        else: 
                             self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
+                
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        if self.current_gun != self.minigun: #Click to shoot guns
+                            if self.player.ammo >= self.current_gun.ammo_weight:
+                                self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun)
+    
+        if self.state == "game":
+            mouse_buttons = pygame.mouse.get_pressed()
+            if self.current_gun == self.minigun: #Pressed to shoot
+                if mouse_buttons[0] and self.current_gun.weapon_state == 0:
+                    if self.player.ammo >= self.current_gun.ammo_weight:
+                        self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun)
         return events
+    
     def handle_input(self):
         """Verwerk toetsenbord input (continuous events)"""
         keys = pygame.key.get_pressed()
@@ -236,7 +246,6 @@ class Game:
 
             if self.state == "game":
                 self.clock.tick(60)
-                self.handle_events()
                 if self.door_pos == 0 or self.door_pos > WIDTH/2:
                     self.update()
                     self.render()
