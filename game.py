@@ -211,6 +211,10 @@ class Game:
         self.objects = self.create_objects()
         self.state = "game"
         self.player.score = 0
+        self.player.level = 0
+        M.map_level = 0
+        M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
+        M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
         self.main_music.play()
         self.door_pos = 0
@@ -285,6 +289,7 @@ class Game:
                 Menu_button.draw_button(events)
 
             if self.state == 'dead':
+                pygame.mixer.stop()
                 SCREEN.blit(SCREEN_DEAD, (0,0))
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
