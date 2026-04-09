@@ -50,11 +50,22 @@ class Enemy(RenderObject):
     def find_path(self, player):
         player_pos = player.pos
         is_los, dist = self.is_player_los(player_pos)
+    
+        # Remember player once seen
+        if is_los:
+            self.spotted_player = True
+    
+        # Direct movement if visible
         if is_los and dist >= MIN_DIST:
             self.move_towards(player_pos)
-            self.spotted_player = True
-        elif dist < MIN_DIST:
+
+        # Attack if close
+        if dist < MIN_DIST:
             player.take_damage(self.damage)
+
+        # Use A* if player was seen
+        if self.spotted_player and dist < AGGRO_DIST:
+            self.A_star(player)
 
 
     def is_hit(self, pos):
