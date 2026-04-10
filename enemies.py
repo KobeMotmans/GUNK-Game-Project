@@ -65,7 +65,7 @@ class Enemy(RenderObject):
 
         # Use A* if player was seen
         if self.spotted_player and dist < AGGRO_DIST:
-            self.A_star(player)
+            self.A_star(self.pos, player)
 
 
     def is_hit(self, pos):

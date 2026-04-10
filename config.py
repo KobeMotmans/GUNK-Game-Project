@@ -16,7 +16,7 @@ SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
 # Map instellingen
 TILE_SIZE = 100
-MAP_PATH = ["assets/map.png", "assets/map_level_2.png","assets/map.png"]
+MAP_PATH = ["assets/map.png", "assets/map_level_2.png","assets/lvl3.png"]
 MAX_LEVEL = len(MAP_PATH)-1
 START_ANGLES = [0, pi, 0]
 ELEV_SPEED = 10
