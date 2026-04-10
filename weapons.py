@@ -96,5 +96,5 @@ class Rifle(Gun):
 
 
 class Minigun(Gun):
-    def __init__(self, damage=0.7, recoil_speed=0, shoot_speed=5, ammo_weight=1, shoot_sound = "assets/minigun.mp3", auto = True):
+    def __init__(self, damage=0.5, recoil_speed=0, shoot_speed=5, ammo_weight=1, shoot_sound = "assets/minigun.mp3", auto = True):
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", shoot_sound, auto)

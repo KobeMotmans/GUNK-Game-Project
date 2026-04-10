@@ -24,6 +24,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = False
         self.state = None
+        self.escaped = False
 
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
@@ -250,15 +251,24 @@ class Game:
 
             if self.state == "game":
                 self.clock.tick(60)
-                if self.door_pos == 0 or self.door_pos > WIDTH/2:
+                if (self.door_pos == 0 or self.door_pos > WIDTH/2) and not self.escaped:
                     self.update()
                     self.render()
                     
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-300, 20))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-150))
+                
                 if self.player.got_keycard:
                     SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
+                    
+                if self.escaped:
+                    SCREEN.fill((0,130,200))
+                    SCREEN.blit(pygame.font.SysFont('ocraextended', 150, True).render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-400))
+                    SCREEN.blit(pygame.font.SysFont('ocraextended', 150, True).render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-200))
+                    SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+                    Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                    Menu_button.draw_button(events)
                 
                 if self.player.level%1 != 0:
                     if self.door_pos < WIDTH/2:
@@ -270,7 +280,8 @@ class Game:
                             self.level_up()
                         else:
                             pygame.mixer.stop()
-                            self.state = "menu"
+                            self.escaped = True
+                            pygame.mouse.set_visible(True)
                             
                     elif self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
@@ -280,6 +291,7 @@ class Game:
                         self.player.level += 0.5
                         self.door_pos = -ELEV_SPEED
                     self.door_pos += ELEV_SPEED
+                    
 
             if self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
