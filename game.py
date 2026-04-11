@@ -20,6 +20,7 @@ class Game:
     def __init__(self):
         pygame.init()
         pygame.mixer.init()
+        self.music = True
         self.main_music = pygame.mixer.Sound("assets/Soundtrack.mp3")
         self.clock = pygame.time.Clock()
         self.running = False
@@ -217,7 +218,7 @@ class Game:
         M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
-        self.main_music.play()
+        self.main_music.play() if self.music else None
         self.door_pos = 0
         
     def level_up(self):
@@ -311,6 +312,9 @@ class Game:
                 SCREEN.fill((70,70,70))
                 Menu_button = Button(400, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
+                
+                Music_button = Button(100, 250, 60, "MUSIC" if self.music == False else "NO MUSIC", 35, "black", 'white', 'white', 'black', self, "settings", True, 0, "music")
+                Music_button.draw_button(events)
 
                     
             if self.player.death and self.state == "game":
