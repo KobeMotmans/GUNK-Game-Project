@@ -35,7 +35,7 @@ class Button:
                         self.GAME.running = False
                         self.GAME.state = None
                     if self.state_change == "game":
-                        pygame.mixer.unpause()
+                        pygame.mixer.unpause() if self.GAME.music else None
                         self.GAME.state = "game"
 
 

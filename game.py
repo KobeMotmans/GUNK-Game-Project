@@ -202,6 +202,8 @@ class Game:
 
     def reset_game(self):
         # Init speler
+        M.map_level = 0
+        M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         # Init wapens
         self.pistol = Pistol()
