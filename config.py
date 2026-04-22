@@ -44,6 +44,10 @@ MIN_DIST = 40
 WEAPON_SIZE = (300, 300)
 WEAPON_OFFSET_X = 0.04  # 4% van schermbreedte
 
+#Object instellingen
+HEALTH_CHANCE = 0.20
+HEALTH_REGEN = 2
+
 START_AMMO = 100
 AMMO_CAP = 200
 
