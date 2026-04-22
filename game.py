@@ -4,11 +4,12 @@ game.py - Hoofd game loop en initialisatie
 
 import pygame
 from math import pi
+import random
 
 from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
-from enemies import Andrei
+from enemies import Andrei, Ahmed, Ruben
 from player import Player
 from Menu import Button
 from map_loader import M, png_to_list_fast
@@ -37,22 +38,25 @@ class Game:
         self.rifle = Rifle()
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
+        
+        self.state = "menu"
+        self.curr_flash = ""
+        self.flash_time = 0
+        self.door_pos = 0
+        self.possible_enemies = [Andrei, Ahmed, Ruben]
 
         # Init objects
         self.objects = self.create_objects()
 
-        self.state = "menu"
-
-        self.curr_flash = ""
-        self.flash_time = 0
-        self.door_pos = 0
-
+        
 
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
         enemies = []
         for enemy_pos in M.SPAWNS["enemies"]:
-            enemies.append(Andrei(enemy_pos[0], enemy_pos[1]))
+            randomnumber = random.randint(0,2)
+            random_enemy =  self.possible_enemies[randomnumber]
+            enemies.append(random_enemy(enemy_pos[0], enemy_pos[1]))
         return enemies
 
     def create_objects(self):
@@ -285,6 +289,7 @@ class Game:
                             pygame.mixer.stop()
                             self.escaped = True
                             pygame.mouse.set_visible(True)
+                            pygame.event.set_grab(True)
                             
                     elif self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
@@ -312,7 +317,7 @@ class Game:
 
             if self.state == 'settings':
                 SCREEN.fill((70,70,70))
-                Menu_button = Button(400, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button = Button(200, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
                 
                 Music_button = Button(100, 250, 60, "MUSIC" if self.music == False else "NO MUSIC", 35, "black", 'white', 'white', 'black', self, "settings", True, 0, "music")
