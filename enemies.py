@@ -85,13 +85,13 @@ class Enemy(RenderObject):
 
 
 class Andrei(Enemy):
-    def __init__(self, x, y, health=10, damage=3, speed=3):
+    def __init__(self, x, y, health=13, damage=3, speed=3):
         super().__init__(health, damage, speed, "andrei", x, y)   
 class Ahmed(Enemy):
     def __init__(self, x, y, health=6, damage=2, speed=6):
         super().__init__(health, damage, speed, "ahmed", x, y)
 class Ruben(Enemy):
-    def __init__(self, x, y, health=14, damage=2, speed=2):
+    def __init__(self, x, y, health=19, damage=2, speed=2):
         super().__init__(health, damage, speed, "ruben", x, y)
 class Jan(Enemy):
     def __init__(self, x, y, health=20, damage=2, speed=2):

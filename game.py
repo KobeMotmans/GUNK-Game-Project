@@ -87,13 +87,26 @@ class Game:
                             self.current_gun = self.unlocked_guns[0] 
                         else: 
                             self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
+                    if event.key == pygame.K_ESCAPE: 
+                        pygame.mouse.set_visible(True)
+                        pygame.event.set_grab(False)
+                        self.state = "paused"
+                        pygame.mixer.pause()
                 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
                         if self.current_gun.auto == False: #Click to shoot guns
                             if self.player.ammo >= self.current_gun.ammo_weight:
                                 self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun)
-    
+
+            elif self.state == "paused":
+                 if event.type == pygame.KEYDOWN: #unpause
+                     if event.key == pygame.K_ESCAPE: 
+                         pygame.mouse.set_visible(False)
+                         pygame.event.set_grab(True)
+                         self.state = "game"
+                         pygame.mixer.unpause() 
+        
         if self.state == "game":
             mouse_buttons = pygame.mouse.get_pressed()
             if self.current_gun.auto: #Pressed to shoot
@@ -112,12 +125,6 @@ class Game:
             pygame.quit()
 
         if self.state == "game":
-            if keys[pygame.K_ESCAPE]:
-                pygame.mouse.set_visible(True)
-                pygame.event.set_grab(False)
-                self.state = "paused"
-                pygame.mixer.pause()
-
             self.player.rotate(pygame.mouse.get_rel()[0])
             pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
             pygame.mouse.get_rel()
@@ -346,11 +353,6 @@ class Game:
                 self.state = "dead"
             pygame.display.flip()
 
-        if keys[pygame.K_DELETE]:
-            self.running = False
-            pygame.mixer.stop()
-            self.state = None
-            pygame.quit()
         pygame.quit()
 
 
