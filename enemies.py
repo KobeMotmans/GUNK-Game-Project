@@ -5,7 +5,7 @@ enemies.py - Vijand klassen en rendering
 import pygame
 from math import atan2, hypot, cos, sin, tan, pi
 
-from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS, MIN_DIST, AGGRO_DIST
+from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, AGGRO_DIST
 from vector import Vector
 from map_loader import map_to_cord, cord_to_map, is_in_wall
 from objects import RenderObject
