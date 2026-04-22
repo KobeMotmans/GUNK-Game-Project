@@ -6,7 +6,7 @@ import pygame
 from math import pi
 import random
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, set_resolution
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben
@@ -267,9 +267,11 @@ class Game:
         self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
+        pygame.mixer.Sound("assets/elev_ding.mp3").play
 
     def run(self):
         self.running = True
+        set_resolution("high")
         self.state = "menu"
         while self.running:
             events = self.handle_events()
@@ -317,8 +319,10 @@ class Game:
                     if self.door_pos < WIDTH/2:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
                         pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-self.door_pos,0,self.door_pos,HEIGHT])
+                        self.door_pos += ELEV_SPEED
                     elif self.door_pos <= WIDTH/2 + ELEV_SPEED:
                         SCREEN.fill((20,20,20))
+                        self.door_pos += 1
                         if self.player.level < MAX_LEVEL:
                             self.level_up()
                         else:
@@ -329,12 +333,13 @@ class Game:
                             
                     elif self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
-                        pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
+                        pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos/2,0,WIDTH-self.door_pos,HEIGHT])
+                        self.door_pos += ELEV_SPEED
                        
                     elif self.door_pos >= WIDTH:
                         self.player.level += 0.5
-                        self.door_pos = -ELEV_SPEED
-                    self.door_pos += ELEV_SPEED
+                        self.door_pos = 0
+                    
                     
 
             elif self.state == "paused":

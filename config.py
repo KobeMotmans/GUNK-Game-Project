@@ -16,9 +16,9 @@ SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
 # Map instellingen
 TILE_SIZE = 100
-MAP_PATH = ["assets/map.png", "assets/map_level_2.png","assets/lvl3.png"]
+MAP_PATH = ["assets/floor_0.png", "assets/floor_0.png","assets/floor_0.png"]
 MAX_LEVEL = len(MAP_PATH)-1
-START_ANGLES = [0, pi, 0]
+START_ANGLES = [4, pi, 0]
 ELEV_SPEED = 10
 
 # Raycasting instellingen
@@ -29,7 +29,7 @@ PROJ_DIST = (WIDTH / 2) / (pi / 4)  # tan(FOV/2) = tan(pi/4) = 1
 def set_resolution(quality: str):
     """Update raycasting constants. quality = 'high' or 'low'"""
     import config
-    divisor = 4 if quality == "high" else 8
+    divisor = 4 if quality == "high" else 10
     config.NUM_RAYS = WIDTH // divisor
     config.DELTA_ANGLE = FOV / config.NUM_RAYS
 
