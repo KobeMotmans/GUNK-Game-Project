@@ -8,11 +8,12 @@ from config import TILE_SIZE, MAP_PATH, START_ANGLES
 color_to_number = {
     (255, 255, 255): 0, #Open space
     (0,0,0): 1, # Wall
-    (255, 0, 0): 2, # Exit
-    (0, 255, 0): 3, #Enemy
-    (0,0,255): 4, #Player Spawn
-    (255, 255, 0): 5, #Keycard
-    (0, 255, 255): 6 #Ammo
+    (0, 255, 0): 2, # Exit
+    (255, 0, 0): 3, #Enemy
+    (0, 255, 255): 4, #Player Spawn
+    (0, 0, 255): 5, #Keycard
+    (255, 255, 0): 6, #Ammo
+    (255, 0, 255): 7 #Jan Lemeire
 }
 
 
@@ -54,6 +55,8 @@ def png_to_list_fast(path):
                 spawns["keycard"]= (x_center,y_center)
             elif number == 6:
                 spawns["ammo"].append((x_center,y_center))
+            elif number == 7:
+                spawns["jan"]= (x_center,y_center)
 
     return map_list, spawns
 
