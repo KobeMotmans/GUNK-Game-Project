@@ -16,6 +16,7 @@ class Button:
         self.state_change = state_change
         self.mouse_vis = mouse_vis
         self.x_pos = x_pos
+        self.function = function
     def draw_button(self, events):
         mouse = pygame.mouse.get_pos()
         hovering = (WIDTH/2-self.w/2+self.x_pos <= mouse[0] <= WIDTH/2+self.w/2+self.x_pos and HEIGHT/2-self.h/2+self.y_pos <= mouse[1] <= HEIGHT/2+self.h/2+self.y_pos)
@@ -25,16 +26,16 @@ class Button:
                     pygame.mouse.set_visible(self.mouse_vis)
                     pygame.event.set_grab(True)
                     self.GAME.state = self.state_change
+                    if self.function == "music":
+                        self.GAME.music = not self.GAME.music
                     if self.state_change == "reset":
                         self.GAME.reset_game()
-                        self.GAME.main_music.play()
-                        self.GAME.state = "game"
                     if self.state_change == "Stop":
                         pygame.mixer.stop()
                         self.GAME.running = False
                         self.GAME.state = None
                     if self.state_change == "game":
-                        pygame.mixer.unpause()
+                        pygame.mixer.unpause() if self.GAME.music else None
                         self.GAME.state = "game"
 
 

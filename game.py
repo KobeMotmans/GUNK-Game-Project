@@ -20,10 +20,12 @@ class Game:
     def __init__(self):
         pygame.init()
         pygame.mixer.init()
+        self.music = True
         self.main_music = pygame.mixer.Sound("assets/Soundtrack.mp3")
         self.clock = pygame.time.Clock()
         self.running = False
         self.state = None
+        self.escaped = False
 
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
@@ -71,20 +73,30 @@ class Game:
         events = pygame.event.get()
         for event in events:
             if event.type == pygame.QUIT:
-                self.game_running = False
+                self.running = False
+    
             if self.state == "game":
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1 :
-                        if self.player.ammo >= self.current_gun.ammo_weight:  # Links klik
-                            self.current_gun.shoot(self.player.pos, self.player.angle, self.objects["enemies"], self.player, self.current_gun)
-
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_a:
-                        if self.current_gun == self.unlocked_guns[-1]:
-                            self.current_gun = self.unlocked_guns[0]
-                        else:
+                if event.type == pygame.KEYDOWN: #Switch guns
+                    if event.key == pygame.K_a: 
+                        if self.current_gun == self.unlocked_guns[-1]: 
+                            self.current_gun = self.unlocked_guns[0] 
+                        else: 
                             self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
+                
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        if self.current_gun.auto == False: #Click to shoot guns
+                            if self.player.ammo >= self.current_gun.ammo_weight:
+                                self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun)
+    
+        if self.state == "game":
+            mouse_buttons = pygame.mouse.get_pressed()
+            if self.current_gun.auto: #Pressed to shoot
+                if mouse_buttons[0] and self.current_gun.weapon_state == 0:
+                    if self.player.ammo >= self.current_gun.ammo_weight:
+                        self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun)
         return events
+    
     def handle_input(self):
         """Verwerk toetsenbord input (continuous events)"""
         keys = pygame.key.get_pressed()
@@ -184,13 +196,14 @@ class Game:
             if self.curr_flash == "keycard":
                 SCREEN.blit(KEYCARD_FLASH, (0, 0))
             elif self.curr_flash == "ammo":
-                print("ammo flash")
                 SCREEN.blit(AMMO_FLASH, (0, 0))
         # 5. Wapen laatst
         self.current_gun.draw()
 
     def reset_game(self):
         # Init speler
+        M.map_level = 0
+        M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         # Init wapens
         self.pistol = Pistol()
@@ -202,11 +215,14 @@ class Game:
         self.objects = self.create_objects()
         self.state = "game"
         self.player.score = 0
-        self.player.ammo = START_AMMO
-        self.main_music.play()
-        self.door_pos = 0
+        self.player.level = 0
         M.map_level = 0
-
+        M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
+        M.start_angle = START_ANGLES[M.map_level]
+        self.player.ammo = START_AMMO
+        self.main_music.play() if self.music else None
+        self.door_pos = 0
+        
     def level_up(self):
         M.map_level += 1
         M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
@@ -224,6 +240,9 @@ class Game:
             keys = pygame.key.get_pressed()
             if self.state == "menu":
                 SCREEN.fill((70,70,70))
+                
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-400))
+                
                 Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "reset", False)
                 Start_knop.draw_button(events)
 
@@ -235,33 +254,47 @@ class Game:
 
             if self.state == "game":
                 self.clock.tick(60)
-                self.handle_events()
-                self.update()
-                self.render()
+                if (self.door_pos == 0 or self.door_pos > WIDTH/2) and not self.escaped:
+                    self.update()
+                    self.render()
+                    
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-300, 20))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-150))
+                
                 if self.player.got_keycard:
                     SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
-
+                    
+                if self.escaped:
+                    SCREEN.fill((0,130,200))
+                    SCREEN.blit(pygame.font.SysFont('ocraextended', 150, True).render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-400))
+                    SCREEN.blit(pygame.font.SysFont('ocraextended', 150, True).render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-200))
+                    SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+                    Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                    Menu_button.draw_button(events)
+                
                 if self.player.level%1 != 0:
                     if self.door_pos < WIDTH/2:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
                         pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-self.door_pos,0,self.door_pos,HEIGHT])
-                    if self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
+                    elif self.door_pos <= WIDTH/2 + ELEV_SPEED:
+                        SCREEN.fill((20,20,20))
+                        if self.player.level < MAX_LEVEL:
+                            self.level_up()
+                        else:
+                            pygame.mixer.stop()
+                            self.escaped = True
+                            pygame.mouse.set_visible(True)
+                            
+                    elif self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
                         pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
-                        if self.door_pos <= WIDTH/2 + ELEV_SPEED:
-                            if self.player.level < MAX_LEVEL:
-                                self.level_up()
-                            else:
-                                SCREEN.fill('light blue')
-                                break
-                    if self.door_pos >= WIDTH:
+                       
+                    elif self.door_pos >= WIDTH:
                         self.player.level += 0.5
-                        print(self.player.level)
-                        self.door_pos = 0
+                        self.door_pos = -ELEV_SPEED
                     self.door_pos += ELEV_SPEED
+                    
 
             if self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
@@ -271,6 +304,7 @@ class Game:
                 Menu_button.draw_button(events)
 
             if self.state == 'dead':
+                pygame.mixer.stop()
                 SCREEN.blit(SCREEN_DEAD, (0,0))
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
@@ -280,8 +314,11 @@ class Game:
                 SCREEN.fill((70,70,70))
                 Menu_button = Button(400, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
+                
+                Music_button = Button(100, 250, 60, "MUSIC" if self.music == False else "NO MUSIC", 35, "black", 'white', 'white', 'black', self, "settings", True, 0, "music")
+                Music_button.draw_button(events)
 
-
+                    
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"

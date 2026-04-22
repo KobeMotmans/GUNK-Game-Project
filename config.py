@@ -16,10 +16,10 @@ SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
 # Map instellingen
 TILE_SIZE = 100
-MAP_PATH = ["assets/map.png", "assets/map_level_2.png","assets/map.png"]
-MAX_LEVEL = len(MAP_PATH)
+MAP_PATH = ["assets/map.png", "assets/map_level_2.png","assets/lvl3.png"]
+MAX_LEVEL = len(MAP_PATH)-1
 START_ANGLES = [0, pi, 0]
-ELEV_SPEED = 5
+ELEV_SPEED = 10
 
 # Raycasting instellingen
 FOV = pi / 2
@@ -57,4 +57,7 @@ AMMO_FLASH.fill((255,215,0), special_flags=pygame.BLEND_MULT)
 
 KEYCARD_FLASH = SCREEN_FLASH.copy()
 KEYCARD_FLASH.fill((0,0,255), special_flags=pygame.BLEND_MULT)
+
+#Enemy instellingen
+AGGRO_DIST = 30
 
