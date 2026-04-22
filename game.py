@@ -289,6 +289,7 @@ class Game:
                             pygame.mixer.stop()
                             self.escaped = True
                             pygame.mouse.set_visible(True)
+                            pygame.event.set_grab(True)
                             
                     elif self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
