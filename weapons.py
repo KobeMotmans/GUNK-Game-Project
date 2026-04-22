@@ -50,10 +50,11 @@ class Gun:
             while (ray_pos - pos).norm() < MAX_DEPTH:
                 ray_pos = Vector(ray_pos.x + dx, ray_pos.y + dy)
                 for enemy in enemies:
-                    if enemy.is_hit(ray_pos):
-                        enemy.take_dmg(self.damage)
-                        enemy_hit = True
-                        break
+                    if enemy.is_los:
+                        if enemy.is_hit(ray_pos):
+                            enemy.take_dmg(self.damage)
+                            enemy_hit = True
+                            break
                 if enemy_hit:
                     break
 
