@@ -38,22 +38,23 @@ class Game:
         self.rifle = Rifle()
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
-
-        # Init objects
-        self.objects = self.create_objects()
-
+        
         self.state = "menu"
-
         self.curr_flash = ""
         self.flash_time = 0
         self.door_pos = 0
         self.possible_enemies = [Andrei, Ahmed, Ruben]
 
+        # Init objects
+        self.objects = self.create_objects()
+
+        
+
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
         enemies = []
         for enemy_pos in M.SPAWNS["enemies"]:
-            randomnumber = random.randint(1,3)
+            randomnumber = random.randint(0,2)
             random_enemy =  self.possible_enemies[randomnumber]
             enemies.append(random_enemy(enemy_pos[0], enemy_pos[1]))
         return enemies
