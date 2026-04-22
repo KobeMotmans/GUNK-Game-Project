@@ -21,6 +21,40 @@ class Enemy(RenderObject):
         self.spotted_player = False
         self.is_los = False
 
+    def draw_health_bar(self, sprite_h, draw_x, draw_y):
+        bar_width = sprite_h
+        bar_height = sprite_h * 0.1
+
+        health_ratio = max(0, self.health / self.max_health)
+
+        # Plaats bar net boven de sprite
+        bar_x = draw_x
+        bar_y = draw_y - bar_height - 4
+
+        # Achtergrond
+        bg_rect = pygame.Rect(bar_x, bar_y, bar_width, bar_height)
+        pygame.draw.rect(SCREEN, (120, 0, 0), bg_rect)
+
+        # Dynamische kleur
+        if health_ratio > 0.5:
+            color = (0, 200, 0)
+        elif health_ratio > 0.25:
+            color = (200, 200, 0)
+        else:
+            color = (200, 0, 0)
+
+        # Voorgrond
+        fg_rect = pygame.Rect(
+            bar_x,
+            bar_y,
+            bar_width * health_ratio,
+            bar_height
+        )
+        pygame.draw.rect(SCREEN, color, fg_rect)
+
+        # Rand
+        pygame.draw.rect(SCREEN, (0, 0, 0), bg_rect, 1)
+
     def is_player_los(self, player_pos):
         # Vector van enemy naar speler
         dx = player_pos.x - self.pos.x
