@@ -25,13 +25,14 @@ ELEV_SPEED = 10
 FOV = pi / 2
 MAX_DEPTH = 1000
 PROJ_DIST = (WIDTH / 2) / (pi / 4)  # tan(FOV/2) = tan(pi/4) = 1
-
+NUM_RAYS = 0
+DELTA_ANGLE = 0
 def set_resolution(quality: str):
     """Update raycasting constants. quality = 'high' or 'low'"""
-    import config
-    divisor = 4 if quality == "high" else 10
-    config.NUM_RAYS = WIDTH // divisor
-    config.DELTA_ANGLE = FOV / config.NUM_RAYS
+    global NUM_RAYS, DELTA_ANGLE
+    divisor = 4 if quality == "high" else 8
+    NUM_RAYS = WIDTH // divisor
+    DELTA_ANGLE = FOV / NUM_RAYS
 
 # Speler instellingen
 PLAYER_RADIUS = 10

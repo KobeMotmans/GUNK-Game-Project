@@ -270,6 +270,7 @@ class Game:
         pygame.mixer.Sound("assets/elev_ding.mp3").play
 
     def run(self):
+        set_resolution("high")
         self.running = True
         set_resolution("high")
         self.state = "menu"
