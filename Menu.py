@@ -1,5 +1,5 @@
 import pygame
-from config import HEIGHT, WIDTH, SCREEN, NUM_RAYS
+from config import HEIGHT, WIDTH, SCREEN, set_resolution
 
 class Button:
     def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0, function = None):
@@ -24,10 +24,14 @@ class Button:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
                 if hovering:
                     pygame.mouse.set_visible(self.mouse_vis)
-                    pygame.event.set_grab(True)
+                    pygame.event.set_grab(self.state_change == "game")
                     self.GAME.state = self.state_change
-                    if self.function == "music":
-                        self.GAME.music = not self.GAME.music
+                    if self.function == "res_high":
+                        set_resolution("high")
+                        self.GAME.resolution = "high"
+                    if self.function == "res_low":
+                        set_resolution("low")
+                        self.GAME.resolution = "low"
                     if self.state_change == "reset":
                         self.GAME.reset_game()
                     if self.state_change == "Stop":
@@ -35,9 +39,8 @@ class Button:
                         self.GAME.running = False
                         self.GAME.state = None
                     if self.state_change == "game":
-                        pygame.mixer.unpause() if self.GAME.music else None
+                        pygame.mixer.unpause()
                         self.GAME.state = "game"
-
 
         color = self.button_hov_color if hovering else self.button_color
         text_color = self.text_hov_color if hovering else self.text_color

@@ -46,7 +46,7 @@ class Game:
 
         # Init objects
         self.objects = self.create_objects()
-
+        self.resolution = "high"
         self.volume_slider = Slider(
                                     y_pos=50,       # vertical offset from screen center
                                     width=400,
@@ -278,18 +278,21 @@ class Game:
             if self.state == "menu":
                 SCREEN.fill((70,70,70))
                 
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-400))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
                 
                 Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "reset", False)
                 Start_knop.draw_button(events)
 
-                Settings_button = Button(150, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self, "settings", True)
+                Settings_button = Button(100, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self, "settings", True)
                 Settings_button.draw_button(events)
+                
+                Credits_button = Button(180, 200, 60, "CREDITS", 30 ,"black", 'white', 'white', 'black', self, "credits", True)
+                Credits_button.draw_button(events)
 
-                Quit_button = Button(250, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self, "Stop", False)
+                Quit_button = Button(260, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self, "Stop", False)
                 Quit_button.draw_button(events)
-
-            if self.state == "game":
+                
+            elif self.state == "game":
                 self.clock.tick(60)
                 if (self.door_pos == 0 or self.door_pos > WIDTH/2) and not self.escaped:
                     self.update()
@@ -334,28 +337,40 @@ class Game:
                     self.door_pos += ELEV_SPEED
                     
 
-            if self.state == "paused":
+            elif self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
                 Restart_knop.draw_button(events)
 
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
 
-            if self.state == 'dead':
+            elif self.state == 'dead':
                 pygame.mixer.stop()
                 SCREEN.blit(SCREEN_DEAD, (0,0))
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
-
-            if self.state == 'settings':
+           
+            elif self.state == "credits":
                 SCREEN.fill((70, 70, 70))
                 Menu_button = Button(200, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
-            
-                self.volume_slider.draw(events)  # <-- add this line
-
-                    
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Kobe Motmans", False, 'white'),(WIDTH/2, HEIGHT/2-50))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Andreas Meuwissen", False, 'white'),(WIDTH/2, HEIGHT/2-10))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Ruben Verreth", False, 'white'),(WIDTH/2, HEIGHT/2+40))
+                
+            elif self.state == 'settings':
+                SCREEN.fill((70, 70, 70))
+                Menu_button = Button(200, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                high_label = "[HIGH RES]" if self.resolution == "high" else "HIGH RES"
+                low_label  = "[LOW RES]"  if self.resolution == "low"  else "LOW RES"       
+                Res_high = Button(-70, 200, 60, high_label, 25, "black", "white", "white", "black", self, "settings", True, -220, "res_high")
+                Res_high.draw_button(events)
+                Res_low = Button(-70, 200, 60, low_label, 25, "black", "white", "white", "black", self, "settings", True, 220, "res_low")
+                Res_low.draw_button(events)
+                Menu_button.draw_button(events)
+                self.volume_slider.draw(events)
+                
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"

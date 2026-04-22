@@ -1,7 +1,8 @@
 import pygame
 from math import atan2, hypot, cos, sin, tan, pi
 
-from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS, MIN_DIST, START_HEALTH, HEALTH_REGEN
+import config
+from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN
 from vector import Vector
 
 class RenderObject:
@@ -55,10 +56,10 @@ class RenderObject:
         screen_x = WIDTH / 2 + tan(rel_angle) * PROJ_DIST
 
         # Ray nummer
-        ray_num = int((screen_x / WIDTH) * NUM_RAYS)
+        ray_num = int((screen_x / WIDTH) * config.NUM_RAYS)
 
         # Bounds check
-        if ray_num < 0 or ray_num >= NUM_RAYS:
+        if ray_num < 0 or ray_num >= config.NUM_RAYS:
             return None, None, None, is_hit
 
         # Check of sprite voor de muur staat op deze ray
