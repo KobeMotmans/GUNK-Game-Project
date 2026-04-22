@@ -44,3 +44,59 @@ class Button:
         
         pygame.draw.rect(SCREEN,color,[WIDTH/2-self.w/2+self.x_pos,HEIGHT/2-self.h/2+self.y_pos,self.w,self.h])
         SCREEN.blit(pygame.font.SysFont('ocraextended', self.text_size, True).render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
+
+class Slider: #AI code
+    def __init__(self, y_pos, width, height, min_val, max_val, initial_val, label, GAME):
+        self.y_pos = y_pos
+        self.w = width
+        self.h = height
+        self.min_val = min_val
+        self.max_val = max_val
+        self.value = initial_val
+        self.label = label
+        self.GAME = GAME
+        self.dragging = False
+
+        self.track_x = WIDTH / 2 - width / 2
+        self.track_y = HEIGHT / 2 + y_pos
+        self.handle_r = height
+
+    def get_handle_x(self):
+        ratio = (self.value - self.min_val) / (self.max_val - self.min_val)
+        return self.track_x + ratio * self.w
+
+    def draw(self, events):
+        mouse = pygame.mouse.get_pos()
+        mouse_buttons = pygame.mouse.get_pressed()
+
+        handle_x = self.get_handle_x()
+
+        # Start / stop dragging
+        for ev in events:
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                if abs(mouse[0] - handle_x) <= self.handle_r + 5 and abs(mouse[1] - self.track_y) <= self.handle_r + 5:
+                    self.dragging = True
+            if ev.type == pygame.MOUSEBUTTONUP and ev.button == 1:
+                self.dragging = False
+
+        if self.dragging and mouse_buttons[0]:
+            clamped = max(self.track_x, min(mouse[0], self.track_x + self.w))
+            ratio = (clamped - self.track_x) / self.w
+            self.value = self.min_val + ratio * (self.max_val - self.min_val)
+            self.GAME.main_music.set_volume(self.value)
+
+        # Draw track
+        pygame.draw.rect(SCREEN, 'white', [self.track_x, self.track_y - 4, self.w, 8], border_radius=4)
+
+        # Draw filled portion
+        filled_w = self.get_handle_x() - self.track_x
+        pygame.draw.rect(SCREEN, (0, 200, 255), [self.track_x, self.track_y - 4, filled_w, 8], border_radius=4)
+
+        # Draw handle
+        handle_x = self.get_handle_x()
+        pygame.draw.circle(SCREEN, (0, 200, 255) if self.dragging else 'white', (int(handle_x), int(self.track_y)), self.handle_r)
+
+        # Draw label + value
+        font = pygame.font.SysFont('ocraextended', 25, True)
+        label_surf = font.render(f"{self.label}: {int(self.value * 100)}%", True, 'white')
+        SCREEN.blit(label_surf, (self.track_x, self.track_y - 45))

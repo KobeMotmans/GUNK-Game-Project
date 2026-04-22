@@ -11,7 +11,7 @@ from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben
 from player import Player
-from Menu import Button
+from Menu import Button, Slider
 from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector
@@ -21,7 +21,6 @@ class Game:
     def __init__(self):
         pygame.init()
         pygame.mixer.init()
-        self.music = True
         self.main_music = pygame.mixer.Sound("assets/Soundtrack.mp3")
         self.clock = pygame.time.Clock()
         self.running = False
@@ -48,7 +47,17 @@ class Game:
         # Init objects
         self.objects = self.create_objects()
 
-        
+        self.volume_slider = Slider(
+                                    y_pos=50,       # vertical offset from screen center
+                                    width=400,
+                                    height=12,
+                                    min_val=0.0,
+                                    max_val=1.0,
+                                    initial_val=0.5,
+                                    label="VOLUME",
+                                    GAME=self
+                                )
+        self.main_music.set_volume(0.5)  # match initial slider value
 
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
@@ -248,7 +257,7 @@ class Game:
         M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
-        self.main_music.play() if self.music else None
+        self.main_music.play()
         self.door_pos = 0
         
     def level_up(self):
@@ -340,12 +349,11 @@ class Game:
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
 
             if self.state == 'settings':
-                SCREEN.fill((70,70,70))
+                SCREEN.fill((70, 70, 70))
                 Menu_button = Button(200, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
-                
-                Music_button = Button(100, 250, 60, "MUSIC" if self.music == False else "NO MUSIC", 35, "black", 'white', 'white', 'black', self, "settings", True, 0, "music")
-                Music_button.draw_button(events)
+            
+                self.volume_slider.draw(events)  # <-- add this line
 
                     
             if self.player.death and self.state == "game":
