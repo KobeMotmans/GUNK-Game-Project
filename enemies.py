@@ -14,10 +14,12 @@ from objects import RenderObject
 class Enemy(RenderObject):
     def __init__(self, health, damage, speed, enemy_type, x, y):
         super().__init__(f"enemies/{enemy_type}", x, y)
+        self.max_health = health
         self.health = health
         self.speed = speed
         self.damage = damage
         self.spotted_player = False
+        self.is_los = False
 
     def is_player_los(self, player_pos):
         # Vector van enemy naar speler
@@ -49,14 +51,14 @@ class Enemy(RenderObject):
 
     def find_path(self, player):
         player_pos = player.pos
-        is_los, dist = self.is_player_los(player_pos)
+        self.is_los, dist = self.is_player_los(player_pos)
     
         # Remember player once seen
-        if is_los:
+        if self.is_los:
             self.spotted_player = True
     
         # Direct movement if visible
-        if is_los and dist >= MIN_DIST:
+        if self.is_los and dist >= MIN_DIST:
             self.move_towards(player_pos)
 
         # Attack if close
