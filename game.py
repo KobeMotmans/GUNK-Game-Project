@@ -9,7 +9,7 @@ import random
 from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, set_resolution
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
-from enemies import Andrei, Ahmed, Ruben
+from enemies import Andrei, Ahmed, Ruben, Jan
 from player import Player
 from Menu import Button, Slider
 from map_loader import M, png_to_list_fast
@@ -67,6 +67,9 @@ class Game:
             randomnumber = random.randint(0,2)
             random_enemy =  self.possible_enemies[randomnumber]
             enemies.append(random_enemy(enemy_pos[0], enemy_pos[1]))
+        if "jan" in M.SPAWNS:
+            jan_pos = M.SPAWNS["jan"]
+            enemies.append(Jan(jan_pos[0], jan_pos[1]))
         return enemies
 
     def create_objects(self):
@@ -80,8 +83,6 @@ class Game:
         for ammo_pos in M.SPAWNS["ammo"]:
             objects["ammo"].append(PickupObject("objects/ammo", ammo_pos[0], ammo_pos[1]))
         return objects
-
-
 
     def handle_events(self):
         """Verwerk pygame events"""

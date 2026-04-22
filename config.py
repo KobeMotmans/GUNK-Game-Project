@@ -28,7 +28,6 @@ PROJ_DIST = (WIDTH / 2) / (pi / 4)  # tan(FOV/2) = tan(pi/4) = 1
 NUM_RAYS = 0
 DELTA_ANGLE = 0
 def set_resolution(quality: str):
-    """Update raycasting constants. quality = 'high' or 'low'"""
     global NUM_RAYS, DELTA_ANGLE
     divisor = 4 if quality == "high" else 8
     NUM_RAYS = WIDTH // divisor

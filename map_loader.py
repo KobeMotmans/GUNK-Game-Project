@@ -57,7 +57,6 @@ def png_to_list_fast(path):
                 spawns["ammo"].append((x_center,y_center))
             elif number == 7:
                 spawns["jan"]= (x_center,y_center)
-
     return map_list, spawns
 
 class mapclass:
