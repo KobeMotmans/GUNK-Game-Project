@@ -1,7 +1,7 @@
 import pygame
 from math import atan2, hypot, cos, sin, tan, pi
 
-from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS, MIN_DIST
+from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS, MIN_DIST, START_HEALTH
 from vector import Vector
 
 class RenderObject:
@@ -93,10 +93,7 @@ class PickupObject(RenderObject):
         super().__init__(type, x, y)
     def interact(self, player):
         if self.type == "objects/ammo":
-            if player.ammo > 100:
-                player.ammo = 200
-            else:
-                player.ammo += 100
+            player.ammo = min(player.ammo+100, 200)
         if self.type == "objects/keycard":
             player.got_keycard = True
         if self.type == "objects/exit":
@@ -106,6 +103,8 @@ class PickupObject(RenderObject):
             else:
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render("NO KEYCARD", True,'green'),(WIDTH/2-200,HEIGHT/2))
                 return "fail"
+        if self.type == "objects/health":
+            player.health = min(player.health+5, START_HEALTH)
         return "succes"
                 
 
