@@ -72,8 +72,10 @@ class Player:
             self.inv_time = 60
             self.health -= damage
             print("Player hp:", self.health, "Damage", damage)
-            pygame.mixer.Sound("assets/damage.mp3").play
+            pygame.mixer.Sound("assets/damage.mp3").play()
             if self.health <= 0:
+                pygame.mixer.stop()
+                pygame.mixer.Sound("assets/damage.mp3").play()
                 self.death = True
                 
 

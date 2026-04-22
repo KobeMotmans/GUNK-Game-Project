@@ -97,18 +97,19 @@ class PickupObject(RenderObject):
     def interact(self, player):
         if self.type == "objects/ammo":
             player.ammo = min(player.ammo+100, 200)
-            pygame.mixer.Sound("assets/ammo.mp3").play
+            pygame.mixer.Sound("assets/ammo.mp3").play()
         if self.type == "objects/keycard":
             player.got_keycard = True
+            pygame.mixer.Sound("assets/key.mp3").play()
         if self.type == "objects/exit":
             if player.got_keycard:
                 player.level += 0.5
-                pygame.mixer.Sound("assets/elev_door.mp3").play
             else:
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render("NO KEYCARD", True,'green'),(WIDTH/2-200,HEIGHT/2))
                 return "fail"
         if self.type == "objects/health":
             player.health = min(player.health+HEALTH_REGEN, START_HEALTH)
+            pygame.mixer.Sound("assets/drink.mp3").play()
         return "succes"
                 
 

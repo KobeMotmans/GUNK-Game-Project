@@ -42,6 +42,7 @@ class Game:
         self.curr_flash = ""
         self.flash_time = 0
         self.door_pos = 0
+        self.lift_time = 120
         self.possible_enemies = [Andrei, Ahmed, Ruben]
 
         # Init objects
@@ -133,7 +134,7 @@ class Game:
             self.state = None
             pygame.quit()
 
-        if self.state == "game":
+        if self.state == "game" and not self.escaped:
             self.player.rotate(pygame.mouse.get_rel()[0])
             pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
             pygame.mouse.get_rel()
@@ -262,12 +263,13 @@ class Game:
         
     def level_up(self):
         M.map_level += 1
+        print(M.map_level)
         M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
-        pygame.mixer.Sound("assets/elev_ding.mp3").play
+        pygame.mixer.Sound("assets/elev_ding.mp3").play()
 
     def run(self):
         set_resolution("high")
@@ -317,31 +319,33 @@ class Game:
                     Menu_button.draw_button(events)
                 
                 if self.player.level%1 != 0:
-                    if self.door_pos < WIDTH/2:
+                    if self.door_pos <= WIDTH/2:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
                         pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-self.door_pos,0,self.door_pos,HEIGHT])
                         self.door_pos += ELEV_SPEED
+                        
                     elif self.door_pos <= WIDTH/2 + ELEV_SPEED:
                         SCREEN.fill((20,20,20))
-                        self.door_pos += 1
-                        if self.player.level < MAX_LEVEL:
-                            self.level_up()
-                        else:
-                            pygame.mixer.stop()
-                            self.escaped = True
-                            pygame.mouse.set_visible(True)
-                            pygame.event.set_grab(True)
+                        self.lift_time -= 1
+                        if self.lift_time <= 0:
+                            if self.player.level < MAX_LEVEL:
+                                self.level_up()
+                                self.door_pos += ELEV_SPEED
+                            else:
+                                pygame.mixer.stop()
+                                self.escaped = True
+                                pygame.mouse.set_visible(True)
+                                pygame.event.set_grab(False)
                             
-                    elif self.door_pos > WIDTH/2 and self.door_pos < WIDTH:
+                    elif self.door_pos >= WIDTH/2 + ELEV_SPEED and self.door_pos < WIDTH:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
-                        pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos/2,0,WIDTH-self.door_pos,HEIGHT])
+                        pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
                         self.door_pos += ELEV_SPEED
                        
                     elif self.door_pos >= WIDTH:
                         self.player.level += 0.5
                         self.door_pos = 0
-                    
-                    
+                        self.lift_time = 120
 
             elif self.state == "paused":
                 Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
@@ -351,7 +355,6 @@ class Game:
                 Menu_button.draw_button(events)
 
             elif self.state == 'dead':
-                pygame.mixer.stop()
                 SCREEN.blit(SCREEN_DEAD, (0,0))
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
