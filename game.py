@@ -6,7 +6,7 @@ import pygame
 from math import pi
 import random
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben
@@ -160,7 +160,7 @@ class Game:
                     if enemy.health <= 0:
                         self.player.score += 1
                         self.objects["enemies"].remove(enemy)
-                        if random.random() < 1:
+                        if random.random() < HEALTH_CHANCE:
                             self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
             elif obj == "ammo":
                 for item in self.objects["ammo"]:
