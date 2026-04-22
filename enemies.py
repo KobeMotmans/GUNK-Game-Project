@@ -89,8 +89,8 @@ class Andrei(Enemy):
         super().__init__(health, damage, speed, "andrei", x, y)
         
 class Ahmed(Enemy):
-    def __init__(self, x, y, health=8, damage=1, speed=5):
+    def __init__(self, x, y, health=4, damage=1, speed=5):
         super().__init__(health, damage, speed, "ahmed", x, y)
 class Ruben(Enemy):
-    def __init__(self, x, y, health=15, damage=2, speed=1):
+    def __init__(self, x, y, health=20, damage=2, speed=2):
         super().__init__(health, damage, speed, "ruben", x, y)
