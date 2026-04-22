@@ -37,7 +37,7 @@ class Game:
         self.rifle = Rifle()
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
-        
+
         self.state = "menu"
         self.curr_flash = ""
         self.flash_time = 0
@@ -98,12 +98,12 @@ class Game:
                             self.current_gun = self.unlocked_guns[0] 
                         else: 
                             self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
-                    if event.key == pygame.K_ESCAPE: 
+                    if event.key == pygame.K_ESCAPE:
                         pygame.mouse.set_visible(True)
                         pygame.event.set_grab(False)
                         self.state = "paused"
                         pygame.mixer.pause()
-                
+
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
                         if self.current_gun.auto == False: #Click to shoot guns
@@ -112,12 +112,12 @@ class Game:
 
             elif self.state == "paused":
                  if event.type == pygame.KEYDOWN: #unpause
-                     if event.key == pygame.K_ESCAPE: 
+                     if event.key == pygame.K_ESCAPE:
                          pygame.mouse.set_visible(False)
                          pygame.event.set_grab(True)
                          self.state = "game"
-                         pygame.mixer.unpause() 
-        
+                         pygame.mixer.unpause()
+
         if self.state == "game":
             mouse_buttons = pygame.mouse.get_pressed()
             if self.current_gun.auto: #Pressed to shoot
@@ -242,7 +242,7 @@ class Game:
     def reset_game(self):
         # Init speler
         M.map_level = 0
-        M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
+        M.MAP, M.SPAWNS, M.w, M.h = png_to_list_fast(MAP_PATH[M.map_level])
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         # Init wapens
         self.pistol = Pistol()
@@ -256,7 +256,7 @@ class Game:
         self.player.score = 0
         self.player.level = 0
         M.map_level = 0
-        M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
+        M.MAP, M.SPAWNS, M.w, M.h  = png_to_list_fast(MAP_PATH[M.map_level])
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
         self.main_music.play()
@@ -264,6 +264,7 @@ class Game:
         
     def level_up(self):
         M.map_level += 1
+        M.MAP, M.SPAWNS, M.w, M.h = png_to_list_fast(MAP_PATH[M.map_level])
         print(M.map_level)
         M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
@@ -291,13 +292,13 @@ class Game:
 
                 Settings_button = Button(100, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self, "settings", True)
                 Settings_button.draw_button(events)
-                
+
                 Credits_button = Button(180, 200, 60, "CREDITS", 30 ,"black", 'white', 'white', 'black', self, "credits", True)
                 Credits_button.draw_button(events)
 
                 Quit_button = Button(260, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self, "Stop", False)
                 Quit_button.draw_button(events)
-                
+
             elif self.state == "game":
                 self.clock.tick(60)
                 if (self.door_pos == 0 or self.door_pos > WIDTH/2) and not self.escaped:
@@ -324,7 +325,7 @@ class Game:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
                         pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-self.door_pos,0,self.door_pos,HEIGHT])
                         self.door_pos += ELEV_SPEED
-                        
+
                     elif self.door_pos <= WIDTH/2 + ELEV_SPEED:
                         SCREEN.fill((20,20,20))
                         self.lift_time -= 1
@@ -342,7 +343,7 @@ class Game:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
                         pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
                         self.door_pos += ELEV_SPEED
-                       
+
                     elif self.door_pos >= WIDTH:
                         self.player.level += 0.5
                         self.door_pos = 0
@@ -360,7 +361,7 @@ class Game:
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
-           
+
             elif self.state == "credits":
                 SCREEN.fill((70, 70, 70))
                 Menu_button = Button(200, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
@@ -368,19 +369,19 @@ class Game:
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Kobe Motmans", False, 'white'),(WIDTH/2, HEIGHT/2-50))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Andreas Meuwissen", False, 'white'),(WIDTH/2, HEIGHT/2-10))
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Ruben Verreth", False, 'white'),(WIDTH/2, HEIGHT/2+40))
-                
+
             elif self.state == 'settings':
                 SCREEN.fill((70, 70, 70))
                 Menu_button = Button(200, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 high_label = "[HIGH RES]" if self.resolution == "high" else "HIGH RES"
-                low_label  = "[LOW RES]"  if self.resolution == "low"  else "LOW RES"       
+                low_label  = "[LOW RES]"  if self.resolution == "low"  else "LOW RES"
                 Res_high = Button(-70, 200, 60, high_label, 25, "black", "white", "white", "black", self, "settings", True, -220, "res_high")
                 Res_high.draw_button(events)
                 Res_low = Button(-70, 200, 60, low_label, 25, "black", "white", "white", "black", self, "settings", True, 220, "res_low")
                 Res_low.draw_button(events)
                 Menu_button.draw_button(events)
                 self.volume_slider.draw(events)
-                
+
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"

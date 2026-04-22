@@ -70,5 +70,5 @@ HEALTH_FLASH = SCREEN_FLASH.copy()
 HEALTH_FLASH.fill((0,255,0), special_flags=pygame.BLEND_MULT)
 
 #Enemy instellingen
-AGGRO_DIST = 30
+AGGRO_DIST = 3000
 
