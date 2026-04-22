@@ -58,6 +58,9 @@ AMMO_FLASH.fill((255,215,0), special_flags=pygame.BLEND_MULT)
 KEYCARD_FLASH = SCREEN_FLASH.copy()
 KEYCARD_FLASH.fill((0,0,255), special_flags=pygame.BLEND_MULT)
 
+HEALTH_FLASH = SCREEN_FLASH.copy()
+HEALTH_FLASH.fill((0,255,0), special_flags=pygame.BLEND_MULT)
+
 #Enemy instellingen
 AGGRO_DIST = 30
 

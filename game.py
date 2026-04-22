@@ -6,7 +6,7 @@ import pygame
 from math import pi
 import random
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben
@@ -64,7 +64,8 @@ class Game:
             "enemies": self.create_enemies(),
             "ammo": [],
             "keycard": PickupObject("objects/keycard", M.SPAWNS["keycard"][0], M.SPAWNS["keycard"][1]),
-            "exit": PickupObject("objects/exit", M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1])
+            "exit": PickupObject("objects/exit", M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1]),
+            "health": []
         }
         for ammo_pos in M.SPAWNS["ammo"]:
             objects["ammo"].append(PickupObject("objects/ammo", ammo_pos[0], ammo_pos[1]))
@@ -159,6 +160,8 @@ class Game:
                     if enemy.health <= 0:
                         self.player.score += 1
                         self.objects["enemies"].remove(enemy)
+                        if random.random() < 1:
+                            self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
             elif obj == "ammo":
                 for item in self.objects["ammo"]:
                     dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
@@ -171,6 +174,18 @@ class Game:
                         self.flash_time = 60
                         item.interact(self.player)
                         self.objects["ammo"].remove(item)
+            elif obj == "health":
+                for item in self.objects["health"]:
+                    dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
+                        player_pos, player_angle, wall_distances
+                    )
+                    if dist is not None:
+                        sprites.append((dist, SCREEN_x, item))
+                    if is_hit:
+                        self.curr_flash = "health"
+                        self.flash_time = 60
+                        item.interact(self.player)
+                        self.objects["health"].remove(item)
             else:
                 item = self.objects[obj]
                 if item is not None:
@@ -201,6 +216,8 @@ class Game:
                 SCREEN.blit(KEYCARD_FLASH, (0, 0))
             elif self.curr_flash == "ammo":
                 SCREEN.blit(AMMO_FLASH, (0, 0))
+            elif self.curr_flash == "health":
+                SCREEN.blit(HEALTH_FLASH, (0, 0))
         # 5. Wapen laatst
         self.current_gun.draw()
 
