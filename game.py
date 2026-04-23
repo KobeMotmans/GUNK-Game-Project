@@ -169,7 +169,6 @@ class Game:
             if obj == "enemies":
                 for enemy in self.objects[obj]:
                     enemy.find_path(self.player)
-                    #print(enemy.is_player_los(player_pos))
                     dist, SCREEN_x, angle, _ = enemy.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
