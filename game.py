@@ -244,12 +244,7 @@ class Game:
         M.map_level = 0
         M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
-        # Init wapens
-        self.pistol = Pistol()
-        self.minigun = Minigun()
-        self.rifle = Rifle()
-        self.current_gun = self.pistol
-        self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
+       
         # Init objects
         self.objects = self.create_objects()
         self.state = "game"
