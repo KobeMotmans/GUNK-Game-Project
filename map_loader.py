@@ -57,12 +57,12 @@ def png_to_list_fast(path):
                 spawns["ammo"].append((x_center,y_center))
             elif number == 7:
                 spawns["jan"]= (x_center,y_center)
-    return map_list, spawns
+    return map_list, spawns, w, h
 
 class mapclass:
     def __init__(self, map_level = 0):
         self.map_level = map_level
-        self.MAP, self.SPAWNS = png_to_list_fast(MAP_PATH[self.map_level])
+        self.MAP, self.SPAWNS, self.width, self.height = png_to_list_fast(MAP_PATH[self.map_level])
         self.start_angle = START_ANGLES[self.map_level]
         
 M = mapclass()
