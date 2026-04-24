@@ -40,3 +40,6 @@ class Vector:
 
     def __iter__(self):
         return iter((self.x, self.y))
+
+    def __round__(self, a=None):
+        return round(self.x, a), round(self.y, a)

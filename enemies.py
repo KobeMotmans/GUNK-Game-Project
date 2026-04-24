@@ -22,6 +22,8 @@ class Enemy(RenderObject):
         self.damage = damage
         self.spotted_player = False
         self.is_los = False
+        self.last_player_tile = (1,1)
+        self.target = None
 
     def draw_health_bar(self, sprite_h, draw_x, draw_y):
         bar_width = sprite_h
@@ -85,6 +87,16 @@ class Enemy(RenderObject):
         angle = atan2(dy, dx)
         self.pos += Vector(self.speed * cos(angle), self.speed * sin(angle))
 
+    def has_target(self):
+        if self.target is not None:
+            if abs((self.target - self.pos).norm()) < 10:
+                self.target = None
+                return False
+            else:
+                return True
+        else:
+            return False
+
     def find_path(self, player):
         player_pos = player.pos
         is_los, dist = self.is_in_los(player_pos)
@@ -103,18 +115,18 @@ class Enemy(RenderObject):
         if self.is_los and dist >= MIN_DIST:
             self.move_towards(player_pos)
 
+
         # Attack if close
         if dist < MIN_DIST:
             player.take_damage(self.damage)
 
         # Use A* if player was seen
-        if self.spotted_player and dist < AGGRO_DIST and not is_los: #and last_player_tile[0] != round(cord_to_map(player.pos.x)) and last_player_tile[1] != round(cord_to_map(player.pos.y))
+        if self.spotted_player and dist < AGGRO_DIST and not is_los and not self.has_target():
             state = self.A_star(self.pos,player)
+            self.target = self.get_next_tile(state)
 
-        # Move to last tile player was on
-        if not is_los and self.spotted_player and dist < AGGRO_DIST:
-            wanted_tile = self.next_tile_in_path(self.pos,state)
-            self.move_towards(map_to_cord(Vector(wanted_tile[0], wanted_tile[1])))
+        if self.has_target() and not is_los:
+            self.move_towards(self.target)
 
 
     def is_hit(self, pos):
@@ -125,7 +137,18 @@ class Enemy(RenderObject):
 
     def take_dmg(self,dmg):
         self.health -= dmg
-        
+
+    @staticmethod
+    def get_next_tile(state):
+        curr_state = state
+        last_pos = None
+        while curr_state["parent"]["parent"] is not None:
+            last_pos = curr_state["pos"]
+            curr_state = curr_state["parent"]
+        last_pos = map_to_cord(Vector(last_pos[0]+0.5, last_pos[1]+0.5))
+        return last_pos
+
+
     def A_star(self, pos, player):
         pq = queue.PriorityQueue ()
         x_start = round(cord_to_map(self.pos.x))
@@ -160,18 +183,6 @@ class Enemy(RenderObject):
                         pq . put (( new_priority , teller , new_state ))
                         visited_positions . append (( new_row , new_col ))
         return state
-
-    def next_tile_in_path(self,pos,state):
-        path = []
-        current_state = state
-        while current_state is not None :
-            path.append(current_state['pos'])
-            current_state = current_state ['parent']
-        for i in path:
-            is_los, _ = self.is_in_los(map_to_cord(Vector(i[0],i[1])))
-            if is_los:
-                return i
-        return (self.pos.x,self.pos.y)
 
 
 class Andrei(Enemy):
