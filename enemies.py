@@ -94,7 +94,6 @@ class Enemy(RenderObject):
             self.spotted_player = False
         self.is_los, dist = self.is_in_los(player_pos)
 
-
         # Remember player once seen
         if self.is_los:
             self.spotted_player = True

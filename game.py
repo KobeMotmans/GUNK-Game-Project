@@ -169,7 +169,6 @@ class Game:
             if obj == "enemies":
                 for enemy in self.objects[obj]:
                     enemy.find_path(self.player)
-                    #print(enemy.is_player_los(player_pos))
                     dist, SCREEN_x, angle, _ = enemy.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
@@ -244,12 +243,7 @@ class Game:
         M.map_level = 0
         M.MAP, M.SPAWNS, M.w, M.h = png_to_list_fast(MAP_PATH[M.map_level])
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
-        # Init wapens
-        self.pistol = Pistol()
-        self.minigun = Minigun()
-        self.rifle = Rifle()
-        self.current_gun = self.pistol
-        self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
+       
         # Init objects
         self.objects = self.create_objects()
         self.state = "game"
