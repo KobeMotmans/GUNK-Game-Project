@@ -92,7 +92,8 @@ class Enemy(RenderObject):
         # Forget player once too far
         if dist > AGGRO_DIST:
             self.spotted_player = False
-        self.is_los, dist = self.is_player_los(player_pos)
+        self.is_los, dist = self.is_in_los(player_pos)
+
 
         # Remember player once seen
         if self.is_los:
