@@ -25,11 +25,13 @@ ELEV_SPEED = 10
 FOV = pi / 2
 MAX_DEPTH = 1000
 PROJ_DIST = (WIDTH / 2) / (pi / 4)  # tan(FOV/2) = tan(pi/4) = 1
-NUM_RAYS = 0
-DELTA_ANGLE = 0
+NUM_RAYS = WIDTH//4
+DELTA_ANGLE = FOV/NUM_RAYS
+ASTAR_INTERVAL = 10
 def set_resolution(quality: str):
     global NUM_RAYS, DELTA_ANGLE
     divisor = 4 if quality == "high" else 8
+    ASTAR_INTERVAL = 10  if quality == "high" else 50
     NUM_RAYS = WIDTH // divisor
     DELTA_ANGLE = FOV / NUM_RAYS
 
@@ -70,5 +72,5 @@ HEALTH_FLASH = SCREEN_FLASH.copy()
 HEALTH_FLASH.fill((0,255,0), special_flags=pygame.BLEND_MULT)
 
 #Enemy instellingen
-AGGRO_DIST = 1000
+AGGRO_DIST = 2000
 

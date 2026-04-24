@@ -6,7 +6,7 @@ import pygame
 from math import atan2, hypot, cos, sin, tan, pi
 import queue
 
-from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS, MIN_DIST, AGGRO_DIST, TILE_SIZE
+from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, NUM_RAYS, MIN_DIST, AGGRO_DIST, TILE_SIZE, ASTAR_INTERVAL
 from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, AGGRO_DIST
 from vector import Vector
 from map_loader import map_to_cord, cord_to_map, is_in_wall, M
@@ -25,7 +25,6 @@ class Enemy(RenderObject):
         self.cached_path = []
         self.last_player_tile = None
         self.path_recalc_timer = 0
-        self.PATH_RECALC_INTERVAL = 10  # recalculate every 10 ticks
 
     def draw_health_bar(self, sprite_h, draw_x, draw_y):
         bar_width = sprite_h
@@ -124,7 +123,7 @@ class Enemy(RenderObject):
             # Only re-run A* if player moved tile or timer expired
             self.path_recalc_timer += 1
             player_moved = player_tile != self.last_player_tile
-            timer_expired = self.path_recalc_timer >= self.PATH_RECALC_INTERVAL
+            timer_expired = self.path_recalc_timer >= ASTAR_INTERVAL
     
             if not self.cached_path or player_moved or timer_expired:
                 self.cached_path = self.A_star(player)
