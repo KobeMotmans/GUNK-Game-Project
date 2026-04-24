@@ -22,6 +22,10 @@ class Enemy(RenderObject):
         self.damage = damage
         self.spotted_player = False
         self.is_los = False
+        self.cached_path = []
+        self.last_player_tile = None
+        self.path_recalc_timer = 0
+        self.PATH_RECALC_INTERVAL = 10  # recalculate every 10 ticks
 
     def draw_health_bar(self, sprite_h, draw_x, draw_y):
         bar_width = sprite_h
@@ -88,91 +92,128 @@ class Enemy(RenderObject):
     def find_path(self, player):
         player_pos = player.pos
         is_los, dist = self.is_in_los(player_pos)
-
+        self.is_los = is_los
+    
         # Forget player once too far
         if dist > AGGRO_DIST:
             self.spotted_player = False
-        self.is_los, dist = self.is_in_los(player_pos)
-
+    
         # Remember player once seen
-        if self.is_los:
+        if is_los:
             self.spotted_player = True
-
-
-        # Direct movement if visible
-        if self.is_los and dist >= MIN_DIST:
-            self.move_towards(player_pos)
-
+    
         # Attack if close
         if dist < MIN_DIST:
             player.take_damage(self.damage)
-
-        # Use A* if player was seen
-        if self.spotted_player and dist < AGGRO_DIST and not is_los: #and last_player_tile[0] != round(cord_to_map(player.pos.x)) and last_player_tile[1] != round(cord_to_map(player.pos.y))
-            state = self.A_star(self.pos,player)
-
-        # Move to last tile player was on
-        if not is_los and self.spotted_player and dist < AGGRO_DIST:
-            wanted_tile = self.next_tile_in_path(self.pos,state)
-            self.move_towards(map_to_cord(Vector(wanted_tile[0], wanted_tile[1])))
-
-
+            return
+    
+        # Direct movement if visible
+        if is_los:
+            self.move_towards(player_pos)
+            self.cached_path = []  # clear stale path
+            self.last_player_tile = None
+            return
+    
+        # A* pathfinding when player is hidden but was spotted
+        if self.spotted_player and dist < AGGRO_DIST:
+            player_tile = (
+                round(cord_to_map(player_pos.x)),
+                round(cord_to_map(player_pos.y))
+            )
+    
+            # Only re-run A* if player moved tile or timer expired
+            self.path_recalc_timer += 1
+            player_moved = player_tile != self.last_player_tile
+            timer_expired = self.path_recalc_timer >= self.PATH_RECALC_INTERVAL
+    
+            if not self.cached_path or player_moved or timer_expired:
+                self.cached_path = self.A_star(player)
+                self.last_player_tile = player_tile
+                self.path_recalc_timer = 0
+    
+            # Walk the cached path
+            next_tile = self.next_tile_in_path()
+            if next_tile:
+                self.move_towards(map_to_cord(Vector(next_tile[0], next_tile[1])))
+                
     def is_hit(self, pos):
         dist = (self.pos - pos).norm()
         if dist < self.size:
             return True
         return False
-
     def take_dmg(self,dmg):
         self.health -= dmg
-        
-    def A_star(self, pos, player):
-        pq = queue.PriorityQueue ()
+    
+    def A_star(self, player):
         x_start = round(cord_to_map(self.pos.x))
         y_start = round(cord_to_map(self.pos.y))
         x_end = round(cord_to_map(player.pos.x))
         y_end = round(cord_to_map(player.pos.y))
+    
+        if (x_start, y_start) == (x_end, y_end):
+            return []
+    
+        pq = queue.PriorityQueue()
         teller = 0
-        directions = [(0 ,1) , (1 ,0) , (0 , -1) , ( -1 ,0) ]
-        start_priority = abs (x_start - x_end) + abs (y_start - y_end)
-        start_state = {'pos':(x_start, y_start),'parent':None,'cost': 0}
-        pq.put((start_priority , teller , start_state))
-        visited = []
-        visited_positions = [(x_start,y_start)]
-        while not pq.empty () :
-            priority , _ , state = pq . get ()
-            row , col = state ['pos']
-            cost = state ['cost']
-            visited . append ([row,col])
-            if state ['pos'] == (x_end,y_end):
-                return state
-
-            for x_change , y_change in directions :
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+    
+        start_state = {'pos': (x_start, y_start), 'parent': None, 'cost': 0}
+        start_priority = abs(x_start - x_end) + abs(y_start - y_end)
+        pq.put((start_priority, teller, start_state))
+    
+        visited = set()
+        visited.add((x_start, y_start))
+    
+        while not pq.empty():
+            _, _, state = pq.get()
+            row, col = state['pos']
+            cost = state['cost']
+    
+            if state['pos'] == (x_end, y_end):
+                return self._reconstruct_path(state)
+    
+            for x_change, y_change in directions:
                 new_row = row + x_change
                 new_col = col + y_change
-
-                if 0 <= new_row < M.w and 0 <= new_col < M.h:
-                    if M.MAP[new_row][new_col] != 1 and (new_row ,new_col) not in visited_positions :
-                        new_state = {'pos':(new_row ,new_col),'parent':state,'cost': cost + 1}
-                        distance_to_goal = abs ( new_row - x_end) +abs ( new_col - y_end)
-                        new_priority = new_state ['cost'] +distance_to_goal
-                        teller += 1
-                        pq . put (( new_priority , teller , new_state ))
-                        visited_positions . append (( new_row , new_col ))
-        return state
-
-    def next_tile_in_path(self,pos,state):
+                if (0 <= new_row < M.w and 0 <= new_col < M.h
+                        and M.MAP[new_row][new_col] != 1
+                        and (new_row, new_col) not in visited):
+                    new_state = {
+                        'pos': (new_row, new_col),
+                        'parent': state,
+                        'cost': cost + 1
+                    }
+                    h = abs(new_row - x_end) + abs(new_col - y_end)
+                    teller += 1
+                    pq.put((cost + 1 + h, teller, new_state))
+                    visited.add((new_row, new_col))
+    
+        return []  # No path found
+    
+    def _reconstruct_path(self, state):
+        """Unpack the parent-chain into a plain list, start → goal."""
         path = []
-        current_state = state
-        while current_state is not None :
-            path.append(current_state['pos'])
-            current_state = current_state ['parent']
-        for i in path:
-            is_los, _ = self.is_in_los(map_to_cord(Vector(i[0],i[1])))
-            if is_los:
-                return i
-        return (self.pos.x,self.pos.y)
+        current = state
+        while current is not None:
+            path.append(current['pos'])
+            current = current['parent']
+        path.reverse()  # now start → goal
+        return path
 
+    def next_tile_in_path(self):
+        """Return the furthest tile in the cached path that has LOS."""
+        best = None
+        for tile in self.cached_path:
+            is_los, _ = self.is_in_los(map_to_cord(Vector(tile[0], tile[1])))
+            if is_los:
+                best = tile  # keep going — furthest visible tile is best
+        if best:
+            # Trim path up to that tile so we don't re-walk it
+            idx = self.cached_path.index(best)
+            self.cached_path = self.cached_path[idx:]
+            return best
+        # Fall back to next tile in path
+        return self.cached_path[0] if self.cached_path else None
 
 class Andrei(Enemy):
     def __init__(self, x, y, health=13, damage=3, speed=3):
