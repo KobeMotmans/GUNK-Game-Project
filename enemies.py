@@ -18,7 +18,6 @@ PATHFIND_INTERVAL = 20
 class Enemy(RenderObject):
     def __init__(self, health, damage, speed, enemy_type, x, y):
         super().__init__(f"enemies/{enemy_type}", x, y)
-        self.type = enemy_type
         self.max_health = health
         self.health = health
         self.speed = speed
@@ -31,11 +30,31 @@ class Enemy(RenderObject):
         self._path_timer = 0    # frame-teller voor pathfinding throttle
 
     def draw_health_bar(self, sprite_h, draw_x, draw_y):
-        bar_width = sprite_h
-        bar_height = sprite_h * 0.1
-
         health_ratio = max(0, self.health / self.max_health)
 
+        if self.type == "enemies/jan":
+            # Boss bar bovenaan het scherm
+            bar_width = WIDTH // 2
+            bar_height = 20
+            bar_x = WIDTH // 4
+            bar_y = 30
+
+            # Naam
+            font = pygame.font.SysFont("ocraextended", 28)
+            label = font.render("Jan Lemeire", True, (255, 220, 0))
+            SCREEN.blit(label, (bar_x + bar_width // 2 - label.get_width() // 2, bar_y - 30))
+
+            # Achtergrond
+            pygame.draw.rect(SCREEN, (80, 0, 0), (bar_x, bar_y, bar_width, bar_height))
+
+            # Voorgrond
+            color = (200, 0, 0) if health_ratio <= 0.25 else (200, 200, 0) if health_ratio <= 0.5 else (0, 200, 0)
+            pygame.draw.rect(SCREEN, color, (bar_x, bar_y, int(bar_width * health_ratio), bar_height))
+            return
+
+        # Normale health bar boven de sprite
+        bar_width = sprite_h
+        bar_height = sprite_h * 0.1
         bar_x = draw_x
         bar_y = draw_y - bar_height - 4
 
@@ -221,5 +240,5 @@ class Ruben(Enemy):
         super().__init__(health, damage, speed, "ruben", x, y)
 
 class Jan(Enemy):
-    def __init__(self, x, y, health=100, damage=6, speed=4):
+    def __init__(self, x, y, health=200, damage=6, speed=3):
         super().__init__(health, damage, speed, "jan", x, y)
