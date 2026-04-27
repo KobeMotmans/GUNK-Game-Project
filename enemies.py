@@ -221,5 +221,5 @@ class Ruben(Enemy):
         super().__init__(health, damage, speed, "ruben", x, y)
 
 class Jan(Enemy):
-    def __init__(self, x, y, health=200, damage=6, speed=3):
+    def __init__(self, x, y, health=100, damage=6, speed=4):
         super().__init__(health, damage, speed, "jan", x, y)
