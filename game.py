@@ -177,8 +177,11 @@ class Game:
                     if enemy.health <= 0:
                         self.player.score += 1
                         self.objects["enemies"].remove(enemy)
-                        if random.random() < HEALTH_CHANCE:
-                            self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
+                        if enemy.type == "jan":
+                            self.objects["keycard"] = PickupObject("objects/keycard", enemy.pos.x, enemy.pos.y)
+                        else:
+                            if random.random() < HEALTH_CHANCE:
+                                self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
             elif obj == "ammo":
                 for item in self.objects["ammo"]:
                     dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
@@ -241,7 +244,6 @@ class Game:
     def reset_game(self):
         # Init speler
         M.map_level = 0
-        M.MAP, M.SPAWNS, M.w, M.h = png_to_list_fast(MAP_PATH[M.map_level])
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
        
         # Init objects
@@ -250,7 +252,7 @@ class Game:
         self.player.score = 0
         self.player.level = 0
         M.map_level = 0
-        M.MAP, M.SPAWNS, M.w, M.h  = png_to_list_fast(MAP_PATH[M.map_level])
+        M.MAP, M.SPAWNS, M.width, M.height  = png_to_list_fast(MAP_PATH[M.map_level])
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
         self.main_music.play()
@@ -258,9 +260,7 @@ class Game:
         
     def level_up(self):
         M.map_level += 1
-        M.MAP, M.SPAWNS, M.w, M.h = png_to_list_fast(MAP_PATH[M.map_level])
-        print(M.map_level)
-        M.MAP, M.SPAWNS = png_to_list_fast(MAP_PATH[M.map_level])
+        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]

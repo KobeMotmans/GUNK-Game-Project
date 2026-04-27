@@ -18,6 +18,7 @@ PATHFIND_INTERVAL = 20
 class Enemy(RenderObject):
     def __init__(self, health, damage, speed, enemy_type, x, y):
         super().__init__(f"enemies/{enemy_type}", x, y)
+        self.type = enemy_type
         self.max_health = health
         self.health = health
         self.speed = speed
