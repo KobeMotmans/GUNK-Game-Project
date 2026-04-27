@@ -103,3 +103,35 @@ class Slider: #AI code
         font = pygame.font.SysFont('ocraextended', 25, True)
         label_surf = font.render(f"{self.label}: {int(self.value * 100)}%", True, 'white')
         SCREEN.blit(label_surf, (self.track_x, self.track_y - 45))
+        
+class Tekstballon:
+    def __init__(self, text, y_pos, x_pos):
+        self.text = text
+        self.y_pos = y_pos
+        self.x_pos = x_pos
+        self.linewidth = 0
+
+    def draw(self):
+        self.linewidth = 0
+        pygame.draw.rect(SCREEN, (0, 0, 0), [self.x_pos-5, self.y_pos-5, 300, 110])
+        pygame.draw.rect(SCREEN, (255, 255, 255), [self.x_pos, self.y_pos, 290, 100])
+    
+        triangle_points = [
+            (self.x_pos + 10, self.y_pos + 100),   # Top-left (bottom of rect)
+            (self.x_pos + 10, self.y_pos + 135),   # Tip of the tail
+            (self.x_pos + 45, self.y_pos + 100),   # Top-right (bottom of rect)
+        ]
+        pygame.draw.polygon(SCREEN, (0, 0, 0), triangle_points)
+    
+        inner_triangle_points = [
+            (self.x_pos + 15, self.y_pos + 100),   # Top-left (inset by 2)
+            (self.x_pos + 15, self.y_pos + 125),   # Tip (inset, slightly shorter)
+            (self.x_pos + 40, self.y_pos + 100),   # Top-right (inset by 2)
+        ]
+        pygame.draw.polygon(SCREEN, (255, 255, 255), inner_triangle_points)
+    
+        font = pygame.font.SysFont('ocraextended', 20, False)
+        for zin in self.text.split(";"):
+            SCREEN.blit(font.render(zin, False, (0, 0, 0)), (self.x_pos + 5, self.y_pos + self.linewidth + 5))
+            self.linewidth += 20
+            

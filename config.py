@@ -16,7 +16,7 @@ SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
 # Map instellingen
 TILE_SIZE = 100
-MAP_PATH = ["assets/floor_1.png", "assets/floor_1.png","assets/floor_0.png"]
+MAP_PATH = ["assets/floor_2.png", "assets/floor_1.png","assets/floor_0.png"]
 MAX_LEVEL = len(MAP_PATH)-1
 START_ANGLES = [pi/4, pi, 4]
 ELEV_SPEED = 10
@@ -57,6 +57,7 @@ AMMO_CAP = 200
 
 SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
 SCREEN_DEAD = pygame.transform.scale(pygame.image.load("assets/dead.png").convert_alpha(), (WIDTH, HEIGHT))
+BILAL = pygame.transform.scale(pygame.image.load("assets/bilal.png").convert_alpha(), (200, 200))
 DAMAGE_FLASH = SCREEN_FLASH.copy()
 DAMAGE_FLASH.fill((255,0,0), special_flags=pygame.BLEND_MULT)
 

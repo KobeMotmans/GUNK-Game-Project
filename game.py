@@ -6,12 +6,12 @@ import pygame
 from math import pi
 import random
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, set_resolution
+from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, set_resolution, BILAL
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
 from player import Player
-from Menu import Button, Slider
+from Menu import Button, Slider, Tekstballon
 from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector
@@ -26,6 +26,8 @@ class Game:
         self.running = False
         self.state = None
         self.escaped = False
+        self.bilal_welcome_time = 600
+        self.bilal_controls_time = 200
 
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
@@ -36,7 +38,7 @@ class Game:
         self.minigun = Minigun()
         self.rifle = Rifle()
         self.current_gun = self.pistol
-        self.unlocked_guns = [self.pistol, self.minigun, self.rifle]
+        self.unlocked_guns = [self.pistol]
 
         self.state = "menu"
         self.curr_flash = ""
@@ -48,6 +50,7 @@ class Game:
         # Init objects
         self.objects = self.create_objects()
         self.resolution = "high"
+        self.tutorial = True
         self.volume_slider = Slider(
                                     y_pos=50,       # vertical offset from screen center
                                     width=400,
@@ -260,12 +263,17 @@ class Game:
         
     def level_up(self):
         M.map_level += 1
+        if M.map_level == 1:
+            self.unlocked_guns.append(self.minigun)
+        elif M.map_level == 3:
+            self.unlocked_guns.append(self.rifle)
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
         pygame.mixer.Sound("assets/elev_ding.mp3").play()
+        
 
     def run(self):
         set_resolution("high")
@@ -301,11 +309,19 @@ class Game:
                     self.render()
                     
                 SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-300, 20))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-150))
-                
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
+                if self.tutorial:
+                    if self.bilal_welcome_time >= 0:
+                        Tekstballon("Welkom bij GUNK!;Ik ben Bilal,;en ik zal je helpen;gebouw K te ontsnappen!", HEIGHT-400, 20).draw()
+                        self.bilal_welcome_time -= 1
+                        SCREEN.blit(BILAL, (0,HEIGHT-300))
+                    elif self.bilal_controls_time >= 0:
+                        Tekstballon("Gebruik je muis om;rond te kijken,;en de pijltjes of ZQSD;om te lopen.", HEIGHT-400, 20).draw()
+                        self.bilal_controls_time -= 1
+                        SCREEN.blit(BILAL, (0,HEIGHT-300))
                 if self.player.got_keycard:
-                    SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
+                    SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-120))
                     
                 if self.escaped:
                     SCREEN.fill((0,130,200))
