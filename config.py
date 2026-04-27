@@ -57,6 +57,7 @@ AMMO_CAP = 200
 
 SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
 SCREEN_DEAD = pygame.transform.scale(pygame.image.load("assets/dead.png").convert_alpha(), (WIDTH, HEIGHT))
+BILAL = pygame.transform.scale(pygame.image.load("assets/bilal.png").convert_alpha(), (200, 200))
 DAMAGE_FLASH = SCREEN_FLASH.copy()
 DAMAGE_FLASH.fill((255,0,0), special_flags=pygame.BLEND_MULT)
 
