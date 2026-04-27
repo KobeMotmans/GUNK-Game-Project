@@ -96,7 +96,7 @@ class PickupObject(RenderObject):
         super().__init__(type, x, y)
     def interact(self, player):
         if self.type == "objects/ammo":
-            player.ammo = min(player.ammo+100, 200)
+            player.ammo = min(player.ammo+50, 200)
             pygame.mixer.Sound("assets/ammo.mp3").play()
         if self.type == "objects/keycard":
             player.got_keycard = True
