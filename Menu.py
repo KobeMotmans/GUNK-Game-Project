@@ -117,16 +117,16 @@ class Tekstballon:
         pygame.draw.rect(SCREEN, (255, 255, 255), [self.x_pos, self.y_pos, 290, 100])
     
         triangle_points = [
-            (self.x_pos + 10, self.y_pos + 100),   # Top-left (bottom of rect)
-            (self.x_pos + 10, self.y_pos + 135),   # Tip of the tail
-            (self.x_pos + 45, self.y_pos + 100),   # Top-right (bottom of rect)
+            (self.x_pos + 140, self.y_pos + 100),   # Top-left (bottom of rect)
+            (self.x_pos + 140, self.y_pos + 135),   # Tip of the tail
+            (self.x_pos + 175, self.y_pos + 100),   # Top-right (bottom of rect)
         ]
         pygame.draw.polygon(SCREEN, (0, 0, 0), triangle_points)
     
         inner_triangle_points = [
-            (self.x_pos + 15, self.y_pos + 100),   # Top-left (inset by 2)
-            (self.x_pos + 15, self.y_pos + 125),   # Tip (inset, slightly shorter)
-            (self.x_pos + 40, self.y_pos + 100),   # Top-right (inset by 2)
+            (self.x_pos + 145, self.y_pos + 100),   # Top-left (inset by 2)
+            (self.x_pos + 145, self.y_pos + 125),   # Tip (inset, slightly shorter)
+            (self.x_pos + 170, self.y_pos + 100),   # Top-right (inset by 2)
         ]
         pygame.draw.polygon(SCREEN, (255, 255, 255), inner_triangle_points)
     

@@ -261,6 +261,7 @@ class Game:
         # Init objects
         self.objects = self.create_objects()
         self.state = "game"
+        self.unlocked_guns = [self.pistol]
         self.player.score = 0
         self.player.level = 0
         M.map_level = 0
@@ -332,7 +333,7 @@ class Game:
                         self.bilal_controls_time -= 1
                         SCREEN.blit(BILAL, (0,HEIGHT-300))
                 if self.player.got_keycard:
-                    SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-120))
+                    SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
                     
                 if self.escaped:
                     SCREEN.fill((0,130,200))
