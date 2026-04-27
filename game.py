@@ -48,6 +48,8 @@ class Game:
         self.door_pos = 0
         self.lift_time = 120
         self.possible_enemies = [Andrei, Ahmed, Ruben]
+        self.jan = None  # referentie naar Jan voor de boss bar
+        self.jan_spotted = False
 
         # Init objects
         self.objects = self.create_objects()
@@ -74,7 +76,9 @@ class Game:
             enemies.append(random_enemy(enemy_pos[0], enemy_pos[1]))
         if "jan" in M.SPAWNS:
             jan_pos = M.SPAWNS["jan"]
-            enemies.append(Jan(jan_pos[0], jan_pos[1]))
+            jan = Jan(jan_pos[0], jan_pos[1])
+            self.jan = jan
+            enemies.append(jan)
         return enemies
 
     def create_objects(self):
@@ -179,11 +183,14 @@ class Game:
                     )
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, enemy))
+                        if enemy.type == "enemies/jan":
+                            self.jan_spotted = True
                     if enemy.health <= 0:
                         self.player.score += 1
                         self.objects["enemies"].remove(enemy)
-                        if enemy.type == "jan":
+                        if enemy.type == "enemies/jan":
                             self.objects["keycard"] = PickupObject("objects/keycard", enemy.pos.x, enemy.pos.y)
+                            self.jan = None
                         else:
                             if random.random() < HEALTH_CHANCE:
                                 self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
@@ -309,6 +316,8 @@ class Game:
                 if (self.door_pos == 0 or self.door_pos > WIDTH/2) and not self.escaped:
                     self.update()
                     self.render()
+                    if self.jan is not None and self.jan_spotted:
+                        self.jan.draw_health_bar(None, None, None)
                     
                 SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
                 SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))

@@ -83,7 +83,7 @@ class RenderObject:
         # Centreer sprite
         draw_x = screen_x - sprite_h / 2
         draw_y = HEIGHT / 2 - sprite_h / 2
-        if hasattr(self, "draw_health_bar"):
+        if hasattr(self, "draw_health_bar") and self.type != "enemies/jan":
             self.draw_health_bar(sprite_h, draw_x, draw_y)
 
         SCREEN.blit(self._cached_scale, (draw_x, draw_y))
