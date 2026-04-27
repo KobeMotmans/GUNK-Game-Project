@@ -16,9 +16,9 @@ SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
 # Map instellingen
 TILE_SIZE = 100
-MAP_PATH = ["assets/floor_2.png", "assets/floor_1.png","assets/floor_0.png"]
+MAP_PATH = ["assets/floor_5.png", "assets/floor_3.png","assets/floor_2.png","assets/floor_1.png","assets/floor_0.png"]
 MAX_LEVEL = len(MAP_PATH)-1
-START_ANGLES = [pi/4, pi, 4]
+START_ANGLES = [pi/4, pi, 4, 0, 0, 0]
 ELEV_SPEED = 10
 
 # Raycasting instellingen
@@ -54,6 +54,8 @@ HEALTH_REGEN = 2
 
 START_AMMO = 100
 AMMO_CAP = 200
+
+FONT = 'ocraextended'
 
 SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
 SCREEN_DEAD = pygame.transform.scale(pygame.image.load("assets/dead.png").convert_alpha(), (WIDTH, HEIGHT))

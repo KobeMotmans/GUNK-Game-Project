@@ -6,7 +6,9 @@ import pygame
 from math import pi
 import random
 
-from config import SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, set_resolution, BILAL
+from config import (SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, 
+                    SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
+                    set_resolution, FONT, BILAL)
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
@@ -288,7 +290,7 @@ class Game:
             if self.state == "menu":
                 SCREEN.fill((70,70,70))
                 
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
+                SCREEN.blit(pygame.font.SysFont(FONT, 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
                 
                 Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "reset", False)
                 Start_knop.draw_button(events)
@@ -308,9 +310,9 @@ class Game:
                     self.update()
                     self.render()
                     
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
+                SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
+                SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
+                SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
                 if self.tutorial:
                     if self.bilal_welcome_time >= 0:
                         Tekstballon("Welkom bij GUNK!;Ik ben Bilal,;en ik zal je helpen;gebouw K te ontsnappen!", HEIGHT-400, 20).draw()
@@ -321,13 +323,13 @@ class Game:
                         self.bilal_controls_time -= 1
                         SCREEN.blit(BILAL, (0,HEIGHT-300))
                 if self.player.got_keycard:
-                    SCREEN.blit(pygame.font.SysFont('ocraextended', 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-120))
+                    SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-120))
                     
                 if self.escaped:
                     SCREEN.fill((0,130,200))
-                    SCREEN.blit(pygame.font.SysFont('ocraextended', 150, True).render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-400))
-                    SCREEN.blit(pygame.font.SysFont('ocraextended', 150, True).render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-200))
-                    SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+                    SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-400))
+                    SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-200))
+                    SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
                     Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                     Menu_button.draw_button(events)
                 
@@ -371,25 +373,25 @@ class Game:
                 SCREEN.blit(SCREEN_DEAD, (0,0))
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+                SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
 
             elif self.state == "credits":
                 SCREEN.fill((70, 70, 70))
                 Menu_button = Button(self.credits_height + 540, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, self.credits_height))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Developed by:", False, 'white'),(WIDTH/4, self.credits_height+280))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Kobe Motmans", False, 'white'),(WIDTH/4, self.credits_height+320))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Andreas Meuwissen", False, 'white'),(WIDTH/4, self.credits_height+360))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Ruben Verreth", False, 'white'),(WIDTH/4, self.credits_height +400))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Music by:", False, 'white'),(WIDTH/4, self.credits_height + 480))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("nog niet wiel", False, 'white'),(WIDTH/4, self.credits_height + 520))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Special thanks to:", False, 'white'),(WIDTH/4, self.credits_height + 600))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Andrei", False, 'white'),(WIDTH/4, self.credits_height + 640))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Ahmed", False, 'white'),(WIDTH/4, self.credits_height + 680))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Ruben", False, 'white'),(WIDTH/4, self.credits_height + 720))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Jan", False, 'white'),(WIDTH/4, self.credits_height + 760))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Bilal", False, 'white'),(WIDTH/4, self.credits_height + 800))
+                SCREEN.blit(pygame.font.SysFont(FONT, 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, self.credits_height))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Developed by:", False, 'white'),(WIDTH/4, self.credits_height+280))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Kobe Motmans", False, 'white'),(WIDTH/4, self.credits_height+320))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Andreas Meuwissen", False, 'white'),(WIDTH/4, self.credits_height+360))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ruben Verreth", False, 'white'),(WIDTH/4, self.credits_height +400))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Music by:", False, 'white'),(WIDTH/4, self.credits_height + 480))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("nog niet wiel", False, 'white'),(WIDTH/4, self.credits_height + 520))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Special thanks to:", False, 'white'),(WIDTH/4, self.credits_height + 600))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Andrei", False, 'white'),(WIDTH/4, self.credits_height + 640))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ahmed", False, 'white'),(WIDTH/4, self.credits_height + 680))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ruben", False, 'white'),(WIDTH/4, self.credits_height + 720))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Jan", False, 'white'),(WIDTH/4, self.credits_height + 760))
+                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Bilal", False, 'white'),(WIDTH/4, self.credits_height + 800))
                 self.credits_height -= 4
                 if self.credits_height < -900:
                     self.credits_height = HEIGHT

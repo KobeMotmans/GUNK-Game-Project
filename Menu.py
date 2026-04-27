@@ -1,5 +1,5 @@
 import pygame
-from config import HEIGHT, WIDTH, SCREEN, set_resolution
+from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT
 
 class Button:
     def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0, function = None):
@@ -46,7 +46,7 @@ class Button:
         text_color = self.text_hov_color if hovering else self.text_color
         
         pygame.draw.rect(SCREEN,color,[WIDTH/2-self.w/2+self.x_pos,HEIGHT/2-self.h/2+self.y_pos,self.w,self.h])
-        SCREEN.blit(pygame.font.SysFont('ocraextended', self.text_size, True).render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
+        SCREEN.blit(pygame.font.SysFont(FONT, self.text_size, True).render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
 
 class Slider: #AI code
     def __init__(self, y_pos, width, height, min_val, max_val, initial_val, label, GAME):
@@ -100,7 +100,7 @@ class Slider: #AI code
         pygame.draw.circle(SCREEN, (0, 200, 255) if self.dragging else 'white', (int(handle_x), int(self.track_y)), self.handle_r)
 
         # Draw label + value
-        font = pygame.font.SysFont('ocraextended', 25, True)
+        font = pygame.font.SysFont(FONT, 25, True)
         label_surf = font.render(f"{self.label}: {int(self.value * 100)}%", True, 'white')
         SCREEN.blit(label_surf, (self.track_x, self.track_y - 45))
         
@@ -130,7 +130,7 @@ class Tekstballon:
         ]
         pygame.draw.polygon(SCREEN, (255, 255, 255), inner_triangle_points)
     
-        font = pygame.font.SysFont('ocraextended', 20, False)
+        font = pygame.font.SysFont(FONT, 20, False)
         for zin in self.text.split(";"):
             SCREEN.blit(font.render(zin, False, (0, 0, 0)), (self.x_pos + 5, self.y_pos + self.linewidth + 5))
             self.linewidth += 20

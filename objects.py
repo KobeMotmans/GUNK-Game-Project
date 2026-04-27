@@ -2,7 +2,7 @@ import pygame
 from math import atan2, hypot, cos, sin, tan, pi
 
 import config
-from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN
+from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, FONT
 from vector import Vector
 
 class RenderObject:
@@ -105,7 +105,7 @@ class PickupObject(RenderObject):
             if player.got_keycard:
                 player.level += 0.5
             else:
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 80, True).render("NO KEYCARD", True,'green'),(WIDTH/2-200,HEIGHT/2))
+                SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render("NO KEYCARD", True,'green'),(WIDTH/2-200,HEIGHT/2))
                 return "fail"
         if self.type == "objects/health":
             player.health = min(player.health+HEALTH_REGEN, START_HEALTH)
