@@ -272,6 +272,7 @@ class Game:
         self.running = True
         set_resolution("high")
         self.state = "menu"
+        self.credits_height = HEIGHT
         while self.running:
             events = self.handle_events()
             self.handle_input()
@@ -358,11 +359,24 @@ class Game:
 
             elif self.state == "credits":
                 SCREEN.fill((70, 70, 70))
-                Menu_button = Button(200, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button = Button(self.credits_height + 450, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 Menu_button.draw_button(events)
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Kobe Motmans", False, 'white'),(WIDTH/2, HEIGHT/2-50))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Andreas Meuwissen", False, 'white'),(WIDTH/2, HEIGHT/2-10))
-                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Ruben Verreth", False, 'white'),(WIDTH/2, HEIGHT/2+40))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, self.credits_height-350))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Developed by:", False, 'white'),(WIDTH/4, self.credits_height - 80))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Kobe Motmans", False, 'white'),(WIDTH/4, self.credits_height - 40))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Andreas Meuwissen", False, 'white'),(WIDTH/4, self.credits_height))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Ruben Verreth", False, 'white'),(WIDTH/4, self.credits_height + 40))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Music by:", False, 'white'),(WIDTH/4, self.credits_height + 120))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("nog niet wiel", False, 'white'),(WIDTH/4, self.credits_height + 160))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Special thanks to:", False, 'white'),(WIDTH/4, self.credits_height + 240))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Andrei", False, 'white'),(WIDTH/4, self.credits_height + 280))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Ahmed", False, 'white'),(WIDTH/4, self.credits_height + 320))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Ruben", False, 'white'),(WIDTH/4, self.credits_height + 360))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Jan", False, 'white'),(WIDTH/4, self.credits_height + 400))
+                SCREEN.blit(pygame.font.SysFont('ocraextended', 40, False).render("Bilal", False, 'white'),(WIDTH/4, self.credits_height + 440))
+                self.credits_height -= 4
+                if self.credits_height < -HEIGHT:
+                    self.credits_height = HEIGHT-450
 
             elif self.state == 'settings':
                 SCREEN.fill((70, 70, 70))
