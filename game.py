@@ -52,7 +52,6 @@ class Game:
         self.jan_spotted = False
 
         # Init objects
-        self.objects = self.create_objects()
         self.resolution = "high"
         self.tutorial = True
         self.volume_slider = Slider(
@@ -85,12 +84,17 @@ class Game:
         objects = {
             "enemies": self.create_enemies(),
             "ammo": [],
-            "keycard": PickupObject("objects/keycard", M.SPAWNS["keycard"][0], M.SPAWNS["keycard"][1]),
+            "keycard": [],
             "exit": PickupObject("objects/exit", M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1]),
             "health": []
         }
         for ammo_pos in M.SPAWNS["ammo"]:
             objects["ammo"].append(PickupObject("objects/ammo", ammo_pos[0], ammo_pos[1]))
+        if M.SPAWNS["keycard"]:
+            keycard_pos = M.SPAWNS["keycard"][random.randint(0, len( M.SPAWNS["keycard"])-1)]
+            objects["keycard"].append(PickupObject("objects/keycard", keycard_pos[0], keycard_pos[1]))
+            print("Chosen keycard pos:", keycard_pos)
+        
         return objects
 
     def handle_events(self):
@@ -189,7 +193,7 @@ class Game:
                         self.player.score += 1
                         self.objects["enemies"].remove(enemy)
                         if enemy.type == "enemies/jan":
-                            self.objects["keycard"] = PickupObject("objects/keycard", enemy.pos.x, enemy.pos.y)
+                            self.objects["keycard"].append(PickupObject("objects/keycard", enemy.pos.x, enemy.pos.y))
                             self.jan = None
                         else:
                             if random.random() < HEALTH_CHANCE:
@@ -218,6 +222,18 @@ class Game:
                         self.flash_time = 60
                         item.interact(self.player)
                         self.objects["health"].remove(item)
+            elif obj == "keycard":
+                for item in self.objects["keycard"]:
+                    dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
+                        player_pos, player_angle, wall_distances
+                    )
+                    if dist is not None:
+                        sprites.append((dist, SCREEN_x, item))
+                    if is_hit:
+                        self.curr_flash = "keycard"
+                        self.flash_time = 60
+                        item.interact(self.player)
+                        self.objects["keycard"].remove(item)
             else:
                 item = self.objects[obj]
                 if item is not None:
@@ -257,7 +273,6 @@ class Game:
         # Init speler
         M.map_level = 0
         # Init objects
-        self.objects = self.create_objects()
         self.state = "game"
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol]
@@ -267,6 +282,7 @@ class Game:
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
+        self.objects = self.create_objects()
         self.main_music.play()
         self.door_pos = 0
         

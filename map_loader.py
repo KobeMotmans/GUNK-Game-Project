@@ -35,7 +35,7 @@ def png_to_list_fast(path):
         "player": (150,150), #Default location
         "enemies": [],
         "ammo": [],
-        "keycard": (0,0),
+        "keycard": [],
         "end_point": (0,0)
     }
     for y in range(h):
@@ -52,7 +52,7 @@ def png_to_list_fast(path):
             elif number == 4:
                 spawns["player"] = (x_center,y_center)
             elif number == 5:
-                spawns["keycard"]= (x_center,y_center)
+                spawns["keycard"].append((x_center,y_center))
             elif number == 6:
                 spawns["ammo"].append((x_center,y_center))
             elif number == 7:
