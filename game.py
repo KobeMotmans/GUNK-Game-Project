@@ -257,13 +257,13 @@ class Game:
         # Init speler
         M.map_level = 0
         # Init objects
-        self.objects = self.create_objects()
         self.state = "game"
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol]
         self.player.score = 0
         self.player.level = 0
         M.MAP, M.SPAWNS, M.width, M.height  = png_to_list_fast(MAP_PATH[M.map_level])
+        self.objects = self.create_objects()
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
