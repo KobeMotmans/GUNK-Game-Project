@@ -279,7 +279,6 @@ class Game:
         self.player.score = 0
         self.player.level = 0
         M.MAP, M.SPAWNS, M.width, M.height  = png_to_list_fast(MAP_PATH[M.map_level])
-        self.objects = self.create_objects()
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
@@ -366,17 +365,18 @@ class Game:
                         self.door_pos += ELEV_SPEED
 
                     elif self.door_pos <= WIDTH/2 + ELEV_SPEED:
-                        SCREEN.fill((20,20,20))
-                        self.lift_time -= 1
-                        if self.lift_time <= 0:
-                            if self.player.level < MAX_LEVEL:
+                        if self.player.level < MAX_LEVEL:
+                            SCREEN.fill((20,20,20))
+                            self.lift_time -= 1
+                            if self.lift_time <= 0:
                                 self.level_up()
                                 self.door_pos += ELEV_SPEED
-                            else:
-                                pygame.mixer.stop()
-                                self.escaped = True
-                                pygame.mouse.set_visible(True)
-                                pygame.event.set_grab(False)
+                        else:
+                            pygame.mixer.stop()
+                            self.door_pos += ELEV_SPEED
+                            self.escaped = True
+                            pygame.mouse.set_visible(True)
+                            pygame.event.set_grab(False)
                             
                     elif self.door_pos >= WIDTH/2 + ELEV_SPEED and self.door_pos < WIDTH:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
@@ -384,8 +384,9 @@ class Game:
                         self.door_pos += ELEV_SPEED
 
                     elif self.door_pos >= WIDTH:
-                        self.player.level += 0.5
-                        self.door_pos = 0
+                        if not self.escaped:
+                            self.player.level += 0.5
+                            self.door_pos = 0
                         self.lift_time = 120
 
             elif self.state == "paused":
