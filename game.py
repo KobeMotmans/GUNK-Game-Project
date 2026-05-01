@@ -330,7 +330,7 @@ class Game:
 
             elif self.state == "game":
                 self.clock.tick(60)
-                if (self.door_pos == 0 or self.door_pos > WIDTH/2) and not self.escaped:
+                if (self.door_pos == 0 or self.door_pos >= WIDTH/2 + ELEV_SPEED) and not self.escaped:
                     self.update()
                     self.render()
                     if self.jan is not None and self.jan_spotted:
