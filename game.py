@@ -88,6 +88,7 @@ class Game:
         if M.SPAWNS["keycard"]:
             keycard_pos = M.SPAWNS["keycard"][random.randint(0, len( M.SPAWNS["keycard"])-1)]
             objects["keycard"].append(PickupObject("objects/keycard", keycard_pos[0], keycard_pos[1]))
+            print("Chosen keycard pos:", keycard_pos)
         
         return objects
 
@@ -373,25 +374,7 @@ class Game:
                         self.lift_time = 120
 
             elif self.state == "paused":
-                SCREEN.fill(self.bg_color)
-                
-                high_label = "[HIGH RES]" if self.resolution == "high" else "HIGH RES"
-                low_label  = "[LOW RES]"  if self.resolution == "low"  else "LOW RES"
-                
-                Res_high = Button(-70, 200, 60, high_label, 25, "black", "white", "white", "black", self, "settings", True, -220, "res_high")
-                Res_low = Button(-70, 200, 60, low_label, 25, "black", "white", "white", "black", self, "settings", True, 220, "res_low")
-                
-                tuto_label = "[TUTORIAL]" if self.tutorial.flags["general"] == True else "TUTORIAL"
-                
-                Tutorial_button = Button(100, 250, 60, tuto_label, 25, "black", "white", "white", "black", self, "settings", True, 0, "tutorial")
-                Menu_button = Button(230, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
-                
-                Tutorial_button.draw_button(events)
-                Res_high.draw_button(events)
-                Res_low.draw_button(events)
-                Menu_button.draw_button(events)
-                self.volume_slider.draw(events)
-
+                self.Menu.draw_paused_screen(events)
             elif self.state == 'dead':
                 SCREEN.blit(SCREEN_DEAD, (0,0))
                 Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
