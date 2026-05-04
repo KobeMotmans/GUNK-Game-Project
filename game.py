@@ -12,7 +12,7 @@ from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
 from player import Player
-from Menu import Menu, Button, Slider, Bilal, Tutorial
+from Menu import Button,Bilal
 from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector
