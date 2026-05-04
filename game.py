@@ -59,6 +59,16 @@ class Game:
 
         # Init objects
         self.resolution = "high"
+        self.volume_slider = Slider(
+                                    y_pos=50,
+                                    width=400,
+                                    height=12,
+                                    min_val=0.0,
+                                    max_val=1.0,
+                                    initial_val=0.5,
+                                    label="VOLUME",
+                                    GAME=self
+                                )
         self.main_music.set_volume(0.5)  # match initial slider value
 
     def create_enemies(self):
@@ -435,17 +445,7 @@ class Game:
                 Tutorial_button = Button(100, 250, 60, tuto_label, 25, "black", "white", "white", "black", self, "settings", True, 0, "tutorial")
                 Tutorial_button.draw_button(events)
                 Menu_button.draw_button(events)
-                Volume_slider = Slider(
-                                            y_pos=50,
-                                            width=400,
-                                            height=12,
-                                            min_val=0.0,
-                                            max_val=1.0,
-                                            initial_val=0.5,
-                                            label="VOLUME",
-                                            GAME=self
-                                        )
-                Volume_slider.draw(events)
+                self.volume_slider.draw(events)
                 
 
             if self.player.death and self.state == "game":
