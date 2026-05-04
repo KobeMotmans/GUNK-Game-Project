@@ -6,13 +6,12 @@ import pygame
 from math import atan2, hypot, cos, sin
 import heapq
 
-from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE
+from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL
 from vector import Vector
 from map_loader import map_to_cord, cord_to_map, is_in_wall, M
 from objects import RenderObject
 
-# Hoe vaak A* opnieuw berekend wordt (in frames)
-PATHFIND_INTERVAL = 20
+
 
 
 class Enemy(RenderObject):
@@ -116,7 +115,7 @@ class Enemy(RenderObject):
     def find_path(self, player):
         player_pos = player.pos
 
-        # LOS slechts 1x berekenen per frame
+        # LOS slechts 1 keer berekenen per frame
         self.is_los, dist = self.is_in_los(player_pos)
 
         if dist > AGGRO_DIST:
@@ -155,7 +154,7 @@ class Enemy(RenderObject):
 
     def take_dmg(self, dmg):
         self.health -= dmg
-
+    # Deze code is eerst zelf geschreven geweest door Ruben (zie zijn commit over A*) en is hierna herwerkt met AI aangezien we 1 fps hadden
     def A_star(self, player):
         """
         A* pathfinding. Nodes zijn (col, row) = (x, y) in maptiles.

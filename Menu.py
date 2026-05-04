@@ -198,12 +198,29 @@ class Tekstballon:
 
 class Bilal:
     def __init__(self):
+        # Dialog / speech state
         self.queue = deque()
         self.current = None
         self.timer = 0
 
         self.interrupt_msg = None
         self.interrupt_timer = 0
+
+        # Tutorial flags
+        self.flags = {
+            "general": True,
+            "monster": False,
+            "seen_enemy": False,
+            "got_keycard": False,
+            "boss_warning": False,
+            "floor_3": False,
+            "floor_1": False,
+            "floor_0": False,
+        }
+
+    # ======================
+    # SPEECH LOGIC
+    # ======================
 
     def say(self, text, duration=250):
         self.queue.append((text, duration))
@@ -242,18 +259,12 @@ class Bilal:
             text = self.current
 
         if text:
-            Tekstballon(text, HEIGHT-400, 20).draw()
-            SCREEN.blit(BILAL, (0, HEIGHT-300))
-class Tutorial:
-    def __init__(self, bilal):
-        self.bilal = bilal
-        self.flags = {
-            "general": True,
-            "monster":False,
-            "seen_enemy": False,
-            "got_keycard": False,
-            "boss_warning": False
-        }
+            Tekstballon(text, HEIGHT - 400, 20).draw()
+            SCREEN.blit(BILAL, (0, HEIGHT - 300))
+
+    # ======================
+    # TUTORIAL / EVENTS
+    # ======================
 
     def trigger(self, event_name):
         if self.flags.get(event_name):
@@ -262,37 +273,43 @@ class Tutorial:
         self.flags[event_name] = True
 
         if event_name == "seen_enemy":
-            self.bilal.interrupt(
-                "Pas op, de assistenten proberen je ontsnapping tegen te houden! Je zal ze moeten neerschieten met linker-muisklik!"
+            self.interrupt(
+                "Pas op, de assistenten proberen je ontsnapping tegen te houden! "
+                "Je zal ze moeten neerschieten met linker-muisklik!"
             )
-        elif event_name == 'monster':
-            self.bilal.interrupt(
+
+        elif event_name == "monster":
+            self.interrupt(
                 "Door Monster Energy™ te drinken krijg je twee HP terug!", 200
             )
 
         elif event_name == "keycard":
-            self.bilal.interrupt(
+            self.interrupt(
                 "Daar ligt de keycard! Breng hem naar de lift en verdwijn van deze verdieping"
             )
 
         elif event_name == "boss_warning":
-            self.bilal.interrupt(
-                "Daar is jan! Dit is je kans om hier een einde aan te maken!",
+            self.interrupt(
+                "Daar is Jan! Dit is je kans om hier een einde aan te maken!"
             )
+
         elif event_name == "floor_3":
-            self.bilal.say(
-                "We zijn op verdieping 3 geraakt. Je hebt ook een minigun gevonden op verdieping 4. Duw op A om te wisselen",
+            self.say(
+                "We zijn op verdieping 3 geraakt. Je hebt ook een minigun gevonden "
+                "op verdieping 4. Duw op A om te wisselen",
                 400
             )
+
         elif event_name == "floor_1":
-            self.bilal.say(
+            self.say(
                 "Net wanneer we hier binnenkwamen lag hier een rifle. Zoek hem via A."
             )
+
         elif event_name == "floor_0":
-            self.bilal.say(
+            self.say(
                 "Dit is verdieping 0. Er is wel een probleempje. Jan is hier, en hij heeft de laatste keycard."
             )
-            self.bilal.say(
+            self.say(
                 "Je kan hem vinden in de garage. Maar pas op, hij is heel erg sterk!"
             )
 
