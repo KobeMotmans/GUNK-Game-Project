@@ -59,7 +59,7 @@ HEALTH_REGEN = 2
 START_AMMO = 100
 AMMO_CAP = 200
 
-FONT = 'ocraextended'
+FONT = 'assets/font/Hyro.ttf'
 MENU_BG = (70,70,70)
 
 SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))

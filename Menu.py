@@ -12,10 +12,18 @@ class Menu:
         self.lift_time = 120
         self.credits_height = HEIGHT
         self.lift_time = ELEV_TIME
+
+        self.credits_height = HEIGHT
+
+        self.title_font = pygame.font.Font(FONT, 300)
+        self.title_font.set_bold(True)
+
+        self.text_font = pygame.font.Font(FONT, 40)
+   
     def draw_main_menu(self, events):
         SCREEN.fill(self.bg_color)
         
-        SCREEN.blit(pygame.font.SysFont(FONT, 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
+        SCREEN.blit(self.title_font.render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
         
         Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self.game, "reset", False)
         Start_knop.draw_button(events)
@@ -48,27 +56,62 @@ class Menu:
         Res_low.draw_button(events)
         Menu_button.draw_button(events)
         self.volume_slider.draw(events)
-        
+
     def draw_credits(self, events):
         SCREEN.fill(self.bg_color)
-        SCREEN.blit(pygame.font.SysFont(FONT, 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, self.credits_height))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Developed by:", False, 'white'),(WIDTH/4, self.credits_height+280))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Kobe Motmans", False, 'white'),(WIDTH/4, self.credits_height+320))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Andreas Meuwissen", False, 'white'),(WIDTH/4, self.credits_height+360))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ruben Verreth", False, 'white'),(WIDTH/4, self.credits_height +400))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Music by:", False, 'white'),(WIDTH/4, self.credits_height + 480))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("nog niet wiel", False, 'white'),(WIDTH/4, self.credits_height + 520))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Special thanks to:", False, 'white'),(WIDTH/4, self.credits_height + 600))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Andrei", False, 'white'),(WIDTH/4, self.credits_height + 640))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ahmed", False, 'white'),(WIDTH/4, self.credits_height + 680))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ruben", False, 'white'),(WIDTH/4, self.credits_height + 720))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Jan", False, 'white'),(WIDTH/4, self.credits_height + 760))
-        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Bilal", False, 'white'),(WIDTH/4, self.credits_height + 800))
-        self.credits_height -= 4
+
+        y = self.credits_height
+        x = WIDTH / 4
+        white = "white"
+
+        # Titel
+        SCREEN.blit(
+            self.title_font.render("GUNK", True, white),
+            (WIDTH / 2 - 360, y)
+        )
+
+        # Credits regels
+        lines = [
+            ("Developed by:", 280),
+            ("Kobe Motmans", 320),
+            ("Andreas Meuwissen", 360),
+            ("Ruben Verreth", 400),
+            ("Music by:", 480),
+            ("nog niet wiel", 520),
+            ("Special thanks to:", 600),
+            ("Andrei", 640),
+            ("Ahmed", 680),
+            ("Ruben", 720),
+            ("Jan", 760),
+            ("Bilal", 800),
+        ]
+
+        for text, offset in lines:
+            SCREEN.blit(
+                self.text_font.render(text, False, white),
+                (x, y + offset)
+            )
+
+        # Scroll
+        self.credits_height -= 1
         if self.credits_height < -900:
             self.credits_height = HEIGHT
-        
-        Menu_button = Button(self.credits_height + 540, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+
+        # Menu knop
+        Menu_button = Button(
+            self.credits_height + 540,
+            140,
+            60,
+            "MENU",
+            35,
+            "black",
+            'white',
+            'white',
+            'black',
+            self.game,
+            "menu",
+            True
+        )
         Menu_button.draw_button(events)
     def draw_UI(self, events):
         SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render(f"{round(self.game.clock.get_fps())}", True, 'green'),(20, 20))
@@ -139,6 +182,8 @@ class Button:
         self.mouse_vis = mouse_vis
         self.x_pos = x_pos
         self.function = function
+        self.font = pygame.font.Font(FONT, self.text_size)
+        self.font.set_bold(True)
     def draw_button(self, events):
         mouse = pygame.mouse.get_pos()
         hovering = (WIDTH/2-self.w/2+self.x_pos <= mouse[0] <= WIDTH/2+self.w/2+self.x_pos and HEIGHT/2-self.h/2+self.y_pos <= mouse[1] <= HEIGHT/2+self.h/2+self.y_pos)
@@ -170,7 +215,7 @@ class Button:
         text_color = self.text_hov_color if hovering else self.text_color
         
         pygame.draw.rect(SCREEN,color,[WIDTH/2-self.w/2+self.x_pos,HEIGHT/2-self.h/2+self.y_pos,self.w,self.h])
-        SCREEN.blit(pygame.font.SysFont(FONT, self.text_size, True).render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
+        SCREEN.blit(self.font.render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
 
 # ---- Het grootste deel hiervan is AI code, eerder flavour en tutorial dan functionele game code-----
 class Slider:
@@ -188,6 +233,8 @@ class Slider:
         self.track_x = WIDTH / 2 - width / 2
         self.track_y = HEIGHT / 2 + y_pos
         self.handle_r = height
+
+        self.font = pygame.font.Font(FONT, 25)
 
     def get_handle_x(self):
         ratio = (self.value - self.min_val) / (self.max_val - self.min_val)
@@ -225,8 +272,8 @@ class Slider:
         pygame.draw.circle(SCREEN, (0, 200, 255) if self.dragging else 'white', (int(handle_x), int(self.track_y)), self.handle_r)
 
         # Draw label + value
-        font = pygame.font.SysFont(FONT, 25, True)
-        label_surf = font.render(f"{self.label}: {int(self.value * 100)}%", True, 'white')
+
+        label_surf = self.font.render(f"{self.label}: {int(self.value * 100)}%", True, 'white')
         SCREEN.blit(label_surf, (self.track_x, self.track_y - 45))
 
 class Tekstballon:
@@ -236,6 +283,7 @@ class Tekstballon:
         self.x_pos = x_pos
         self.max_width = max_width
         self.padding = padding
+        self.font = pygame.font.Font(FONT, 20)
     @staticmethod
     def wrap_text(text, font, max_width):
         words = text.split(" ")
@@ -256,16 +304,15 @@ class Tekstballon:
         return lines
 
     def draw(self):
-        font = pygame.font.SysFont(FONT, 20, False)
 
         # 1. Splits op expliciete nieuwe regels (;)
         raw_lines = []
         for part in self.text.split(";"):
-            raw_lines.extend(self.wrap_text(part, font, self.max_width))
+            raw_lines.extend(self.wrap_text(part, self.font, self.max_width))
 
-        line_height = font.get_height()
+        line_height = self.font.get_height()
         text_height = line_height * len(raw_lines)
-        text_width = max(font.size(line)[0] for line in raw_lines) if raw_lines else 0
+        text_width = max(self.font.size(line)[0] for line in raw_lines) if raw_lines else 0
 
         box_w = text_width + self.padding * 2
         box_h = text_height + self.padding * 2
@@ -290,7 +337,7 @@ class Tekstballon:
         # 3. Tekenen van tekst
         for i, line in enumerate(raw_lines):
             SCREEN.blit(
-                font.render(line, False, (0, 0, 0)),
+                self.font.render(line, False, (0, 0, 0)),
                 (x + self.padding, y + self.padding + i * line_height)
             )
 
