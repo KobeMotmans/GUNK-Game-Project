@@ -1,12 +1,16 @@
 import pygame
-from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL
+from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL
 from collections import deque
 class Menu:
     def __init__(self, color, GAME):
         self.bg_color = color
         self.credits_height = HEIGHT
         self.game = GAME
-        self.volume_slider = Slider(y_pos=50,width=400,height=12,min_val=0.0,max_val=1.0,initial_val=0.5,label="VOLUME",GAME = self.game)     
+        self.volume_slider = Slider(y_pos=50,width=400,height=12,min_val=0.0,max_val=1.0,initial_val=0.5,label="VOLUME",GAME = self.game)
+        
+        self.lift_time = 120
+        self.credits_height = HEIGHT
+   
     def draw_main_menu(self, events):
         SCREEN.fill(self.bg_color)
         
@@ -66,10 +70,22 @@ class Menu:
         Menu_button = Button(self.credits_height + 540, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
     def draw_paused_screen(self, events):
-        Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
+        Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self.game, "game", False)
         Restart_knop.draw_button(events)
 
-        Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+        Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+        Menu_button.draw_button(events)
+    def draw_dead_screen(self,events):
+        SCREEN.blit(SCREEN_DEAD, (0,0))
+        Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+        Menu_button.draw_button(events)
+        SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.game.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+    def draw_escaped_screen(self,events):
+        SCREEN.blit(VICTORY_SCREEN, (0,0))
+        SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-400))
+        SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-200))
+        SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.game.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+        Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
         
 class Button:

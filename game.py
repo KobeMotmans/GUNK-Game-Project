@@ -51,7 +51,6 @@ class Game:
         self.state = "menu"
         self.curr_flash = ""
         self.flash_time = 0
-        self.door_pos = 0
         self.lift_time = 120
         self.possible_enemies = [Andrei, Ahmed, Ruben]
         self.jan = None  # referentie naar Jan voor de boss bar
@@ -335,12 +334,7 @@ class Game:
                     SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
                     
                 if self.escaped:
-                    SCREEN.blit(VICTORY_SCREEN, (0,0))
-                    SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-400))
-                    SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-200))
-                    SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
-                    Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
-                    Menu_button.draw_button(events)
+                    Menu.draw_escaped_screen(events)
                 
                 if self.player.level%1 != 0:
                     if self.door_pos <= WIDTH/2:
@@ -376,17 +370,11 @@ class Game:
             elif self.state == "paused":
                 self.Menu.draw_paused_screen(events)
             elif self.state == 'dead':
-                SCREEN.blit(SCREEN_DEAD, (0,0))
-                Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
-                Menu_button.draw_button(events)
-                SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
-
+                self.Menu.draw_dead_screen(events)
             elif self.state == "credits":
                 self.Menu.draw_credits(events)
-
             elif self.state == 'settings':
                self.Menu.draw_settings(events)              
-
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"
