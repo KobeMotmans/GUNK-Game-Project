@@ -160,7 +160,7 @@ class Game:
         self.player.tick()
 
     def render(self):   #Render alle game elementen
-        SCREEN.fill((72, 0, 72) if self.Menu.silly_mode else 'black')
+        SCREEN.fill((32, 0, 32) if self.Menu.silly_mode else 'black')
 
 
         player_pos = self.player.get_pos()
@@ -299,7 +299,6 @@ class Game:
         self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
-        pygame.mixer.Sound("assets/elev_ding.mp3").play()
         
 
     def run(self):

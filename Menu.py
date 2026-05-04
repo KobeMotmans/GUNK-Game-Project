@@ -136,6 +136,7 @@ class Menu:
                     self.game.level_up()
                 if self.lift_time == 0:
                     self.game.player.door_pos += ELEV_SPEED
+                    pygame.mixer.Sound("assets/elev_ding.mp3").play()
                 self.lift_time -= 1
             else:
                 pygame.mixer.stop()
