@@ -60,16 +60,6 @@ class Game:
 
         # Init objects
         self.resolution = "high"
-        self.volume_slider = Slider(
-                                    y_pos=50,       # vertical offset from screen center
-                                    width=400,
-                                    height=12,
-                                    min_val=0.0,
-                                    max_val=1.0,
-                                    initial_val=0.5,
-                                    label="VOLUME",
-                                    GAME=self
-                                )
         self.main_music.set_volume(0.5)  # match initial slider value
 
     def create_enemies(self):
@@ -207,6 +197,7 @@ class Game:
                         else:
                             if random.random() < HEALTH_CHANCE:
                                 self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
+                                self.tutorial.trigger("monster")
             elif obj == "ammo":
                 for item in self.objects["ammo"]:
                     dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
@@ -309,7 +300,7 @@ class Game:
             self.tutorial.trigger("floor_0")
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
-        self.player.got_keycard = True
+        self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
         pygame.mixer.Sound("assets/elev_ding.mp3").play()
@@ -434,15 +425,29 @@ class Game:
 
             elif self.state == 'settings':
                 SCREEN.fill((70, 70, 70))
-                Menu_button = Button(200, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                Menu_button = Button(230, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
                 high_label = "[HIGH RES]" if self.resolution == "high" else "HIGH RES"
                 low_label  = "[LOW RES]"  if self.resolution == "low"  else "LOW RES"
                 Res_high = Button(-70, 200, 60, high_label, 25, "black", "white", "white", "black", self, "settings", True, -220, "res_high")
                 Res_high.draw_button(events)
                 Res_low = Button(-70, 200, 60, low_label, 25, "black", "white", "white", "black", self, "settings", True, 220, "res_low")
                 Res_low.draw_button(events)
+                tuto_label = "[TUTORIAL]" if self.tutorial.flags["general"] == True else "TUTORIAL"
+                Tutorial_button = Button(100, 250, 60, tuto_label, 25, "black", "white", "white", "black", self, "settings", True, 0, "tutorial")
+                Tutorial_button.draw_button(events)
                 Menu_button.draw_button(events)
-                self.volume_slider.draw(events)
+                Volume_slider = Slider(
+                                            y_pos=50,
+                                            width=400,
+                                            height=12,
+                                            min_val=0.0,
+                                            max_val=1.0,
+                                            initial_val=0.5,
+                                            label="VOLUME",
+                                            GAME=self
+                                        )
+                Volume_slider.draw(events)
+                
 
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
