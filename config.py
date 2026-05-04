@@ -44,6 +44,9 @@ START_HEALTH = 10
 SPRITE_SIZE = 100
 MIN_DIST = 40
 
+# Hoe vaak A* opnieuw berekend wordt (in frames)
+PATHFIND_INTERVAL = 20
+
 # Wapen instellingen
 WEAPON_SIZE = (300, 300)
 WEAPON_OFFSET_X = 0.04  # 4% van schermbreedte

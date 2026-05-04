@@ -30,13 +30,12 @@ class Game:
 
         #Init Bilal/Tutorial
         self.bilal = Bilal()
-        self.tutorial = Tutorial(self.bilal)
         self.bilal.say("Welkom bij GUNK!", 100)
         self.bilal.say("Gebruik je muis om rond te kijken en ZQSD om te bewegen", 200)
         self.bilal.say("Je zit vast op verdieping 5 van het K gebouw. Probeer via de lift te ontsnappen.", 250)
         self.bilal.say("Er moet in één van deze kamers een keycard liggen. Zoek hem!", 200)
         self.bilal.say("Maar pas op, want de andere assistenten zijn gek geworden van het K gebouw!", 200)
-        self.Menu = Menu(MENU_BG, self)
+
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
 
@@ -181,10 +180,10 @@ class Game:
                     )
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, enemy))
-                        self.tutorial.trigger("seen_enemy")
+                        self.bilal.trigger("seen_enemy")
                         if enemy.type == "enemies/jan":
                             self.jan_spotted = True
-                            self.tutorial.trigger("boss_warning")
+                            self.bilal.trigger("boss_warning")
                     if enemy.health <= 0:
                         self.player.score += 1
                         self.objects["enemies"].remove(enemy)
@@ -195,7 +194,7 @@ class Game:
                         else:
                             if random.random() < HEALTH_CHANCE:
                                 self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
-                                self.tutorial.trigger("monster")
+                                self.bilal.trigger("monster")
             elif obj == "ammo":
                 for item in self.objects["ammo"]:
                     dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
@@ -241,7 +240,7 @@ class Game:
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, item))
                         if obj == "keycard":
-                            self.tutorial.trigger("keycard")
+                            self.bilal.trigger("keycard")
                     if is_hit:
                         interaction = item.interact(self.player)
                         if interaction == "succes":
@@ -290,12 +289,12 @@ class Game:
         M.map_level += 1
         if M.map_level == 1:
             self.unlocked_guns.append(self.minigun)
-            self.tutorial.trigger("floor_3")
+            self.bilal.trigger("floor_3")
         elif M.map_level == 3:
             self.unlocked_guns.append(self.rifle)
-            self.tutorial.trigger("floor_1")
+            self.bilal.trigger("floor_1")
         elif M.map_level == 4:
-            self.tutorial.trigger("floor_0")
+            self.bilal.trigger("floor_0")
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.player.got_keycard = False
@@ -315,7 +314,7 @@ class Game:
             self.handle_input()
             if self.state == "menu":
                 self.Menu.draw_main_menu(events)
-                
+
             elif self.state == "game":
                 self.clock.tick(60)
                 if (self.door_pos == 0 or self.door_pos >= WIDTH/2 + ELEV_SPEED) and not self.escaped:
@@ -327,7 +326,7 @@ class Game:
                 SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
                 SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
                 SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
-                if self.tutorial.flags["general"]:
+                if self.bilal.flags["general"]:
                     self.bilal.update()
                     self.bilal.draw()
                 if self.player.got_keycard:
@@ -374,7 +373,8 @@ class Game:
             elif self.state == "credits":
                 self.Menu.draw_credits(events)
             elif self.state == 'settings':
-               self.Menu.draw_settings(events)              
+               self.Menu.draw_settings(events)
+
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"
