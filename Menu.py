@@ -1,6 +1,7 @@
 import pygame
-from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL
+from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME
 from collections import deque
+from map_loader import M
 class Menu:
     def __init__(self, color, GAME):
         self.bg_color = color
@@ -10,7 +11,7 @@ class Menu:
         
         self.lift_time = 120
         self.credits_height = HEIGHT
-   
+        self.lift_time = ELEV_TIME
     def draw_main_menu(self, events):
         SCREEN.fill(self.bg_color)
         
@@ -69,12 +70,46 @@ class Menu:
         
         Menu_button = Button(self.credits_height + 540, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
+    def draw_UI(self, events):
+        SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render(f"{round(self.game.clock.get_fps())}", True, 'green'),(20, 20))
+        SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.game.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
+        SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.game.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
     def draw_paused_screen(self, events):
         Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self.game, "game", False)
         Restart_knop.draw_button(events)
 
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
+    def draw_elevator(self, events, player):
+        if player.door_pos <= WIDTH/2:
+            pygame.draw.rect(SCREEN,(20,20,20),[0,0,player.door_pos,HEIGHT])
+            pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-player.door_pos,0,player.door_pos,HEIGHT])
+            player.door_pos += ELEV_SPEED
+
+        elif player.door_pos <= WIDTH/2 + ELEV_SPEED:
+            if M.map_level < MAX_LEVEL:
+                SCREEN.fill((20,20,20))
+                if self.lift_time == ELEV_TIME:
+                    self.game.level_up()
+                if self.lift_time == 0:
+                    self.game.player.door_pos += ELEV_SPEED
+                self.lift_time -= 1
+            else:
+                pygame.mixer.stop()
+                self.game.player.door_pos += ELEV_SPEED
+                self.game.escaped = True
+                pygame.mouse.set_visible(True)
+                pygame.event.set_grab(False)
+                
+        elif WIDTH/2 + ELEV_SPEED <= player.door_pos < WIDTH:
+            pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-player.door_pos,HEIGHT])
+            pygame.draw.rect(SCREEN,(20,20,20),[player.door_pos,0,WIDTH-player.door_pos,HEIGHT])
+            player.door_pos += ELEV_SPEED
+
+        elif player.door_pos >= WIDTH:
+            if not self.game.escaped:
+                player.door_pos = 0
+            self.lift_time = ELEV_TIME
     def draw_dead_screen(self,events):
         SCREEN.blit(SCREEN_DEAD, (0,0))
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)

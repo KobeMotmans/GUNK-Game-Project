@@ -20,6 +20,7 @@ MAP_PATH = ["assets/floor_5.png", "assets/floor_3.png","assets/floor_2.png","ass
 MAX_LEVEL = len(MAP_PATH)-1
 START_ANGLES = [-pi/2, 0, 0, pi/2, -pi/2]
 ELEV_SPEED = 10
+ELEV_TIME = 120
 
 # Raycasting instellingen
 FOV = pi / 2

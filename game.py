@@ -7,7 +7,7 @@ import random
 
 from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
-                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG)
+                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME)
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
@@ -51,7 +51,6 @@ class Game:
         self.state = "menu"
         self.curr_flash = ""
         self.flash_time = 0
-        self.lift_time = 120
         self.possible_enemies = [Andrei, Ahmed, Ruben]
         self.jan = None  # referentie naar Jan voor de boss bar
         self.jan_spotted = False
@@ -277,14 +276,13 @@ class Game:
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol]
         self.player.score = 0
-        self.player.level = 0
         M.MAP, M.SPAWNS, M.width, M.height  = png_to_list_fast(MAP_PATH[M.map_level])
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
         self.objects = self.create_objects()
         self.main_music.play()
-        self.door_pos = 0
+        self.player.door_pos = 0
         
     def level_up(self):
         M.map_level += 1
@@ -318,15 +316,14 @@ class Game:
 
             elif self.state == "game":
                 self.clock.tick(60)
-                if (self.door_pos == 0 or self.door_pos >= WIDTH/2 + ELEV_SPEED) and not self.escaped:
+                if (self.player.door_pos == 0 or self.player.door_pos >= WIDTH/2 + ELEV_SPEED) and not self.escaped:
                     self.update()
                     self.render()
                     if self.jan is not None and self.jan_spotted:
                         self.jan.draw_health_bar(None, None, None)
-                    
-                SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
-                SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
-                SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
+                        
+                self.Menu.draw_UI(events)
+                
                 if self.bilal.flags["general"]:
                     self.bilal.update()
                     self.bilal.draw()
@@ -334,38 +331,10 @@ class Game:
                     SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
                     
                 if self.escaped:
-                    Menu.draw_escaped_screen(events)
+                    self.Menu.draw_escaped_screen(events)
                 
-                if self.player.level%1 != 0:
-                    if self.door_pos <= WIDTH/2:
-                        pygame.draw.rect(SCREEN,(20,20,20),[0,0,self.door_pos,HEIGHT])
-                        pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-self.door_pos,0,self.door_pos,HEIGHT])
-                        self.door_pos += ELEV_SPEED
-
-                    elif self.door_pos <= WIDTH/2 + ELEV_SPEED:
-                        if self.player.level < MAX_LEVEL:
-                            SCREEN.fill((20,20,20))
-                            self.lift_time -= 1
-                            if self.lift_time <= 0:
-                                self.level_up()
-                                self.door_pos += ELEV_SPEED
-                        else:
-                            pygame.mixer.stop()
-                            self.door_pos += ELEV_SPEED
-                            self.escaped = True
-                            pygame.mouse.set_visible(True)
-                            pygame.event.set_grab(False)
-                            
-                    elif WIDTH/2 + ELEV_SPEED <= self.door_pos < WIDTH:
-                        pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
-                        pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
-                        self.door_pos += ELEV_SPEED
-
-                    elif self.door_pos >= WIDTH:
-                        if not self.escaped:
-                            self.player.level += 0.5
-                            self.door_pos = 0
-                        self.lift_time = 120
+                if self.player.door_pos != 0:
+                    self.Menu.draw_elevator(events, self.player)
 
             elif self.state == "paused":
                 self.Menu.draw_paused_screen(events)

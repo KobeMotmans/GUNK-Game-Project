@@ -103,7 +103,7 @@ class PickupObject(RenderObject):
             pygame.mixer.Sound("assets/key.mp3").play()
         if self.type == "objects/exit":
             if player.got_keycard:
-                player.level += 0.5
+                player.door_pos  = 1
             else:
                 SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render("NO KEYCARD", True,'green'),(WIDTH/2-200,HEIGHT/2))
                 return "fail"
