@@ -30,18 +30,21 @@ class Button:
                     if self.function == "res_high":
                         set_resolution("high")
                         self.GAME.resolution = "high"
-                    if self.function == "res_low":
+                    elif self.function == "res_low":
                         set_resolution("low")
                         self.GAME.resolution = "low"
-                    if self.state_change == "reset":
+                    elif self.function == "tutorial":
+                        self.GAME.tutorial.flags["general"] = not self.GAME.tutorial.flags["general"]
+                    elif self.state_change == "reset":
                         self.GAME.reset_game()
-                    if self.state_change == "Stop":
+                    elif self.state_change == "Stop":
                         pygame.mixer.stop()
                         self.GAME.running = False
                         self.GAME.state = None
-                    if self.state_change == "game":
+                    elif self.state_change == "game":
                         pygame.mixer.unpause()
                         self.GAME.state = "game"
+                    
 
         color = self.button_hov_color if hovering else self.button_color
         text_color = self.text_hov_color if hovering else self.text_color
@@ -115,7 +118,6 @@ class Tekstballon:
         self.x_pos = x_pos
         self.max_width = max_width
         self.padding = padding
-
     @staticmethod
     def wrap_text(text, font, max_width):
         words = text.split(" ")
@@ -134,7 +136,6 @@ class Tekstballon:
             lines.append(current_line)
 
         return lines
-
 
     def draw(self):
         font = pygame.font.SysFont(FONT, 20, False)
@@ -204,8 +205,6 @@ class Bilal:
         self.interrupt_msg = None
         self.interrupt_timer = 0
 
-    # -------- Public API --------
-
     def say(self, text, duration=250):
         self.queue.append((text, duration))
 
@@ -217,8 +216,6 @@ class Bilal:
         self.queue.clear()
         self.current = None
         self.timer = 0
-
-    # -------- Update / Draw --------
 
     def update(self):
         if self.interrupt_timer > 0:
@@ -247,13 +244,12 @@ class Bilal:
         if text:
             Tekstballon(text, HEIGHT-400, 20).draw()
             SCREEN.blit(BILAL, (0, HEIGHT-300))
-
-
 class Tutorial:
     def __init__(self, bilal):
         self.bilal = bilal
         self.flags = {
             "general": True,
+            "monster":False,
             "seen_enemy": False,
             "got_keycard": False,
             "boss_warning": False
@@ -268,6 +264,10 @@ class Tutorial:
         if event_name == "seen_enemy":
             self.bilal.interrupt(
                 "Pas op, de assistenten proberen je ontsnapping tegen te houden! Je zal ze moeten neerschieten met linker-muisklik!"
+            )
+        elif event_name == 'monster':
+            self.bilal.interrupt(
+                "Door Monster Energy™ te drinken krijg je twee HP terug!", 200
             )
 
         elif event_name == "keycard":
