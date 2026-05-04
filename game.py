@@ -12,7 +12,7 @@ from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
 from player import Player
-from Menu import Menu, Button, Slider, Bilal, Tutorial
+from Menu import Menu, Button, Slider, Bilal
 from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector
@@ -29,6 +29,7 @@ class Game:
         self.escaped = False
 
         #Init Bilal/Tutorial
+        self.Menu = Menu((70,70,70), self)
         self.bilal = Bilal()
         self.bilal.say("Welkom bij GUNK!", 100)
         self.bilal.say("Gebruik je muis om rond te kijken en ZQSD om te bewegen", 200)
