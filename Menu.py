@@ -1,7 +1,77 @@
 import pygame
 from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL
 from collections import deque
+class Menu:
+    def __init__(self, color, GAME):
+        self.bg_color = color
+        self.credits_height = HEIGHT
+        self.game = GAME
+        self.volume_slider = Slider(y_pos=50,width=400,height=12,min_val=0.0,max_val=1.0,initial_val=0.5,label="VOLUME",GAME = self.game)     
+    def draw_main_menu(self, events):
+        SCREEN.fill(self.bg_color)
+        
+        SCREEN.blit(pygame.font.SysFont(FONT, 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
+        
+        Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self.game, "reset", False)
+        Start_knop.draw_button(events)
 
+        Settings_button = Button(100, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self.game, "settings", True)
+        Settings_button.draw_button(events)
+
+        Credits_button = Button(180, 200, 60, "CREDITS", 30 ,"black", 'white', 'white', 'black', self.game, "credits", True)
+        Credits_button.draw_button(events)
+
+        Quit_button = Button(260, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self.game, "Stop", False)
+        Quit_button.draw_button(events)
+    def draw_settings(self, events):
+        SCREEN.fill(self.bg_color)
+        
+        high_label = "[HIGH RES]" if self.game.resolution == "high" else "HIGH RES"
+        low_label  = "[LOW RES]"  if self.game.resolution == "low"  else "LOW RES"
+        
+        Res_high = Button(-70, 200, 60, high_label, 25, "black", "white", "white", "black", self.game, "settings", True, -220, "res_high")
+        Res_low = Button(-70, 200, 60, low_label, 25, "black", "white", "white", "black", self.game, "settings", True, 220, "res_low")
+        
+        tuto_label = "[TUTORIAL]" if self.game.tutorial.flags["general"] == True else "TUTORIAL"
+        
+        Tutorial_button = Button(100, 250, 60, tuto_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "tutorial")
+        self.volume_slider.draw(events)
+        Menu_button = Button(230, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+        
+        Tutorial_button.draw_button(events)
+        Res_high.draw_button(events)
+        Res_low.draw_button(events)
+        Menu_button.draw_button(events)
+        self.volume_slider.draw(events)
+        
+    def draw_credits(self, events):
+        SCREEN.fill(self.bg_color)
+        SCREEN.blit(pygame.font.SysFont(FONT, 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, self.credits_height))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Developed by:", False, 'white'),(WIDTH/4, self.credits_height+280))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Kobe Motmans", False, 'white'),(WIDTH/4, self.credits_height+320))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Andreas Meuwissen", False, 'white'),(WIDTH/4, self.credits_height+360))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ruben Verreth", False, 'white'),(WIDTH/4, self.credits_height +400))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Music by:", False, 'white'),(WIDTH/4, self.credits_height + 480))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("nog niet wiel", False, 'white'),(WIDTH/4, self.credits_height + 520))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Special thanks to:", False, 'white'),(WIDTH/4, self.credits_height + 600))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Andrei", False, 'white'),(WIDTH/4, self.credits_height + 640))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ahmed", False, 'white'),(WIDTH/4, self.credits_height + 680))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ruben", False, 'white'),(WIDTH/4, self.credits_height + 720))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Jan", False, 'white'),(WIDTH/4, self.credits_height + 760))
+        SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Bilal", False, 'white'),(WIDTH/4, self.credits_height + 800))
+        self.credits_height -= 4
+        if self.credits_height < -900:
+            self.credits_height = HEIGHT
+        
+        Menu_button = Button(self.credits_height + 540, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+        Menu_button.draw_button(events)
+    def draw_paused_screen(self, events):
+        Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
+        Restart_knop.draw_button(events)
+
+        Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+        Menu_button.draw_button(events)
+        
 class Button:
     def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0, function = None):
         self.y_pos = y_pos
@@ -45,14 +115,14 @@ class Button:
                         pygame.mixer.unpause()
                         self.GAME.state = "game"
                     
-
         color = self.button_hov_color if hovering else self.button_color
         text_color = self.text_hov_color if hovering else self.text_color
         
         pygame.draw.rect(SCREEN,color,[WIDTH/2-self.w/2+self.x_pos,HEIGHT/2-self.h/2+self.y_pos,self.w,self.h])
         SCREEN.blit(pygame.font.SysFont(FONT, self.text_size, True).render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
 
-class Slider: #AI code
+# ---- Het grootste deel hiervan is AI code, eerder flavour en tutorial dan functionele game code-----
+class Slider:
     def __init__(self, y_pos, width, height, min_val, max_val, initial_val, label, GAME):
         self.y_pos = y_pos
         self.w = width
@@ -108,9 +178,6 @@ class Slider: #AI code
         label_surf = font.render(f"{self.label}: {int(self.value * 100)}%", True, 'white')
         SCREEN.blit(label_surf, (self.track_x, self.track_y - 45))
 
-
-
-# ---- Het grootste deel hiervan is AI code, eerder flavour en tutorial dan functionele game code-----
 class Tekstballon:
     def __init__(self, text, y_pos, x_pos, max_width=280, padding=10):
         self.text = text
