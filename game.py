@@ -8,12 +8,12 @@ import random
 
 from config import (SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, 
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
-                    set_resolution, FONT, BILAL)
+                    set_resolution, FONT)
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
 from player import Player
-from Menu import Button, Slider, Tekstballon
+from Menu import Button, Slider, Tekstballon, Bilal, Tutorial
 from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector
@@ -28,8 +28,15 @@ class Game:
         self.running = False
         self.state = None
         self.escaped = False
-        self.bilal_welcome_time = 600
-        self.bilal_controls_time = 200
+
+        #Init Bilal/Tutorial
+        self.bilal = Bilal()
+        self.tutorial = Tutorial(self.bilal)
+        self.bilal.say("Welkom bij GUNK!", 100)
+        self.bilal.say("Gebruik je muis om rond te kijken en ZQSD om te bewegen", 200)
+        self.bilal.say("Je zit vast op verdieping 5 van het K gebouw. Probeer via de lift te ontsnappen.", 250)
+        self.bilal.say("Er moet in één van deze kamers een keycard liggen. Zoek hem!", 200)
+        self.bilal.say("Maar pas op, want de andere assistenten zijn gek geworden van het K gebouw!", 200)
 
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
@@ -53,7 +60,6 @@ class Game:
 
         # Init objects
         self.resolution = "high"
-        self.tutorial = True
         self.volume_slider = Slider(
                                     y_pos=50,       # vertical offset from screen center
                                     width=400,
@@ -119,7 +125,7 @@ class Game:
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        if self.current_gun.auto == False: #Click to shoot guns
+                        if not self.current_gun.auto: #Click to shoot guns
                             if self.player.ammo >= self.current_gun.ammo_weight:
                                 self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun)
 
@@ -187,14 +193,17 @@ class Game:
                     )
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, enemy))
+                        self.tutorial.trigger("seen_enemy")
                         if enemy.type == "enemies/jan":
                             self.jan_spotted = True
+                            self.tutorial.trigger("boss_warning")
                     if enemy.health <= 0:
                         self.player.score += 1
                         self.objects["enemies"].remove(enemy)
                         if enemy.type == "enemies/jan":
                             self.objects["keycard"].append(PickupObject("objects/keycard", enemy.pos.x, enemy.pos.y))
                             self.jan = None
+                            self.bilal.say("Je hebt het gedaan! Zorg dat je nu zo snel mogelijk buiten staat!")
                         else:
                             if random.random() < HEALTH_CHANCE:
                                 self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
@@ -242,6 +251,8 @@ class Game:
                     )
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, item))
+                        if obj == "keycard":
+                            self.tutorial.trigger("keycard")
                     if is_hit:
                         interaction = item.interact(self.player)
                         if interaction == "succes":
@@ -290,11 +301,15 @@ class Game:
         M.map_level += 1
         if M.map_level == 1:
             self.unlocked_guns.append(self.minigun)
+            self.tutorial.trigger("floor_3")
         elif M.map_level == 3:
             self.unlocked_guns.append(self.rifle)
+            self.tutorial.trigger("floor_1")
+        elif M.map_level == 4:
+            self.tutorial.trigger("floor_0")
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
-        self.player.got_keycard = False
+        self.player.got_keycard = True
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
         pygame.mixer.Sound("assets/elev_ding.mp3").play()
@@ -338,15 +353,9 @@ class Game:
                 SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render(f"{round(self.clock.get_fps())}", True, 'green'),(20, 20))
                 SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
                 SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
-                if self.tutorial:
-                    if self.bilal_welcome_time >= 0:
-                        Tekstballon("Welkom bij GUNK!;Ik ben Bilal,;en ik zal je helpen;gebouw K te ontsnappen!", HEIGHT-400, 20).draw()
-                        self.bilal_welcome_time -= 1
-                        SCREEN.blit(BILAL, (0,HEIGHT-300))
-                    elif self.bilal_controls_time >= 0:
-                        Tekstballon("Gebruik je muis om;rond te kijken,;en de pijltjes of ZQSD;om te lopen.", HEIGHT-400, 20).draw()
-                        self.bilal_controls_time -= 1
-                        SCREEN.blit(BILAL, (0,HEIGHT-300))
+                if self.tutorial.flags["general"]:
+                    self.bilal.update()
+                    self.bilal.draw()
                 if self.player.got_keycard:
                     SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
                     
@@ -378,7 +387,7 @@ class Game:
                             pygame.mouse.set_visible(True)
                             pygame.event.set_grab(False)
                             
-                    elif self.door_pos >= WIDTH/2 + ELEV_SPEED and self.door_pos < WIDTH:
+                    elif WIDTH/2 + ELEV_SPEED <= self.door_pos < WIDTH:
                         pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-self.door_pos,HEIGHT])
                         pygame.draw.rect(SCREEN,(20,20,20),[self.door_pos,0,WIDTH-self.door_pos,HEIGHT])
                         self.door_pos += ELEV_SPEED

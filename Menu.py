@@ -1,5 +1,6 @@
 import pygame
-from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT
+from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL
+from collections import deque
 
 class Button:
     def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0, function = None):
@@ -103,35 +104,195 @@ class Slider: #AI code
         font = pygame.font.SysFont(FONT, 25, True)
         label_surf = font.render(f"{self.label}: {int(self.value * 100)}%", True, 'white')
         SCREEN.blit(label_surf, (self.track_x, self.track_y - 45))
-        
+
+
+
+# ---- Het grootste deel hiervan is AI code, eerder flavour en tutorial dan functionele game code-----
 class Tekstballon:
-    def __init__(self, text, y_pos, x_pos):
+    def __init__(self, text, y_pos, x_pos, max_width=280, padding=10):
         self.text = text
         self.y_pos = y_pos
         self.x_pos = x_pos
-        self.linewidth = 0
+        self.max_width = max_width
+        self.padding = padding
+
+    @staticmethod
+    def wrap_text(text, font, max_width):
+        words = text.split(" ")
+        lines = []
+        current_line = ""
+
+        for word in words:
+            test_line = current_line + (" " if current_line else "") + word
+            if font.size(test_line)[0] <= max_width:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word
+
+        if current_line:
+            lines.append(current_line)
+
+        return lines
+
 
     def draw(self):
-        self.linewidth = 0
-        pygame.draw.rect(SCREEN, (0, 0, 0), [self.x_pos-5, self.y_pos-5, 300, 110])
-        pygame.draw.rect(SCREEN, (255, 255, 255), [self.x_pos, self.y_pos, 290, 100])
-    
-        triangle_points = [
-            (self.x_pos + 140, self.y_pos + 100),   # Top-left (bottom of rect)
-            (self.x_pos + 140, self.y_pos + 135),   # Tip of the tail
-            (self.x_pos + 175, self.y_pos + 100),   # Top-right (bottom of rect)
-        ]
-        pygame.draw.polygon(SCREEN, (0, 0, 0), triangle_points)
-    
-        inner_triangle_points = [
-            (self.x_pos + 145, self.y_pos + 100),   # Top-left (inset by 2)
-            (self.x_pos + 145, self.y_pos + 125),   # Tip (inset, slightly shorter)
-            (self.x_pos + 170, self.y_pos + 100),   # Top-right (inset by 2)
-        ]
-        pygame.draw.polygon(SCREEN, (255, 255, 255), inner_triangle_points)
-    
         font = pygame.font.SysFont(FONT, 20, False)
-        for zin in self.text.split(";"):
-            SCREEN.blit(font.render(zin, False, (0, 0, 0)), (self.x_pos + 5, self.y_pos + self.linewidth + 5))
-            self.linewidth += 20
-            
+
+        # 1. Splits op expliciete nieuwe regels (;)
+        raw_lines = []
+        for part in self.text.split(";"):
+            raw_lines.extend(self.wrap_text(part, font, self.max_width))
+
+        line_height = font.get_height()
+        text_height = line_height * len(raw_lines)
+        text_width = max(font.size(line)[0] for line in raw_lines) if raw_lines else 0
+
+        box_w = text_width + self.padding * 2
+        box_h = text_height + self.padding * 2
+
+        x = self.x_pos
+        y = self.y_pos
+
+        # 2. Achtergrond en rand
+        pygame.draw.rect(
+            SCREEN,
+            (0, 0, 0),
+            [x - 4, y - 4, box_w + 8, box_h + 8],
+            border_radius=8
+        )
+        pygame.draw.rect(
+            SCREEN,
+            (255, 255, 255),
+            [x, y, box_w, box_h],
+            border_radius=8
+        )
+
+        # 3. Tekenen van tekst
+        for i, line in enumerate(raw_lines):
+            SCREEN.blit(
+                font.render(line, False, (0, 0, 0)),
+                (x + self.padding, y + self.padding + i * line_height)
+            )
+
+        # 4. “Staart” van de ballon (automatisch gecentreerd)
+        tail_x = x + box_w // 2
+        tail_y = y + box_h
+
+        pygame.draw.polygon(
+            SCREEN,
+            (0, 0, 0),
+            [(tail_x - 12, tail_y),
+             (tail_x + 12, tail_y),
+             (tail_x, tail_y + 22)]
+        )
+        pygame.draw.polygon(
+            SCREEN,
+            (255, 255, 255),
+            [(tail_x - 8, tail_y),
+             (tail_x + 8, tail_y),
+             (tail_x, tail_y + 18)]
+        )
+
+
+class Bilal:
+    def __init__(self):
+        self.queue = deque()
+        self.current = None
+        self.timer = 0
+
+        self.interrupt_msg = None
+        self.interrupt_timer = 0
+
+    # -------- Public API --------
+
+    def say(self, text, duration=250):
+        self.queue.append((text, duration))
+
+    def interrupt(self, text, duration=250):
+        self.interrupt_msg = text
+        self.interrupt_timer = duration
+
+    def clear(self):
+        self.queue.clear()
+        self.current = None
+        self.timer = 0
+
+    # -------- Update / Draw --------
+
+    def update(self):
+        if self.interrupt_timer > 0:
+            self.interrupt_timer -= 1
+            if self.interrupt_timer == 0:
+                self.interrupt_msg = None
+            return
+
+        if self.timer > 0:
+            self.timer -= 1
+            if self.timer == 0:
+                self.current = None
+            return
+
+        if self.queue:
+            self.current, self.timer = self.queue.popleft()
+
+    def draw(self):
+        text = None
+
+        if self.interrupt_msg:
+            text = self.interrupt_msg
+        elif self.current:
+            text = self.current
+
+        if text:
+            Tekstballon(text, HEIGHT-400, 20).draw()
+            SCREEN.blit(BILAL, (0, HEIGHT-300))
+
+
+class Tutorial:
+    def __init__(self, bilal):
+        self.bilal = bilal
+        self.flags = {
+            "general": True,
+            "seen_enemy": False,
+            "got_keycard": False,
+            "boss_warning": False
+        }
+
+    def trigger(self, event_name):
+        if self.flags.get(event_name):
+            return
+
+        self.flags[event_name] = True
+
+        if event_name == "seen_enemy":
+            self.bilal.interrupt(
+                "Pas op, de assistenten proberen je ontsnapping tegen te houden! Je zal ze moeten neerschieten met linker-muisklik!"
+            )
+
+        elif event_name == "keycard":
+            self.bilal.interrupt(
+                "Daar ligt de keycard! Breng hem naar de lift en verdwijn van deze verdieping"
+            )
+
+        elif event_name == "boss_warning":
+            self.bilal.interrupt(
+                "Daar is jan! Dit is je kans om hier een einde aan te maken!",
+            )
+        elif event_name == "floor_3":
+            self.bilal.say(
+                "We zijn op verdieping 3 geraakt. Je hebt ook een minigun gevonden op verdieping 4. Duw op A om te wisselen",
+                400
+            )
+        elif event_name == "floor_1":
+            self.bilal.say(
+                "Net wanneer we hier binnenkwamen lag hier een rifle. Zoek hem via A."
+            )
+        elif event_name == "floor_0":
+            self.bilal.say(
+                "Dit is verdieping 0. Er is wel een probleempje. Jan is hier, en hij heeft de laatste keycard."
+            )
+            self.bilal.say(
+                "Je kan hem vinden in de garage. Maar pas op, hij is heel erg sterk!"
+            )
+

@@ -18,7 +18,7 @@ SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 TILE_SIZE = 100
 MAP_PATH = ["assets/floor_5.png", "assets/floor_3.png","assets/floor_2.png","assets/floor_1.png","assets/floor_0.png"]
 MAX_LEVEL = len(MAP_PATH)-1
-START_ANGLES = [pi/4, pi, 4, 0, 0, 0]
+START_ANGLES = [-pi/2, pi, pi, pi/2, -pi/2]
 ELEV_SPEED = 10
 
 # Raycasting instellingen
@@ -36,7 +36,7 @@ def set_resolution(quality: str):
 # Speler instellingen
 PLAYER_RADIUS = 10
 PLAYER_SPEED = 6
-PLAYER_ROT_SPEED = 0.001
+PLAYER_ROT_SPEED = 0.0007
 
 START_HEALTH = 10
 

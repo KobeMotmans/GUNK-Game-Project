@@ -18,7 +18,7 @@ class Player:
         self.death = False
         self.score = 0
         self.ammo = 0
-        self.got_keycard = False
+        self.got_keycard = True
         self.level = 0
 
     def rotate(self, direction):
