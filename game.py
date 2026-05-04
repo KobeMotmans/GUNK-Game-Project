@@ -98,7 +98,6 @@ class Game:
         if M.SPAWNS["keycard"]:
             keycard_pos = M.SPAWNS["keycard"][random.randint(0, len( M.SPAWNS["keycard"])-1)]
             objects["keycard"].append(PickupObject("objects/keycard", keycard_pos[0], keycard_pos[1]))
-            print("Chosen keycard pos:", keycard_pos)
         
         return objects
 
