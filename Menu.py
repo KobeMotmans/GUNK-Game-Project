@@ -36,7 +36,7 @@ class Menu:
         Res_high = Button(-70, 200, 60, high_label, 25, "black", "white", "white", "black", self.game, "settings", True, -220, "res_high")
         Res_low = Button(-70, 200, 60, low_label, 25, "black", "white", "white", "black", self.game, "settings", True, 220, "res_low")
         
-        tuto_label = "[TUTORIAL]" if self.game.tutorial.flags["general"] == True else "TUTORIAL"
+        tuto_label = "[TUTORIAL]" if self.game.bilal.flags["general"] == True else "TUTORIAL"
         
         Tutorial_button = Button(100, 250, 60, tuto_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "tutorial")
         self.volume_slider.draw(events)
