@@ -7,12 +7,12 @@ import random
 
 from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
-                    set_resolution, FONT, VICTORY_SCREEN)
+                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG)
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
 from player import Player
-from Menu import Button, Slider, Bilal, Tutorial
+from Menu import Menu, Button, Slider, Bilal, Tutorial
 from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector
@@ -36,7 +36,7 @@ class Game:
         self.bilal.say("Je zit vast op verdieping 5 van het K gebouw. Probeer via de lift te ontsnappen.", 250)
         self.bilal.say("Er moet in één van deze kamers een keycard liggen. Zoek hem!", 200)
         self.bilal.say("Maar pas op, want de andere assistenten zijn gek geworden van het K gebouw!", 200)
-
+        self.Menu = Menu(MENU_BG, self)
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
 
@@ -59,16 +59,6 @@ class Game:
 
         # Init objects
         self.resolution = "high"
-        self.volume_slider = Slider(
-                                    y_pos=50,
-                                    width=400,
-                                    height=12,
-                                    min_val=0.0,
-                                    max_val=1.0,
-                                    initial_val=0.5,
-                                    label="VOLUME",
-                                    GAME=self
-                                )
         self.main_music.set_volume(0.5)  # match initial slider value
 
     def create_enemies(self):
@@ -324,24 +314,9 @@ class Game:
         while self.running:
             events = self.handle_events()
             self.handle_input()
-            keys = pygame.key.get_pressed()
             if self.state == "menu":
-                SCREEN.fill((70,70,70))
+                self.Menu.draw_main_menu(events)
                 
-                SCREEN.blit(pygame.font.SysFont(FONT, 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
-                
-                Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self, "reset", False)
-                Start_knop.draw_button(events)
-
-                Settings_button = Button(100, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self, "settings", True)
-                Settings_button.draw_button(events)
-
-                Credits_button = Button(180, 200, 60, "CREDITS", 30 ,"black", 'white', 'white', 'black', self, "credits", True)
-                Credits_button.draw_button(events)
-
-                Quit_button = Button(260, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self, "Stop", False)
-                Quit_button.draw_button(events)
-
             elif self.state == "game":
                 self.clock.tick(60)
                 if (self.door_pos == 0 or self.door_pos >= WIDTH/2 + ELEV_SPEED) and not self.escaped:
@@ -399,11 +374,24 @@ class Game:
                         self.lift_time = 120
 
             elif self.state == "paused":
-                Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self, "game", False)
-                Restart_knop.draw_button(events)
-
-                Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                SCREEN.fill(self.bg_color)
+                
+                high_label = "[HIGH RES]" if self.resolution == "high" else "HIGH RES"
+                low_label  = "[LOW RES]"  if self.resolution == "low"  else "LOW RES"
+                
+                Res_high = Button(-70, 200, 60, high_label, 25, "black", "white", "white", "black", self, "settings", True, -220, "res_high")
+                Res_low = Button(-70, 200, 60, low_label, 25, "black", "white", "white", "black", self, "settings", True, 220, "res_low")
+                
+                tuto_label = "[TUTORIAL]" if self.tutorial.flags["general"] == True else "TUTORIAL"
+                
+                Tutorial_button = Button(100, 250, 60, tuto_label, 25, "black", "white", "white", "black", self, "settings", True, 0, "tutorial")
+                Menu_button = Button(230, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
+                
+                Tutorial_button.draw_button(events)
+                Res_high.draw_button(events)
+                Res_low.draw_button(events)
                 Menu_button.draw_button(events)
+                self.volume_slider.draw(events)
 
             elif self.state == 'dead':
                 SCREEN.blit(SCREEN_DEAD, (0,0))
@@ -412,41 +400,10 @@ class Game:
                 SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
 
             elif self.state == "credits":
-                SCREEN.fill((70, 70, 70))
-                Menu_button = Button(self.credits_height + 540, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
-                Menu_button.draw_button(events)
-                SCREEN.blit(pygame.font.SysFont(FONT, 300, True).render("GUNK", True, 'white'),(WIDTH/2-360, self.credits_height))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Developed by:", False, 'white'),(WIDTH/4, self.credits_height+280))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Kobe Motmans", False, 'white'),(WIDTH/4, self.credits_height+320))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Andreas Meuwissen", False, 'white'),(WIDTH/4, self.credits_height+360))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ruben Verreth", False, 'white'),(WIDTH/4, self.credits_height +400))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Music by:", False, 'white'),(WIDTH/4, self.credits_height + 480))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("nog niet wiel", False, 'white'),(WIDTH/4, self.credits_height + 520))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Special thanks to:", False, 'white'),(WIDTH/4, self.credits_height + 600))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Andrei", False, 'white'),(WIDTH/4, self.credits_height + 640))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ahmed", False, 'white'),(WIDTH/4, self.credits_height + 680))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Ruben", False, 'white'),(WIDTH/4, self.credits_height + 720))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Jan", False, 'white'),(WIDTH/4, self.credits_height + 760))
-                SCREEN.blit(pygame.font.SysFont(FONT, 40, False).render("Bilal", False, 'white'),(WIDTH/4, self.credits_height + 800))
-                self.credits_height -= 4
-                if self.credits_height < -900:
-                    self.credits_height = HEIGHT
+                self.Menu.draw_credits(events)
 
             elif self.state == 'settings':
-                SCREEN.fill((70, 70, 70))
-                Menu_button = Button(230, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self, "menu", True)
-                high_label = "[HIGH RES]" if self.resolution == "high" else "HIGH RES"
-                low_label  = "[LOW RES]"  if self.resolution == "low"  else "LOW RES"
-                Res_high = Button(-70, 200, 60, high_label, 25, "black", "white", "white", "black", self, "settings", True, -220, "res_high")
-                Res_high.draw_button(events)
-                Res_low = Button(-70, 200, 60, low_label, 25, "black", "white", "white", "black", self, "settings", True, 220, "res_low")
-                Res_low.draw_button(events)
-                tuto_label = "[TUTORIAL]" if self.tutorial.flags["general"] == True else "TUTORIAL"
-                Tutorial_button = Button(100, 250, 60, tuto_label, 25, "black", "white", "white", "black", self, "settings", True, 0, "tutorial")
-                Tutorial_button.draw_button(events)
-                Menu_button.draw_button(events)
-                self.volume_slider.draw(events)
-                
+               self.Menu.draw_settings(events)              
 
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
