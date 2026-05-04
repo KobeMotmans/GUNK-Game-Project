@@ -1,5 +1,5 @@
 import pygame
-from math import atan2, hypot, cos, sin, tan, pi
+from math import atan2, hypot, tan, pi
 
 import config
 from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, FONT

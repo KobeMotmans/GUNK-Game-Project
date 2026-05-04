@@ -4,7 +4,7 @@ player.py - Speler klasse met movement en rotatie
 import pygame
 from math import sin, cos, pi
 
-from config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH, START_HEALTH, START_ANGLES
+from config import PLAYER_SPEED, PLAYER_ROT_SPEED, START_HEALTH, START_ANGLES
 from map_loader import will_collide
 from vector import Vector
 

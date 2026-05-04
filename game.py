@@ -3,17 +3,16 @@ game.py - Hoofd game loop en initialisatie
 """
 
 import pygame
-from math import pi
 import random
 
-from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH,
+from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
                     set_resolution, FONT, VICTORY_SCREEN)
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
 from player import Player
-from Menu import Button, Slider, Tekstballon, Bilal, Tutorial
+from Menu import Button, Slider, Bilal, Tutorial
 from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector

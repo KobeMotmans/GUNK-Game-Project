@@ -4,7 +4,7 @@ weapons.py - Wapen klassen en rendering
 
 import pygame
 from config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X, MAX_DEPTH
-from math import hypot, sin, cos, atan2
+from math import sin, cos
 from vector import Vector
 
 # Sound init
