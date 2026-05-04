@@ -18,7 +18,7 @@ SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 TILE_SIZE = 100
 MAP_PATH = ["assets/floor_5.png", "assets/floor_3.png","assets/floor_2.png","assets/floor_1.png","assets/floor_0.png"]
 MAX_LEVEL = len(MAP_PATH)-1
-START_ANGLES = [-pi/2, pi, pi, pi/2, -pi/2]
+START_ANGLES = [-pi/2, 0, 0, pi/2, -pi/2]
 ELEV_SPEED = 10
 
 # Raycasting instellingen
@@ -60,6 +60,10 @@ FONT = 'ocraextended'
 SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
 SCREEN_DEAD = pygame.transform.scale(pygame.image.load("assets/dead.png").convert_alpha(), (WIDTH, HEIGHT))
 BILAL = pygame.transform.scale(pygame.image.load("assets/bilal.png").convert_alpha(), (200, 200))
+
+VICTORY_SCREEN = pygame.transform.scale(pygame.image.load("assets/victory.png").convert_alpha(), (WIDTH, HEIGHT))
+
+
 DAMAGE_FLASH = SCREEN_FLASH.copy()
 DAMAGE_FLASH.fill((255,0,0), special_flags=pygame.BLEND_MULT)
 

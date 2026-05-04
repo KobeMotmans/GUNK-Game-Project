@@ -6,9 +6,9 @@ import pygame
 from math import pi
 import random
 
-from config import (SCREEN, WIDTH, HEIGHT, MAX_DEPTH, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH, 
+from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, MIN_DIST, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
-                    set_resolution, FONT)
+                    set_resolution, FONT, VICTORY_SCREEN)
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
@@ -360,7 +360,7 @@ class Game:
                     SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
                     
                 if self.escaped:
-                    SCREEN.fill((0,130,200))
+                    SCREEN.blit(VICTORY_SCREEN, (0,0))
                     SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-400))
                     SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-200))
                     SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
