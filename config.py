@@ -28,6 +28,7 @@ MAX_DEPTH = 1000
 PROJ_DIST = (WIDTH / 2) / (pi / 4)  # tan(FOV/2) = tan(pi/4) = 1
 NUM_RAYS = 0
 DELTA_ANGLE = 0
+
 def set_resolution(quality: str):
     global NUM_RAYS, DELTA_ANGLE
     divisor = 4 if quality == "high" else 8
@@ -59,7 +60,10 @@ HEALTH_REGEN = 2
 START_AMMO = 100
 AMMO_CAP = 200
 
-FONT = 'assets/font/Hyro.ttf'
+FONT = 'ocraextended'
+SILLY_FONT = 'assets/font/Hyro.ttf'
+    
+
 MENU_BG = (70,70,70)
 
 SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))

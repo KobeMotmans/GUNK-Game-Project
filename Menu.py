@@ -1,5 +1,5 @@
 import pygame
-from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME
+from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT
 from collections import deque
 from map_loader import M
 class Menu:
@@ -12,17 +12,14 @@ class Menu:
         self.lift_time = 120
         self.credits_height = HEIGHT
         self.lift_time = ELEV_TIME
-
-        self.credits_height = HEIGHT
-
-        self.title_font = pygame.font.Font(FONT, 300)
-        self.title_font.set_bold(True)
-
-        self.text_font = pygame.font.Font(FONT, 40)
+        self.silly_mode = False
+        
+        self.text_font = pygame.font.Font(SILLY_FONT, 40) if self.silly_mode else pygame.font.SysFont(FONT, 40)
    
     def draw_main_menu(self, events):
         SCREEN.fill(self.bg_color)
-        
+        self.title_font = pygame.font.Font(SILLY_FONT, 300) if self.silly_mode else pygame.font.SysFont(FONT, 300)
+        self.title_font.set_bold(True)
         SCREEN.blit(self.title_font.render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
         
         Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self.game, "reset", False)
@@ -42,20 +39,23 @@ class Menu:
         high_label = "[HIGH RES]" if self.game.resolution == "high" else "HIGH RES"
         low_label  = "[LOW RES]"  if self.game.resolution == "low"  else "LOW RES"
         
-        Res_high = Button(-70, 200, 60, high_label, 25, "black", "white", "white", "black", self.game, "settings", True, -220, "res_high")
-        Res_low = Button(-70, 200, 60, low_label, 25, "black", "white", "white", "black", self.game, "settings", True, 220, "res_low")
+        Res_high = Button(-90, 200, 60, high_label, 25, "black", "white", "white", "black", self.game, "settings", True, -220, "res_high")
+        Res_low = Button(-90, 200, 60, low_label, 25, "black", "white", "white", "black", self.game, "settings", True, 220, "res_low")
         
         tuto_label = "[TUTORIAL]" if self.game.bilal.flags["general"] == True else "TUTORIAL"
         
-        Tutorial_button = Button(100, 250, 60, tuto_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "tutorial")
+        Tutorial_button = Button(130, 250, 60, tuto_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "tutorial")
+        silly_label = "[SILLY MODE]" if self.silly_mode else "SILLY MODE"
+        Silly_button = Button(210, 250, 60, silly_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "silly")
         self.volume_slider.draw(events)
-        Menu_button = Button(230, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+        Menu_button = Button(320, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         
         Tutorial_button.draw_button(events)
         Res_high.draw_button(events)
         Res_low.draw_button(events)
         Menu_button.draw_button(events)
         self.volume_slider.draw(events)
+        Silly_button.draw_button(events)
 
     def draw_credits(self, events):
         SCREEN.fill(self.bg_color)
@@ -182,7 +182,7 @@ class Button:
         self.mouse_vis = mouse_vis
         self.x_pos = x_pos
         self.function = function
-        self.font = pygame.font.Font(FONT, self.text_size)
+        self.font = pygame.font.Font(SILLY_FONT, self.text_size) if GAME.Menu.silly_mode else pygame.font.SysFont(FONT, self.text_size)
         self.font.set_bold(True)
     def draw_button(self, events):
         mouse = pygame.mouse.get_pos()
@@ -200,7 +200,9 @@ class Button:
                         set_resolution("low")
                         self.GAME.resolution = "low"
                     elif self.function == "tutorial":
-                        self.GAME.tutorial.flags["general"] = not self.GAME.tutorial.flags["general"]
+                        self.GAME.bilal.flags["general"] = not self.GAME.bilal.flags["general"]
+                    elif self.function == "silly":
+                        self.GAME.Menu.silly_mode = not self.GAME.Menu.silly_mode
                     elif self.state_change == "reset":
                         self.GAME.reset_game()
                     elif self.state_change == "Stop":
@@ -234,13 +236,13 @@ class Slider:
         self.track_y = HEIGHT / 2 + y_pos
         self.handle_r = height
 
-        self.font = pygame.font.Font(FONT, 25)
 
     def get_handle_x(self):
         ratio = (self.value - self.min_val) / (self.max_val - self.min_val)
         return self.track_x + ratio * self.w
 
     def draw(self, events):
+        self.font = pygame.font.Font(SILLY_FONT, 25) if self.GAME.Menu.silly_mode else pygame.font.SysFont(FONT, 25)
         mouse = pygame.mouse.get_pos()
         mouse_buttons = pygame.mouse.get_pressed()
 
@@ -277,13 +279,13 @@ class Slider:
         SCREEN.blit(label_surf, (self.track_x, self.track_y - 45))
 
 class Tekstballon:
-    def __init__(self, text, y_pos, x_pos, max_width=280, padding=10):
+    def __init__(self, text, y_pos, x_pos, GAME, max_width=280, padding=10,):
         self.text = text
         self.y_pos = y_pos
         self.x_pos = x_pos
         self.max_width = max_width
         self.padding = padding
-        self.font = pygame.font.Font(FONT, 20)
+        self.font = pygame.font.Font(SILLY_FONT, 20) if GAME.Menu.silly_mode else pygame.font.SysFont(FONT, 20)
     @staticmethod
     def wrap_text(text, font, max_width):
         words = text.split(" ")
@@ -362,11 +364,12 @@ class Tekstballon:
 
 
 class Bilal:
-    def __init__(self):
+    def __init__(self, GAME):
         # Dialog / speech state
         self.queue = deque()
         self.current = None
         self.timer = 0
+        self.Game = GAME
 
         self.interrupt_msg = None
         self.interrupt_timer = 0
@@ -424,7 +427,7 @@ class Bilal:
             text = self.current
 
         if text:
-            Tekstballon(text, HEIGHT - 400, 20).draw()
+            Tekstballon(text, HEIGHT - 400, 20, self.Game).draw()
             SCREEN.blit(BILAL, (0, HEIGHT - 300))
 
     # ======================

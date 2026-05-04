@@ -30,7 +30,7 @@ class Game:
 
         #Init Bilal/Tutorial
         self.Menu = Menu((70,70,70), self)
-        self.bilal = Bilal()
+        self.bilal = Bilal(self)
         self.bilal.say("Welkom bij GUNK!", 100)
         self.bilal.say("Gebruik je muis om rond te kijken en ZQSD om te bewegen", 200)
         self.bilal.say("Je zit vast op verdieping 5 van het K gebouw. Probeer via de lift te ontsnappen.", 250)
@@ -160,7 +160,7 @@ class Game:
         self.player.tick()
 
     def render(self):   #Render alle game elementen
-        SCREEN.fill('black')
+        SCREEN.fill((72, 0, 72) if self.Menu.silly_mode else 'black')
 
 
         player_pos = self.player.get_pos()
