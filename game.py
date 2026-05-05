@@ -12,7 +12,7 @@ from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
 from player import Player
-from Menu import Menu, Button, Slider, Bilal
+from Menu import Button, Slider, Bilal, Menu
 from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector
@@ -296,10 +296,9 @@ class Game:
             self.bilal.trigger("floor_0")
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
-        self.player.got_keycard = False
+        self.player.got_keycard = True
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
-        
 
     def run(self):
         set_resolution("high")
@@ -315,19 +314,20 @@ class Game:
 
             elif self.state == "game":
                 self.clock.tick(60)
-                if (self.player.door_pos == 0 or self.player.door_pos >= WIDTH/2 + ELEV_SPEED) and not self.escaped:
+                if (self.player.door_pos == 0 or self.player.door_pos > WIDTH/2 + ELEV_SPEED) and not self.escaped:
                     self.update()
                     self.render()
                     if self.jan is not None and self.jan_spotted:
-                        self.jan.draw_health_bar(None, None, None)
-                        
+                        self.jan.draw_health_bar(None, None, None)         
                 self.Menu.draw_UI(events)
                 
                 if self.bilal.flags["general"]:
                     self.bilal.update()
                     self.bilal.draw()
                 if self.player.got_keycard:
-                    SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
+                    self.keycard_font = pygame.font.Font(FONT, 20)
+                    self.keycard_font.set_bold(True)
+                    SCREEN.blit(self.keycard_font.render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
                     
                 if self.escaped:
                     self.Menu.draw_escaped_screen(events)

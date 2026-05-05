@@ -13,12 +13,10 @@ class Menu:
         self.credits_height = HEIGHT
         self.lift_time = ELEV_TIME
         self.silly_mode = False
-        
-        self.text_font = pygame.font.Font(SILLY_FONT, 40) if self.silly_mode else pygame.font.SysFont(FONT, 40)
    
     def draw_main_menu(self, events):
         SCREEN.fill(self.bg_color)
-        self.title_font = pygame.font.Font(SILLY_FONT, 300) if self.silly_mode else pygame.font.SysFont(FONT, 300)
+        self.title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT,300)
         self.title_font.set_bold(True)
         SCREEN.blit(self.title_font.render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
         
@@ -65,12 +63,14 @@ class Menu:
         white = "white"
 
         # Titel
-        SCREEN.blit(
-            self.title_font.render("GUNK", True, white),
+        self.title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT,300)
+        self.title_font.set_bold(True)
+        SCREEN.blit(self.title_font.render("GUNK", True, white),
             (WIDTH / 2 - 360, y)
         )
 
         # Credits regels
+        self.text_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 40)
         lines = [
             ("Developed by:", 280),
             ("Kobe Motmans", 320),
@@ -113,10 +113,15 @@ class Menu:
             True
         )
         Menu_button.draw_button(events)
+        
     def draw_UI(self, events):
-        SCREEN.blit(pygame.font.SysFont(FONT, 20, True).render(f"{round(self.game.clock.get_fps())}", True, 'green'),(20, 20))
-        SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.game.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
-        SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"{round(self.game.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
+        self.fps_font = pygame.font.Font(FONT, 20)
+        self.fps_font.set_bold(True)
+        self.hp_font = pygame.font.Font(FONT, 80)
+        self.hp_font.set_bold(True)
+        SCREEN.blit(self.fps_font.render(f"{round(self.game.clock.get_fps())}", True, 'green'),(20, 20))
+        SCREEN.blit(self.hp_font.render(f"{round(self.game.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
+        SCREEN.blit(self.hp_font.render(f"{round(self.game.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
     def draw_paused_screen(self, events):
         Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self.game, "game", False)
         Restart_knop.draw_button(events)
@@ -132,9 +137,8 @@ class Menu:
         elif player.door_pos <= WIDTH/2 + ELEV_SPEED:
             if M.map_level < MAX_LEVEL:
                 SCREEN.fill((20,20,20))
-                if self.lift_time == ELEV_TIME:
-                    self.game.level_up()
                 if self.lift_time == 0:
+                    self.game.level_up()
                     self.game.player.door_pos += ELEV_SPEED
                     pygame.mixer.Sound("assets/elev_ding.mp3").play()
                 self.lift_time -= 1
@@ -155,15 +159,23 @@ class Menu:
                 player.door_pos = 0
             self.lift_time = ELEV_TIME
     def draw_dead_screen(self,events):
+        self.title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT,200)
+        self.title_font.set_bold(True)
         SCREEN.blit(SCREEN_DEAD, (0,0))
+        self.score_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 80)
+        self.score_font.set_bold(True)
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
-        SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.game.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+        SCREEN.blit(self.score_font.render(f"Score:{self.game.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+        SCREEN.blit(self.title_font.render("GAME OVER", True, 'black'),(WIDTH/2-500, HEIGHT/3-50))
     def draw_escaped_screen(self,events):
+        self.endscreen_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 150)
+        self.score_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 80)
         SCREEN.blit(VICTORY_SCREEN, (0,0))
-        SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-400))
-        SCREEN.blit(pygame.font.SysFont(FONT, 150, True).render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-200))
-        SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render(f"Score:{self.game.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
+        pygame.mouse.set_visible(True)
+        SCREEN.blit(self.endscreen_font.render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-530))
+        SCREEN.blit(self.endscreen_font.render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-350))
+        SCREEN.blit(self.score_font.render(f"Score:{self.game.player.score}", True, 'white'),(WIDTH/2-160,HEIGHT/2-40))
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
         
@@ -183,7 +195,7 @@ class Button:
         self.mouse_vis = mouse_vis
         self.x_pos = x_pos
         self.function = function
-        self.font = pygame.font.Font(SILLY_FONT, self.text_size) if GAME.Menu.silly_mode else pygame.font.SysFont(FONT, self.text_size)
+        self.font = pygame.font.Font(SILLY_FONT if GAME.Menu.silly_mode else FONT,self.text_size) 
         self.font.set_bold(True)
     def draw_button(self, events):
         mouse = pygame.mouse.get_pos()
@@ -243,7 +255,7 @@ class Slider:
         return self.track_x + ratio * self.w
 
     def draw(self, events):
-        self.font = pygame.font.Font(SILLY_FONT, 25) if self.GAME.Menu.silly_mode else pygame.font.SysFont(FONT, 25)
+        self.font = pygame.font.Font(SILLY_FONT if self.GAME.Menu.silly_mode else FONT, 25)
         mouse = pygame.mouse.get_pos()
         mouse_buttons = pygame.mouse.get_pressed()
 
@@ -286,7 +298,7 @@ class Tekstballon:
         self.x_pos = x_pos
         self.max_width = max_width
         self.padding = padding
-        self.font = pygame.font.Font(SILLY_FONT, 20) if GAME.Menu.silly_mode else pygame.font.SysFont(FONT, 20)
+        self.font = pygame.font.Font(SILLY_FONT if GAME.Menu.silly_mode else FONT, 20)
     @staticmethod
     def wrap_text(text, font, max_width):
         words = text.split(" ")

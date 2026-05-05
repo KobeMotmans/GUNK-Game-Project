@@ -60,7 +60,7 @@ HEALTH_REGEN = 2
 START_AMMO = 100
 AMMO_CAP = 200
 
-FONT = 'ocraextended'
+FONT = 'assets/font/ocraextended.ttf'
 SILLY_FONT = 'assets/font/Hyro.ttf'
     
 
