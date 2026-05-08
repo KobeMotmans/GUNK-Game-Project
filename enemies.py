@@ -6,7 +6,7 @@ import pygame
 from math import atan2, hypot, cos, sin
 import heapq
 
-from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT
+from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, ATTACK_DIST
 from vector import Vector
 from map_loader import map_to_cord, cord_to_map, is_in_wall, M
 from objects import RenderObject
@@ -127,10 +127,10 @@ class Enemy(RenderObject):
             self._full_path = []
             self.target = None
 
-        if self.is_los and dist >= MIN_DIST:
+        if self.is_los and dist > ATTACK_DIST:
             self.move_towards(player_pos)
 
-        if dist < MIN_DIST:
+        if self.is_los and dist <= ATTACK_DIST:
             player.take_damage(self.damage)
 
         # A* throttlen: herbereken periodiek of als enemy geen target meer heeft

@@ -7,7 +7,7 @@ class Menu:
         self.bg_color = color
         self.credits_height = HEIGHT
         self.game = GAME
-        self.volume_slider = Slider(y_pos=50,width=400,height=12,min_val=0.0,max_val=1.0,initial_val=0.5,label="VOLUME",GAME = self.game)
+        self.volume_slider = Slider(y_pos=50,width=400,height=12,min_val=0.0,max_val=1.0,initial_val=0.5,label="MUSIC VOLUME",GAME = self.game)
         
         self.lift_time = 120
         self.credits_height = HEIGHT

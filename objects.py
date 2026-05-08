@@ -105,7 +105,9 @@ class PickupObject(RenderObject):
             if player.got_keycard:
                 player.door_pos  = 1
             else:
-                SCREEN.blit(pygame.font.SysFont(FONT, 80, True).render("NO KEYCARD", True,'green'),(WIDTH/2-200,HEIGHT/2))
+                self.font = pygame.font.Font(FONT, 80)
+                self.font.set_bold(True)
+                SCREEN.blit(self.font.render("NO KEYCARD", True,'green'),(WIDTH/2-200,HEIGHT/2))
                 return "fail"
         if self.type == "objects/health":
             player.health = min(player.health+HEALTH_REGEN, START_HEALTH)

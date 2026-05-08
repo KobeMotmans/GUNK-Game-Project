@@ -7,7 +7,7 @@ import random
 
 from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
-                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME)
+                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME, SILLY_FONT)
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
@@ -325,7 +325,7 @@ class Game:
                     self.bilal.update()
                     self.bilal.draw()
                 if self.player.got_keycard:
-                    self.keycard_font = pygame.font.Font(FONT, 20)
+                    self.keycard_font = pygame.font.Font(SILLY_FONT if self.Menu.silly_mode else FONT, 20)
                     self.keycard_font.set_bold(True)
                     SCREEN.blit(self.keycard_font.render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
                     
