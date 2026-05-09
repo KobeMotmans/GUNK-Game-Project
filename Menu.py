@@ -77,7 +77,7 @@ class Menu:
             ("Andreas Meuwissen", 360),
             ("Ruben Verreth", 400),
             ("Music by:", 480),
-            ("nog niet wiel", 520),
+            ("Rube van der Wielen", 520),
             ("Special thanks to:", 600),
             ("Andrei", 640),
             ("Ahmed", 680),
@@ -93,7 +93,7 @@ class Menu:
             )
 
         # Scroll
-        self.credits_height -= 1
+        self.credits_height -= 2
         if self.credits_height < -900:
             self.credits_height = HEIGHT
 

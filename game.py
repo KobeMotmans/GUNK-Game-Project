@@ -22,11 +22,12 @@ class Game:
     def __init__(self):
         pygame.init()
         pygame.mixer.init()
-        self.main_music = pygame.mixer.Sound("assets/Soundtrack.mp3")
         self.clock = pygame.time.Clock()
         self.running = False
         self.state = None
         self.escaped = False
+        self.normal_music = pygame.mixer.Sound("assets/esKape Final.mp3")
+        self.funny_music = pygame.mixer.Sound("assets/Funny Music.mp3")
 
         #Init Bilal/Tutorial
         self.Menu = Menu((70,70,70), self)
@@ -40,6 +41,10 @@ class Game:
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
 
+        if self.Menu.silly_mode:
+            self.main_music = self.funny_music
+        else:
+            self.main_music = self.normal_music
 
         # Init wapens
         self.pistol = Pistol()
@@ -160,7 +165,7 @@ class Game:
         self.player.tick()
 
     def render(self):   #Render alle game elementen
-        SCREEN.fill((32, 0, 32) if self.Menu.silly_mode else 'black')
+        SCREEN.fill((0, 255, 255) if self.Menu.silly_mode else 'black')
 
 
         player_pos = self.player.get_pos()
@@ -281,9 +286,14 @@ class Game:
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
         self.objects = self.create_objects()
-        self.main_music.play()
+
         self.player.door_pos = 0
-        
+
+        if self.Menu.silly_mode:
+            self.main_music = self.funny_music
+        else:
+            self.main_music = self.normal_music
+        self.main_music.play()
     def level_up(self):
         M.map_level += 1
         if M.map_level == 1:
@@ -296,7 +306,7 @@ class Game:
             self.bilal.trigger("floor_0")
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
-        self.player.got_keycard = True
+        self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
 
