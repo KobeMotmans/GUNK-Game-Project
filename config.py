@@ -45,6 +45,7 @@ START_HEALTH = 10
 # Sprite instellingen
 SPRITE_SIZE = 100
 MIN_DIST = 40
+ATTACK_DIST = 43
 
 # Hoe vaak A* opnieuw berekend wordt (in frames)
 PATHFIND_INTERVAL = 20
