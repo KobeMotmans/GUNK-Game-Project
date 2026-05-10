@@ -1,3 +1,5 @@
+https://github.com/KobeMotmans/GUNK-Game-Project
+Om het spel te runnen, voer game.py uit
 ```
 Project Software en AI:
 Kobe Motmans, Andreas Meuwissen en, Ruben Verreth IR3-1   
