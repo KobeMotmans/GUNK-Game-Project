@@ -21,16 +21,16 @@ from vector import Vector
 class Game:
     def __init__(self):
         pygame.init()
-        pygame.mixer.init()
         self.clock = pygame.time.Clock()
         self.running = False
         self.state = None
         self.escaped = False
-        self.normal_music = pygame.mixer.Sound("assets/esKape Final.mp3")
-        self.funny_music = pygame.mixer.Sound("assets/Funny Music.mp3")
 
         #Init Bilal/Tutorial
         self.Menu = Menu((70,70,70), self)
+
+        self.Menu.draw_loading_screen()
+
         self.bilal = Bilal(self)
         self.bilal.say("Welkom bij GUNK!", 100)
         self.bilal.say("Gebruik je muis om rond te kijken en ZQSD om te bewegen", 200)
@@ -38,13 +38,12 @@ class Game:
         self.bilal.say("Er moet in één van deze kamers een keycard liggen. Zoek hem!", 200)
         self.bilal.say("Maar pas op, want de andere assistenten zijn gek geworden van het K gebouw!", 200)
 
+        self.Menu.draw_loading_screen()
+
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
 
-        if self.Menu.silly_mode:
-            self.main_music = self.funny_music
-        else:
-            self.main_music = self.normal_music
+        self.Menu.draw_loading_screen()
 
         # Init wapens
         self.pistol = Pistol()
@@ -53,16 +52,37 @@ class Game:
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol]
 
-        self.state = "menu"
         self.curr_flash = ""
         self.flash_time = 0
         self.possible_enemies = [Andrei, Ahmed, Ruben]
         self.jan = None  # referentie naar Jan voor de boss bar
         self.jan_spotted = False
 
+        self.Menu.draw_loading_screen()
+
         # Init objects
         self.resolution = "high"
+
+        pygame.mixer.init()
+
+        self.normal_music = pygame.mixer.Sound("assets/esKape Final.mp3")
+
+        self.Menu.draw_loading_screen()
+
+        self.funny_music = pygame.mixer.Sound("assets/Funny Music.mp3")
+
+        self.Menu.draw_loading_screen()
+
+        if self.Menu.silly_mode:
+            self.main_music = self.funny_music
+        else:
+            self.main_music = self.normal_music
         self.main_music.set_volume(0.5)  # match initial slider value
+
+        self.Menu.draw_loading_screen()
+
+        self.state = "menu"
+
 
     def create_enemies(self):
         """Maak een lijst van test vijanden"""

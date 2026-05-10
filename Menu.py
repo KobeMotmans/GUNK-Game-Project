@@ -13,12 +13,40 @@ class Menu:
         self.credits_height = HEIGHT
         self.lift_time = ELEV_TIME
         self.silly_mode = False
-   
+        self.loading_progress = 0
+
+    def draw_loading_screen(self):
+        SCREEN.fill(self.bg_color)
+
+        # Titel
+        title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 100)
+        title_font.set_bold(True)
+        SCREEN.blit(title_font.render("Loading...", True, 'white'), (WIDTH / 2 - 250, HEIGHT - 300))
+
+        title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 300)
+        title_font.set_bold(True)
+        SCREEN.blit(title_font.render("GUNK", True, 'white'), (WIDTH / 2 - 360, HEIGHT / 2 - 350))
+
+        # 🔥 Progress bar
+        bar_width = 600
+        bar_height = 30
+        bar_x = WIDTH / 2 - bar_width / 2
+        bar_y = HEIGHT - 150
+
+        # achtergrond (grijs)
+        pygame.draw.rect(SCREEN, (80, 80, 80), (bar_x, bar_y, bar_width, bar_height))
+
+        # progress (groen)
+        progress_width = bar_width * self.loading_progress
+        pygame.draw.rect(SCREEN, (0, 200, 0), (bar_x, bar_y, progress_width, bar_height))
+        self.loading_progress += 0.2
+        pygame.display.flip()
+
     def draw_main_menu(self, events):
         SCREEN.fill(self.bg_color)
-        self.title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT,300)
-        self.title_font.set_bold(True)
-        SCREEN.blit(self.title_font.render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
+        title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT,300)
+        title_font.set_bold(True)
+        SCREEN.blit(title_font.render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
         
         Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self.game, "reset", False)
         Start_knop.draw_button(events)
@@ -178,7 +206,7 @@ class Menu:
         SCREEN.blit(self.score_font.render(f"Score:{self.game.player.score}", True, 'white'),(WIDTH/2-160,HEIGHT/2-40))
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
-        
+
 class Button:
     def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0, function = None):
         self.y_pos = y_pos
@@ -232,7 +260,6 @@ class Button:
         pygame.draw.rect(SCREEN,color,[WIDTH/2-self.w/2+self.x_pos,HEIGHT/2-self.h/2+self.y_pos,self.w,self.h])
         SCREEN.blit(self.font.render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
 
-# ---- Het grootste deel hiervan is AI code, eerder flavour en tutorial dan functionele game code-----
 class Slider:
     def __init__(self, y_pos, width, height, min_val, max_val, initial_val, label, GAME):
         self.y_pos = y_pos
@@ -291,6 +318,8 @@ class Slider:
         label_surf = self.font.render(f"{self.label}: {int(self.value * 100)}%", True, 'white')
         SCREEN.blit(label_surf, (self.track_x, self.track_y - 45))
 
+
+# ---- Het grootste deel hiervan is AI code, eerder flavour en tutorial dan functionele game code-----
 class Tekstballon:
     def __init__(self, text, y_pos, x_pos, GAME, max_width=280, padding=10,):
         self.text = text
