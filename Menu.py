@@ -16,7 +16,6 @@ class Menu:
 
     def draw_loading_screen(self):
         SCREEN.fill(self.bg_color)
-
         # Titel
         title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 100)
         title_font.set_bold(True)
@@ -26,7 +25,7 @@ class Menu:
         title_font.set_bold(True)
         SCREEN.blit(title_font.render("GUNK", True, 'white'), (WIDTH / 2 - 360, HEIGHT / 2 - 350))
 
-        # 🔥 Progress bar
+        # Progress bar
         bar_width = 600
         bar_height = 30
         bar_x = WIDTH / 2 - bar_width / 2
@@ -160,7 +159,7 @@ class Menu:
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
     def draw_elevator(self, events, player):
-        self.elev_color = 'pink' if self.silly_mode else (20,20,20)
+        self.elev_color = (255,0,255) if self.silly_mode else (20,20,20)
         if player.door_pos <= WIDTH/2:
             pygame.draw.rect(SCREEN,self.elev_color,[0,0,player.door_pos,HEIGHT])
             pygame.draw.rect(SCREEN,self.elev_color,[WIDTH-player.door_pos,0,player.door_pos,HEIGHT])
