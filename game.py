@@ -304,6 +304,7 @@ class Game:
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
         self.objects = self.create_objects()
+        self.jan_spotted = False
         self.escaped = False
         self.player.door_pos = 0
 
