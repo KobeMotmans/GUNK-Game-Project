@@ -312,6 +312,7 @@ class Game:
         else:
             self.main_music = self.normal_music
         self.main_music.play()
+        
     def level_up(self):
         M.map_level += 1
         if M.map_level == 1:
@@ -324,7 +325,7 @@ class Game:
             self.bilal.trigger("floor_0")
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
-        self.player.got_keycard = True
+        self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
 
