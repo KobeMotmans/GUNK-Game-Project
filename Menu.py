@@ -208,10 +208,10 @@ class Menu:
         self.score_font.set_bold(True)
         SCREEN.blit(VICTORY_SCREEN, (0,0))
         pygame.mouse.set_visible(True)
-        SCREEN.blit(self.endscreen_font.render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-530))
-        SCREEN.blit(self.endscreen_font.render("ESCAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-350))
-        SCREEN.blit(self.score_font.render(f"Score:{self.game.player.score}", True, 'white'),(WIDTH/2-160,HEIGHT/2-40))
-        Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+        SCREEN.blit(self.endscreen_font.render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-460))
+        SCREEN.blit(self.endscreen_font.render("ESKAPE", True, 'white'),(WIDTH/2-280, HEIGHT/2-280))
+        SCREEN.blit(self.score_font.render(f"Score:{self.game.player.score}", True, 'white'),(WIDTH/2-160,HEIGHT/2+10))
+        Menu_button = Button(150, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
     def get_volume_slider(self, GAME):
         if self.volume_slider is None:
