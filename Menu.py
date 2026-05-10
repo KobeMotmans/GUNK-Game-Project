@@ -3,18 +3,18 @@ from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_S
 from collections import deque
 from map_loader import M
 class Menu:
-    def __init__(self, color, GAME):
+    def __init__(self, color):
         self.bg_color = color
         self.credits_height = HEIGHT
-        self.game = GAME
-        self.volume_slider = Slider(y_pos=50,width=400,height=12,min_val=0.0,max_val=1.0,initial_val=0.5,label="MUSIC VOLUME",GAME = self.game)
+        self.volume_slider = None
         
         self.lift_time = 120
         self.credits_height = HEIGHT
         self.lift_time = ELEV_TIME
         self.silly_mode = False
    
-    def draw_main_menu(self, events):
+    def draw_main_menu(self, events, GAME):
+        self.game = GAME
         SCREEN.fill(self.bg_color)
         self.title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT,300)
         self.title_font.set_bold(True)
@@ -31,7 +31,8 @@ class Menu:
 
         Quit_button = Button(260, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self.game, "Stop", False)
         Quit_button.draw_button(events)
-    def draw_settings(self, events):
+    def draw_settings(self, events, GAME):
+        self.game = GAME
         SCREEN.fill(self.bg_color)
         
         high_label = "[HIGH RES]" if self.game.resolution == "high" else "HIGH RES"
@@ -45,17 +46,18 @@ class Menu:
         Tutorial_button = Button(130, 250, 60, tuto_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "tutorial")
         silly_label = "[SILLY MODE]" if self.silly_mode else "SILLY MODE"
         Silly_button = Button(210, 250, 60, silly_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "silly")
-        self.volume_slider.draw(events)
+        volume_slider = self.get_volume_slider(self.game)
+        volume_slider.draw(events)
         Menu_button = Button(320, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         
         Tutorial_button.draw_button(events)
         Res_high.draw_button(events)
         Res_low.draw_button(events)
         Menu_button.draw_button(events)
-        self.volume_slider.draw(events)
         Silly_button.draw_button(events)
 
-    def draw_credits(self, events):
+    def draw_credits(self, events, GAME):
+        self.game = GAME
         SCREEN.fill(self.bg_color)
 
         y = self.credits_height
@@ -122,21 +124,23 @@ class Menu:
         SCREEN.blit(self.fps_font.render(f"{round(self.game.clock.get_fps())}", True, 'green'),(20, 20))
         SCREEN.blit(self.hp_font.render(f"{round(self.game.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
         SCREEN.blit(self.hp_font.render(f"{round(self.game.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
-    def draw_paused_screen(self, events):
+    def draw_paused_screen(self, events,GAME):
+        self.game = GAME
         Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self.game, "game", False)
         Restart_knop.draw_button(events)
 
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
     def draw_elevator(self, events, player):
+        self.elev_color = 'pink' if self.silly_mode else (20,20,20)
         if player.door_pos <= WIDTH/2:
-            pygame.draw.rect(SCREEN,(20,20,20),[0,0,player.door_pos,HEIGHT])
-            pygame.draw.rect(SCREEN,(20,20,20),[WIDTH-player.door_pos,0,player.door_pos,HEIGHT])
+            pygame.draw.rect(SCREEN,self.elev_color,[0,0,player.door_pos,HEIGHT])
+            pygame.draw.rect(SCREEN,self.elev_color,[WIDTH-player.door_pos,0,player.door_pos,HEIGHT])
             player.door_pos += ELEV_SPEED
 
         elif player.door_pos <= WIDTH/2 + ELEV_SPEED:
             if M.map_level < MAX_LEVEL:
-                SCREEN.fill((20,20,20))
+                SCREEN.fill(self.elev_color)
                 if self.lift_time == 0:
                     self.game.level_up()
                     self.game.player.door_pos += ELEV_SPEED
@@ -150,15 +154,16 @@ class Menu:
                 pygame.event.set_grab(False)
                 
         elif WIDTH/2 + ELEV_SPEED <= player.door_pos < WIDTH:
-            pygame.draw.rect(SCREEN,(20,20,20),[0,0,WIDTH-player.door_pos,HEIGHT])
-            pygame.draw.rect(SCREEN,(20,20,20),[player.door_pos,0,WIDTH-player.door_pos,HEIGHT])
+            pygame.draw.rect(SCREEN,self.elev_color,[0,0,WIDTH-player.door_pos,HEIGHT])
+            pygame.draw.rect(SCREEN,self.elev_color,[player.door_pos,0,WIDTH-player.door_pos,HEIGHT])
             player.door_pos += ELEV_SPEED
 
         elif player.door_pos >= WIDTH:
             if not self.game.escaped:
                 player.door_pos = 0
             self.lift_time = ELEV_TIME
-    def draw_dead_screen(self,events):
+    def draw_dead_screen(self,events,GAME):
+        self.game = GAME
         self.title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT,200)
         self.title_font.set_bold(True)
         SCREEN.blit(SCREEN_DEAD, (0,0))
@@ -168,9 +173,12 @@ class Menu:
         Menu_button.draw_button(events)
         SCREEN.blit(self.score_font.render(f"Score:{self.game.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
         SCREEN.blit(self.title_font.render("GAME OVER", True, 'black'),(WIDTH/2-500, HEIGHT/3-50))
-    def draw_escaped_screen(self,events):
+    def draw_escaped_screen(self,events,GAME):
+        self.game = GAME
         self.endscreen_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 150)
+        self.endscreen_font.set_bold(True)
         self.score_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 80)
+        self.score_font.set_bold(True)
         SCREEN.blit(VICTORY_SCREEN, (0,0))
         pygame.mouse.set_visible(True)
         SCREEN.blit(self.endscreen_font.render("SUCCESFUL", True, 'white'),(WIDTH/2-370, HEIGHT/2-530))
@@ -178,7 +186,17 @@ class Menu:
         SCREEN.blit(self.score_font.render(f"Score:{self.game.player.score}", True, 'white'),(WIDTH/2-160,HEIGHT/2-40))
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
+    def get_volume_slider(self, GAME):
+        if self.volume_slider is None:
+            self.volume_slider = Slider(
+                y_pos=50, width=400, height=12,
+                min_val=0.0, max_val=1.0, initial_val=0.5,
+                label="MUSIC VOLUME", GAME=GAME
+                )
+        return self.volume_slider
         
+Menu_inst = Menu((70,70,70))
+
 class Button:
     def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0, function = None):
         self.y_pos = y_pos
