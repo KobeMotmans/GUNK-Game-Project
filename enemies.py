@@ -17,7 +17,7 @@ from Menu import Menu_inst
 
 class Enemy(RenderObject):
     def __init__(self, health, damage, speed, enemy_type, x, y):
-        self.path = f"enemies/{enemy_type}" if not Menu_inst.silly_mode else f"enemies/silly/{enemy_type}"
+        self.path = f"enemies/{enemy_type}"
         super().__init__(self.path, x, y)
         self.max_health = health
         self.health = health

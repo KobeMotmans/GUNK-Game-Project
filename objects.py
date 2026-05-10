@@ -4,12 +4,13 @@ from math import atan2, hypot, tan, pi
 import config
 from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, FONT
 from vector import Vector
+from Menu import Menu_inst
 
 class RenderObject:
     def __init__(self, type, x, y):
         self.pos = Vector(x, y)
         self.type = type
-        sprite_path = f"assets/{type}.png"
+        sprite_path = f"assets/{type}.png" if not Menu_inst.silly_mode else f"assets/silly/{type}.png"
         self.sprite = pygame.image.load(sprite_path).convert_alpha()
         # Cache voor sprite scaling
         self._cached_scale = None
