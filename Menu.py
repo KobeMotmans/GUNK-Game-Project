@@ -171,12 +171,13 @@ class Menu:
                 if self.lift_time == 0:
                     self.game.level_up()
                     self.game.player.door_pos += ELEV_SPEED
-                    pygame.mixer.Sound("assets/elev_ding.mp3").play()
+                    pygame.mixer.Sound("assets/silly/toot_toot.mp3" if self.silly_mode else "assets/elev_ding.mp3").play()
                 self.lift_time -= 1
             else:
                 pygame.mixer.stop()
                 self.game.player.door_pos += ELEV_SPEED
                 self.game.escaped = True
+                if self.silly_mode : pygame.mixer.Sound("assets/silly/Banjo.mp3").play()
                 pygame.mouse.set_visible(True)
                 pygame.event.set_grab(False)
                 
@@ -200,6 +201,7 @@ class Menu:
         Menu_button.draw_button(events)
         SCREEN.blit(self.score_font.render(f"Score:{self.game.player.score}", True, 'black'),(WIDTH/2-160,HEIGHT/2-40))
         SCREEN.blit(self.title_font.render("GAME OVER", True, 'black'),(WIDTH/2-500, HEIGHT/3-50))
+        
     def draw_escaped_screen(self,events,GAME):
         self.game = GAME
         self.endscreen_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 150)
@@ -261,7 +263,7 @@ class Button:
                         self.GAME.bilal.flags["general"] = not self.GAME.bilal.flags["general"]
                     elif self.function == "silly":
                         self.GAME.Menu.silly_mode = not self.GAME.Menu.silly_mode
-                    elif self.state_change == "reset":
+                    if self.state_change == "reset":
                         self.GAME.reset_game()
                     elif self.state_change == "Stop":
                         pygame.mixer.stop()
@@ -270,6 +272,8 @@ class Button:
                     elif self.state_change == "game":
                         pygame.mixer.unpause()
                         self.GAME.state = "game"
+                    elif self.state_change == "menu":
+                        pygame.mixer.stop()
                     
         color = self.button_hov_color if hovering else self.button_color
         text_color = self.text_hov_color if hovering else self.text_color

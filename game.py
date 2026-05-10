@@ -324,7 +324,7 @@ class Game:
             self.bilal.trigger("floor_0")
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
-        self.player.got_keycard = False
+        self.player.got_keycard = True
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
 
