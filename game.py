@@ -312,6 +312,7 @@ class Game:
         else:
             self.main_music = self.normal_music
         self.main_music.play()
+        
     def level_up(self):
         M.map_level += 1
         if M.map_level == 1:
