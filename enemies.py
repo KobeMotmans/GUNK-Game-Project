@@ -10,13 +10,15 @@ from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PA
 from vector import Vector
 from map_loader import map_to_cord, cord_to_map, is_in_wall, M
 from objects import RenderObject
+from Menu import Menu_inst
 
 
 
 
 class Enemy(RenderObject):
     def __init__(self, health, damage, speed, enemy_type, x, y):
-        super().__init__(f"enemies/{enemy_type}", x, y)
+        self.path = f"enemies/{enemy_type}" if not Menu_inst.silly_mode else f"enemies/silly/{enemy_type}"
+        super().__init__(self.path, x, y)
         self.max_health = health
         self.health = health
         self.speed = speed
