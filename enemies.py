@@ -6,7 +6,7 @@ import pygame
 from math import atan2, hypot, cos, sin
 import heapq
 
-from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, ATTACK_DIST
+from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, SILLY_FONT, ATTACK_DIST
 from vector import Vector
 from map_loader import map_to_cord, cord_to_map, is_in_wall, M
 from objects import RenderObject
@@ -41,7 +41,8 @@ class Enemy(RenderObject):
             bar_y = 30
 
             # Naam
-            font = pygame.font.SysFont(FONT, 28)
+            font = pygame.font.Font(SILLY_FONT if Menu_inst.silly_mode else FONT, 28)
+            font.set_bold(True)
             label = font.render("Jan Lemeire", True, (255, 220, 0))
             SCREEN.blit(label, (bar_x + bar_width // 2 - label.get_width() // 2, bar_y - 30))
 

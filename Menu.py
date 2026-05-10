@@ -177,7 +177,7 @@ class Menu:
                 pygame.mixer.stop()
                 self.game.player.door_pos += ELEV_SPEED
                 self.game.escaped = True
-                if self.silly_mode : pygame.mixer.Sound("assets/silly/Banjo.mp3").play()
+                pygame.mixer.Sound("assets/silly/Banjo.mp3" if self.silly_mode else "assets/Motivator.mp3").play()
                 pygame.mouse.set_visible(True)
                 pygame.event.set_grab(False)
                 
