@@ -1,5 +1,5 @@
 import pygame
-from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT
+from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT
 from collections import deque
 from map_loader import M
 class Menu:
@@ -194,7 +194,7 @@ class Menu:
         self.game = GAME
         self.title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT,200)
         self.title_font.set_bold(True)
-        SCREEN.blit(SCREEN_DEAD, (0,0))
+        SCREEN.blit(SCREEN_DEAD, (0,0)) if not self.silly_mode else SCREEN.blit(SCREEN_DEAD_SILLY, (0,0))
         self.score_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, 80)
         self.score_font.set_bold(True)
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)

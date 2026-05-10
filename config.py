@@ -69,6 +69,7 @@ MENU_BG = (70,70,70)
 
 SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
 SCREEN_DEAD = pygame.transform.scale(pygame.image.load("assets/dead.png").convert_alpha(), (WIDTH, HEIGHT))
+SCREEN_DEAD_SILLY = pygame.transform.scale(pygame.image.load("assets/silly/rainbow.png").convert_alpha(), (WIDTH, HEIGHT))
 BILAL = pygame.transform.scale(pygame.image.load("assets/bilal.png").convert_alpha(), (200, 200))
 
 VICTORY_SCREEN = pygame.transform.scale(pygame.image.load("assets/victory.png").convert_alpha(), (WIDTH, HEIGHT))
