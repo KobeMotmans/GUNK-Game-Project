@@ -38,7 +38,7 @@ def set_resolution(quality: str):
 # Speler instellingen
 PLAYER_RADIUS = 10
 PLAYER_SPEED = 6
-PLAYER_ROT_SPEED = 0.0007
+PLAYER_ROT_SPEED = 0.0008
 
 START_HEALTH = 10
 

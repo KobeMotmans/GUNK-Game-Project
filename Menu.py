@@ -159,7 +159,7 @@ class Menu:
         Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
         Menu_button.draw_button(events)
     def draw_elevator(self, events, player):
-        self.elev_color = (255,0,255) if self.silly_mode else (20,20,20)
+        self.elev_color = "pink" if self.silly_mode else (20,20,20)
         if player.door_pos <= WIDTH/2:
             pygame.draw.rect(SCREEN,self.elev_color,[0,0,player.door_pos,HEIGHT])
             pygame.draw.rect(SCREEN,self.elev_color,[WIDTH-player.door_pos,0,player.door_pos,HEIGHT])
