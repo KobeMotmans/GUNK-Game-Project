@@ -7,11 +7,13 @@ from config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X, MAX_DEPT
 from math import sin, cos
 from vector import Vector
 
+from Menu import Menu_inst
+
 # Sound init
 pygame.mixer.init()
 
 class Gun:
-    def __init__(self, damage, recoil_speed, shoot_speed, ammo_weight, guntype, shoot_sound, auto = False):
+    def __init__(self, damage, recoil_speed, shoot_speed, ammo_weight, guntype, shoot_sound, silly_sound,auto = False):
         self.damage = damage
         self.recoil_speed = recoil_speed
         self.weapon_state = 0  # 0=rust, 1=schieten, 2=recoil
@@ -28,6 +30,7 @@ class Gun:
         self.gun_recoil = self._load_texture(base_path + "GUN_recoil.png")
         self.gun_shoot = self._load_texture(base_path + "GUN_muzzle.png")
         self.shoot_sound = pygame.mixer.Sound(shoot_sound)
+        self.silly_sound = pygame.mixer.Sound(silly_sound)
 
         self.weapon_rect = self.gun_rest.get_rect()
 
@@ -79,7 +82,8 @@ class Gun:
         elif self.weapon_state == 1:
             SCREEN.blit(self.gun_shoot, (x_pos, y_pos))
             if not self.played_sound:
-                self.shoot_sound.play()
+                sound = self.silly_sound if Menu_inst.silly_mode else self.shoot_sound
+                sound.play()
                 self.played_sound = True
         elif self.weapon_state == 2:
             SCREEN.blit(self.gun_recoil, (x_pos, y_pos))
@@ -87,15 +91,13 @@ class Gun:
 
 
 class Pistol(Gun):
-    def __init__(self, damage=2, recoil_speed=10, shoot_speed=10, ammo_weight=2, shoot_sound = "assets/pistol.mp3"):
-        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol", shoot_sound)
-
+    def __init__(self, damage=2, recoil_speed=10, shoot_speed=10, ammo_weight=2,shoot_sound="assets/pistol.mp3", silly_sound="assets/Pew.mp3"):
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol", shoot_sound, silly_sound)
 
 class Rifle(Gun):
-    def __init__(self, damage=6, recoil_speed=60, shoot_speed=15, ammo_weight=5, shoot_sound = "assets/musket.mp3"):
-        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "rifle", shoot_sound)
-
+    def __init__(self, damage=6, recoil_speed=60, shoot_speed=15, ammo_weight=5,shoot_sound="assets/musket.mp3", silly_sound="assets/Pew.mp3"):
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "rifle", shoot_sound, silly_sound)
 
 class Minigun(Gun):
-    def __init__(self, damage=0.75, recoil_speed=0, shoot_speed=5, ammo_weight=1, shoot_sound = "assets/minigun.mp3", auto = True):
-        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", shoot_sound, auto)
+    def __init__(self, damage=0.75, recoil_speed=0, shoot_speed=5, ammo_weight=1,shoot_sound="assets/minigun.mp3", silly_sound="assets/Pew.mp3", auto=True):
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", shoot_sound, silly_sound, auto)

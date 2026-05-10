@@ -12,7 +12,7 @@ from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
 from player import Player
-from Menu import Button, Slider, Bilal, Menu
+from Menu import Menu_inst, Bilal
 from map_loader import M, png_to_list_fast
 from objects import PickupObject
 from vector import Vector
@@ -27,10 +27,8 @@ class Game:
         self.escaped = False
 
         #Init Bilal/Tutorial
-        self.Menu = Menu((70,70,70), self)
-
+        self.Menu = Menu_inst
         self.Menu.draw_loading_screen()
-
         self.bilal = Bilal(self)
         self.bilal.say("Welkom bij GUNK!", 100)
         self.bilal.say("Gebruik je muis om rond te kijken en ZQSD om te bewegen", 200)
@@ -306,7 +304,7 @@ class Game:
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
         self.objects = self.create_objects()
-
+        self.escaped = False
         self.player.door_pos = 0
 
         if self.Menu.silly_mode:
@@ -340,7 +338,7 @@ class Game:
             events = self.handle_events()
             self.handle_input()
             if self.state == "menu":
-                self.Menu.draw_main_menu(events)
+                self.Menu.draw_main_menu(events, self)
 
             elif self.state == "game":
                 self.clock.tick(60)
@@ -360,19 +358,19 @@ class Game:
                     SCREEN.blit(self.keycard_font.render("KEYCARD ACQUIRED", True, 'green'),(WIDTH-210, HEIGHT-60))
                     
                 if self.escaped:
-                    self.Menu.draw_escaped_screen(events)
+                    self.Menu.draw_escaped_screen(events, self)
                 
                 if self.player.door_pos != 0:
                     self.Menu.draw_elevator(events, self.player)
 
             elif self.state == "paused":
-                self.Menu.draw_paused_screen(events)
+                self.Menu.draw_paused_screen(events, self)
             elif self.state == 'dead':
-                self.Menu.draw_dead_screen(events)
+                self.Menu.draw_dead_screen(events, self)
             elif self.state == "credits":
-                self.Menu.draw_credits(events)
+                self.Menu.draw_credits(events, self)
             elif self.state == 'settings':
-               self.Menu.draw_settings(events)
+               self.Menu.draw_settings(events, self)
 
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
