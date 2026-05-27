@@ -7,6 +7,7 @@ import pickle
 import struct
 import threading
 import queue
+import time
 
 
 class ServerIO(threading.Thread):
@@ -20,14 +21,14 @@ class ServerIO(threading.Thread):
         # TCP for initial handshake
         self.tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.tcp_server.settimeout(0.2)
+        self.tcp_server.setblocking(False)
         self.tcp_server.bind(('0.0.0.0', port))
         self.tcp_server.listen(max_players)
 
         # UDP for game data
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.udp_socket.settimeout(0.05)
+        self.udp_socket.setblocking(False)
         self.udp_socket.bind(('0.0.0.0', port))
 
         # Remote clients: [(addr, player_id, name)]
@@ -40,6 +41,12 @@ class ServerIO(threading.Thread):
         self.outgoing_queue = queue.Queue()  # main thread → send any packet to clients
         self.lobby_updates = queue.Queue()   # lobby changes → main thread
 
+        # Host name
+        self.host_name = "Host"
+
+        # Stale client tracking
+        self.last_seen = {}       # player_id → time.time()
+
         # Pending TCP registrations awaiting UDP
         self._pending = {}       # player_id → name
         self._pending_lock = threading.Lock()
@@ -51,6 +58,7 @@ class ServerIO(threading.Thread):
             self._receive_udp()
             self._send_state()
             self._send_outgoing()
+            self._cleanup_stale()
 
     # ── TCP handshake ──────────────────────────────────────────
 
@@ -79,7 +87,7 @@ class ServerIO(threading.Thread):
                             resp_data = pickle.dumps(resp)
                             sock.sendall(struct.pack('!I', len(resp_data)) + resp_data)
             sock.close()
-        except socket.timeout:
+        except BlockingIOError:
             pass
         except OSError:
             pass
@@ -100,41 +108,57 @@ class ServerIO(threading.Thread):
     # ── UDP receive ────────────────────────────────────────────
 
     def _receive_udp(self):
-        try:
-            data, addr = self.udp_socket.recvfrom(65536)
-        except socket.timeout:
-            return
-        except OSError:
-            return
+        while True:
+            try:
+                data, addr = self.udp_socket.recvfrom(65536)
+            except BlockingIOError:
+                return
+            except OSError:
+                return
 
-        try:
-            packet = pickle.loads(data)
-        except Exception:
-            return
+            try:
+                packet = pickle.loads(data)
+            except Exception:
+                continue
 
-        ptype = packet.get("type")
+            ptype = packet.get("type")
 
-        if ptype == "register":
-            pid = packet.get("player_id", -1)
-            with self._pending_lock:
-                name = self._pending.pop(pid, f"Player {pid}")
-            with self.clients_lock:
-                for c_addr, c_pid, _ in self.clients:
-                    if c_pid == pid:
-                        return
-                if len(self.clients) < self.max_players - 1:
-                    self.clients.append((addr, pid, name))
-                    self.lobby_updates.put(("player_joined", pid, name))
+            if ptype == "register":
+                pid = packet.get("player_id", -1)
+                with self._pending_lock:
+                    name = self._pending.pop(pid, f"Player {pid}")
+                with self.clients_lock:
+                    for c_addr, c_pid, _ in self.clients:
+                        if c_pid == pid:
+                            break
+                    else:
+                        if len(self.clients) < self.max_players - 1:
+                            self.clients.append((addr, pid, name))
+                            self.lobby_updates.put(("player_joined", pid, name))
 
-        elif ptype == "input":
-            pid = None
-            with self.clients_lock:
-                for c_addr, c_pid, _ in self.clients:
-                    if c_addr[0] == addr[0] and c_addr[1] == addr[1]:
-                        pid = c_pid
-                        break
-            if pid is not None:
-                self.input_queue.put((pid, packet.get("data", {})))
+            elif ptype == "pos_update":
+                pid = None
+                with self.clients_lock:
+                    for c_addr, c_pid, _ in self.clients:
+                        if c_addr[0] == addr[0] and c_addr[1] == addr[1]:
+                            pid = c_pid
+                            break
+                if pid is not None:
+                    self.last_seen[pid] = time.time()
+                    self.input_queue.put((pid, packet.get("data", {})))
+
+            elif ptype == "disconnect":
+                pid = None
+                with self.clients_lock:
+                    for i, (c_addr, c_pid, c_name) in enumerate(self.clients):
+                        if c_addr[0] == addr[0] and c_addr[1] == addr[1]:
+                            pid = c_pid
+                            name = c_name
+                            self.clients.pop(i)
+                            break
+                if pid is not None:
+                    self.last_seen.pop(pid, None)
+                    self.lobby_updates.put(("player_left", pid, name))
 
     # ── UDP send ───────────────────────────────────────────────
 
@@ -171,8 +195,24 @@ class ServerIO(threading.Thread):
     def send_to_all(self, packet):
         self.outgoing_queue.put(packet)
 
+    def set_host_name(self, name):
+        self.host_name = name
+
+    def _cleanup_stale(self):
+        now = time.time()
+        stale = []
+        with self.clients_lock:
+            for addr, pid, name in self.clients:
+                last = self.last_seen.get(pid, now)
+                if now - last > 10:
+                    stale.append((addr, pid, name))
+            for _, pid, name in stale:
+                self.clients = [(a, p, n) for a, p, n in self.clients if p != pid]
+                self.last_seen.pop(pid, None)
+                self.lobby_updates.put(("player_left", pid, name))
+
     def get_lobby_players(self):
-        result = [("You (Host)", 0)]
+        result = [(self.host_name, 0)]
         with self.clients_lock:
             for _, pid, name in self.clients:
                 result.append((name, pid))
@@ -244,7 +284,15 @@ class NetworkClient:
     def send_input(self, input_data):
         if not self.server_addr:
             return
-        packet = {"type": "input", "data": input_data}
+        packet = {"type": "pos_update", "data": input_data}
+        try:
+            self.udp_socket.sendto(pickle.dumps(packet), self.server_addr)
+        except OSError:
+            pass
+
+    def send(self, packet):
+        if not self.server_addr:
+            return
         try:
             self.udp_socket.sendto(pickle.dumps(packet), self.server_addr)
         except OSError:

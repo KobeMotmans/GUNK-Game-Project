@@ -2,7 +2,7 @@ import pygame
 from math import atan2, hypot, tan, pi
 
 import config
-from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, FONT
+from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, FONT, SFX_VOLUME
 from vector import Vector
 from Menu import Menu_inst
 
@@ -98,21 +98,28 @@ class PickupObject(RenderObject):
     def interact(self, player):
         if self.type == "objects/ammo":
             player.ammo = min(player.ammo+50, 200)
-            pygame.mixer.Sound("assets/ammo.mp3").play()
+            s = pygame.mixer.Sound("assets/ammo.ogg")
+            s.set_volume(SFX_VOLUME)
+            s.play()
         if self.type == "objects/keycard":
             player.got_keycard = True
-            pygame.mixer.Sound("assets/key.mp3").play()
+            s = pygame.mixer.Sound("assets/key.ogg")
+            s.set_volume(SFX_VOLUME)
+            s.play()
         if self.type == "objects/exit":
             if player.got_keycard:
                 player.door_pos  = 1
             else:
                 self.font = pygame.font.Font(FONT, 80)
                 self.font.set_bold(True)
-                SCREEN.blit(self.font.render("NO KEYCARD", True,'green'),(WIDTH/2-200,HEIGHT/2))
+                no_kc = self.font.render("NO KEYCARD", True,'green')
+                SCREEN.blit(no_kc, (WIDTH//2 - no_kc.get_width()//2, HEIGHT//2))
                 return "fail"
         if self.type == "objects/health":
             player.health = min(player.health+HEALTH_REGEN, START_HEALTH)
-            pygame.mixer.Sound("assets/drink.mp3").play()
+            s = pygame.mixer.Sound("assets/drink.ogg")
+            s.set_volume(SFX_VOLUME)
+            s.play()
         return "succes"
 
 

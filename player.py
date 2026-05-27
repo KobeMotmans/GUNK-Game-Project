@@ -4,7 +4,7 @@ player.py - Speler klasse met movement en rotatie
 import pygame
 from math import sin, cos, pi
 
-from config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH, START_HEALTH, START_ANGLES
+from config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH, START_HEALTH, START_ANGLES, SFX_VOLUME
 from map_loader import will_collide
 from vector import Vector
 from Menu import Menu_inst
@@ -73,10 +73,14 @@ class Player:
         if self.inv_time == 0:
             self.inv_time = 60
             self.health -= damage
-            pygame.mixer.Sound("assets/damage.mp3").play() if not Menu_inst.silly_mode else pygame.mixer.Sound("assets/silly/ah.mp3").play()
+            s = pygame.mixer.Sound("assets/damage.ogg" if not Menu_inst.silly_mode else "assets/silly/ah.ogg")
+            s.set_volume(SFX_VOLUME)
+            s.play()
             if self.health <= 0:
                 pygame.mixer.stop()
-                pygame.mixer.Sound("assets/damage.mp3").play() if not Menu_inst.silly_mode else pygame.mixer.Sound("assets/silly/ah.mp3").play()
+                s = pygame.mixer.Sound("assets/damage.ogg" if not Menu_inst.silly_mode else "assets/silly/ah.ogg")
+                s.set_volume(SFX_VOLUME)
+                s.play()
                 self.death = True
                 
 

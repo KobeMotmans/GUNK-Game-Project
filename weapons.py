@@ -3,7 +3,7 @@ weapons.py - Wapen klassen en rendering
 """
 
 import pygame
-from config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X, MAX_DEPTH
+from config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X, MAX_DEPTH, SFX_VOLUME
 from math import sin, cos
 from vector import Vector
 
@@ -30,7 +30,9 @@ class Gun:
         self.gun_recoil = self._load_texture(base_path + "GUN_recoil.png")
         self.gun_shoot = self._load_texture(base_path + "GUN_muzzle.png")
         self.shoot_sound = pygame.mixer.Sound(shoot_sound)
+        self.shoot_sound.set_volume(SFX_VOLUME)
         self.silly_sound = pygame.mixer.Sound(silly_sound)
+        self.silly_sound.set_volume(SFX_VOLUME)
 
         self.weapon_rect = self.gun_rest.get_rect()
 
@@ -91,13 +93,13 @@ class Gun:
 
 
 class Pistol(Gun):
-    def __init__(self, damage=2, recoil_speed=10, shoot_speed=10, ammo_weight=2,shoot_sound="assets/pistol.mp3", silly_sound="assets/Pew.mp3"):
+    def __init__(self, damage=2, recoil_speed=10, shoot_speed=10, ammo_weight=2,shoot_sound="assets/pistol.ogg", silly_sound="assets/Pew.ogg"):
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol", shoot_sound, silly_sound)
 
 class Rifle(Gun):
-    def __init__(self, damage=6, recoil_speed=60, shoot_speed=15, ammo_weight=5,shoot_sound="assets/musket.mp3", silly_sound="assets/Pew.mp3"):
+    def __init__(self, damage=6, recoil_speed=60, shoot_speed=15, ammo_weight=5,shoot_sound="assets/musket.ogg", silly_sound="assets/Pew.ogg"):
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "rifle", shoot_sound, silly_sound)
 
 class Minigun(Gun):
-    def __init__(self, damage=0.75, recoil_speed=0, shoot_speed=5, ammo_weight=1,shoot_sound="assets/minigun.mp3", silly_sound="assets/Pew.mp3", auto=True):
+    def __init__(self, damage=0.75, recoil_speed=0, shoot_speed=5, ammo_weight=1,shoot_sound="assets/minigun.ogg", silly_sound="assets/Pew.ogg", auto=True):
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", shoot_sound, silly_sound, auto)

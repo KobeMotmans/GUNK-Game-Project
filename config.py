@@ -56,6 +56,8 @@ WEAPON_OFFSET_X = 0.04  # 4% van schermbreedte
 
 #Object instellingen
 HEALTH_CHANCE = 0.20
+
+SFX_VOLUME = 0.3
 HEALTH_REGEN = 2
 
 START_AMMO = 100
