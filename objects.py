@@ -114,7 +114,39 @@ class PickupObject(RenderObject):
             player.health = min(player.health+HEALTH_REGEN, START_HEALTH)
             pygame.mixer.Sound("assets/drink.mp3").play()
         return "succes"
-                
+
+
+class PlayerSprite(RenderObject):
+    """Sprite voor remote spelers in de 3D wereld"""
+    def __init__(self, name, x=0, y=0):
+        self.pos = Vector(x, y)
+        self.name = name
+        self.type = "player"
+        try:
+            self.sprite = pygame.image.load("assets/player.png").convert_alpha()
+        except (FileNotFoundError, pygame.error):
+            sprite = pygame.Surface((SPRITE_SIZE, SPRITE_SIZE * 2), pygame.SRCALPHA)
+            pygame.draw.ellipse(sprite, (0, 150, 255), (0, 0, SPRITE_SIZE, SPRITE_SIZE * 2))
+            pygame.draw.rect(sprite, (0, 100, 200), (int(SPRITE_SIZE * 0.25), 0, int(SPRITE_SIZE * 0.5), int(SPRITE_SIZE * 0.75)))
+            self.sprite = sprite
+        self._cached_scale = None
+        self._cached_dist = -1
+        self.size = SPRITE_SIZE
+        self.dist = 100000000
+
+    def render_fast(self, dist, screen_x):
+        super().render_fast(dist, screen_x)
+        if dist > 0:
+            sprite_h = SPRITE_SIZE * PROJ_DIST / dist
+            name_size = max(10, int(sprite_h / 4))
+            try:
+                font = pygame.font.Font(FONT, name_size)
+            except:
+                font = pygame.font.Font(None, name_size)
+            name_surf = font.render(self.name, True, (255, 255, 255))
+            name_x = screen_x - name_surf.get_width() / 2
+            name_y = HEIGHT / 2 - sprite_h / 2 - name_surf.get_height() - 4
+            SCREEN.blit(name_surf, (name_x, name_y))
 
 
 

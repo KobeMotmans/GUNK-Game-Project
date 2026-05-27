@@ -1,5 +1,5 @@
 import pygame
-from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT
+from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT
 from collections import deque
 from map_loader import M
 class Menu:
@@ -13,6 +13,17 @@ class Menu:
         self.lift_time = ELEV_TIME
         self.silly_mode = False
         self.loading_progress = 0
+
+        # Multiplayer input fields
+        self.mp_name_input = ""
+        self.mp_host_port = "5555"
+        self.mp_join_ip = "127.0.0.1"
+        self.mp_join_port = "5555"
+        self.input_focus = None
+        self.lobby_status = ""
+        self.client_list = [("You (Host)", 0)]
+        self.waiting_text = "Verbinden..."
+        self.mp_status = ""
 
     def draw_loading_screen(self):
         SCREEN.fill(self.bg_color)
@@ -40,24 +51,215 @@ class Menu:
         self.loading_progress += 0.2
         pygame.display.flip()
 
+    def _draw_main_button(self, events, text, y_pos, w, action=None, h=55, font_size=34, x=None):
+        if x is None:
+            x = WIDTH//2 - w//2
+        rect = pygame.Rect(x, y_pos, w, h)
+        mouse = pygame.mouse.get_pos()
+        hover = rect.collidepoint(mouse)
+        pygame.draw.rect(SCREEN, (100, 100, 100) if hover else (70, 70, 70), rect, border_radius=8)
+        if hover:
+            pygame.draw.rect(SCREEN, (180, 180, 180), rect, 2, border_radius=8)
+        font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, font_size)
+        surf = font.render(text, True, 'white')
+        SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y_pos + h//2 - surf.get_height()//2))
+        for ev in events:
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                if rect.collidepoint(mouse) and action:
+                    action()
+                    return True
+        return False
+
     def draw_main_menu(self, events, GAME):
         self.game = GAME
         SCREEN.fill(self.bg_color)
         title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT,300)
         title_font.set_bold(True)
         SCREEN.blit(title_font.render("GUNK", True, 'white'),(WIDTH/2-360, HEIGHT/2-350))
-        
-        Start_knop = Button(0, 200, 100, "START", 45, "black", 'white', 'white', 'black', self.game, "reset", False)
-        Start_knop.draw_button(events)
 
-        Settings_button = Button(100, 200, 60, "OPTIONS", 30, "black", 'white', 'white', 'black', self.game, "settings", True)
-        Settings_button.draw_button(events)
+        c = WIDTH//2
+        self._draw_main_button(events, "SOLO", 390, 180, lambda: GAME.reset_game(), font_size=36, x=c-200)
+        self._draw_main_button(events, "MULTIPLAYER", 390, 220, lambda: setattr(GAME, 'state', 'multiplayer_menu'), font_size=36, x=c+20)
+        self._draw_main_button(events, "OPTIONS", 480, 220, lambda: setattr(GAME, 'state', 'settings'), font_size=36)
+        self._draw_main_button(events, "CREDITS", 560, 220, lambda: setattr(GAME, 'state', 'credits'), font_size=36)
+        self._draw_main_button(events, "QUIT", 640, 220, lambda: setattr(GAME, 'running', False), font_size=36)
+    # --- Multiplayer UI ----------------------------------------
 
-        Credits_button = Button(180, 200, 60, "CREDITS", 30 ,"black", 'white', 'white', 'black', self.game, "credits", True)
-        Credits_button.draw_button(events)
+    def _draw_text_input(self, events, label, current_text, x, y, width, height=35, field_id=None, numeric=False):
+        """Draw a text input field. Returns the (possibly updated) text."""
+        mouse = pygame.mouse.get_pos()
+        rect = pygame.Rect(x, y, width, height)
 
-        Quit_button = Button(260, 140, 60, "QUIT", 40 ,"black", 'white', 'white', 'black', self.game, "Stop", False)
-        Quit_button.draw_button(events)
+        label_font = pygame.font.Font(FONT, 22)
+        label_surf = label_font.render(label, True, 'white')
+        SCREEN.blit(label_surf, (x, y - 25))
+
+        focused = self.input_focus == field_id
+        bg_color = (60, 60, 80) if focused else (40, 40, 40)
+        pygame.draw.rect(SCREEN, bg_color, rect, border_radius=4)
+        pygame.draw.rect(SCREEN, (180, 180, 255) if focused else (100, 100, 100), rect, 2, border_radius=4)
+
+        font = pygame.font.Font(FONT, 22)
+        display_text = current_text + ("|" if focused else "")
+        text_surf = font.render(display_text, True, 'white')
+        SCREEN.blit(text_surf, (x + 6, y + (height - text_surf.get_height()) // 2))
+
+        for ev in events:
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                if rect.collidepoint(mouse):
+                    self.input_focus = field_id
+                elif self.input_focus == field_id:
+                    self.input_focus = None
+            if ev.type == pygame.KEYDOWN and self.input_focus == field_id:
+                if ev.key == pygame.K_BACKSPACE:
+                    current_text = current_text[:-1]
+                elif ev.key == pygame.K_ESCAPE:
+                    self.input_focus = None
+                elif ev.unicode and len(current_text) < 20:
+                    if numeric and ev.unicode in "0123456789":
+                        current_text += ev.unicode
+                    elif not numeric and ev.unicode.isprintable():
+                        current_text += ev.unicode
+        return current_text
+
+    def _draw_button_custom(self, events, text, x, y, w, h, action=None):
+        """Simple custom button returning True if clicked."""
+        mouse = pygame.mouse.get_pos()
+        rect = pygame.Rect(x, y, w, h)
+        hover = rect.collidepoint(mouse)
+        pygame.draw.rect(SCREEN, (100, 100, 100) if hover else (70, 70, 70), rect, border_radius=6)
+        if hover:
+            pygame.draw.rect(SCREEN, (180, 180, 180), rect, 2, border_radius=6)
+        font = pygame.font.Font(FONT, 28)
+        surf = font.render(text, True, 'white')
+        SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y + h//2 - surf.get_height()//2))
+        for ev in events:
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                if rect.collidepoint(mouse) and action:
+                    action()
+                    return True
+        return False
+
+    def draw_multiplayer_menu(self, events, GAME):
+        self.game = GAME
+        SCREEN.fill(self.bg_color)
+
+        # Shared name input at top center
+        name_label = pygame.font.Font(FONT, 22).render("JOUW NAAM", True, (200, 200, 200))
+        SCREEN.blit(name_label, (WIDTH//2 - name_label.get_width()//2, 40))
+        self.mp_name_input = self._draw_text_input(events, "", self.mp_name_input, WIDTH//2 - 120, 70, 240, field_id="mp_name")
+
+        # Vertical divider
+        divider_x = WIDTH // 2
+        pygame.draw.line(SCREEN, (100, 100, 100), (divider_x, 130), (divider_x, HEIGHT - 40), 2)
+
+        # --- LEFT: HOST ---
+        host_font = pygame.font.Font(FONT, 36)
+        host_label = host_font.render("HOST", True, 'white')
+        SCREEN.blit(host_label, (divider_x//2 - host_label.get_width()//2, 130))
+
+        host_info = pygame.font.Font(FONT, 18).render(f"Port: {self.mp_host_port}", True, (180, 180, 180))
+        SCREEN.blit(host_info, (divider_x//2 - host_info.get_width()//2, 175))
+
+        local_ip = "0.0.0.0"
+        try:
+            import socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+        except:
+            pass
+        ip_info = pygame.font.Font(FONT, 16).render(f"IP: {local_ip}", True, (140, 140, 140))
+        SCREEN.blit(ip_info, (divider_x//2 - ip_info.get_width()//2, 200))
+
+        self.mp_host_port = self._draw_text_input(events, "Port:", self.mp_host_port, 30, 250, divider_x - 60, field_id="mp_host_port", numeric=True)
+
+        def start_host():
+            try:
+                port = int(self.mp_host_port) if self.mp_host_port else DEFAULT_PORT
+            except ValueError:
+                port = DEFAULT_PORT
+            name = self.mp_name_input.strip() or "Host"
+            GAME.host_port = port
+            GAME.player_name = name
+            GAME._start_hosting()
+        start_y = 320
+        self._draw_button_custom(events, "HOST GAME", 30, start_y, divider_x - 60, 50, start_host)
+
+        # --- RIGHT: JOIN ---
+        join_label = host_font.render("JOIN", True, 'white')
+        SCREEN.blit(join_label, (divider_x + (divider_x//2) - join_label.get_width()//2, 130))
+
+        self.mp_join_ip = self._draw_text_input(events, "IP Address:", self.mp_join_ip, divider_x + 30, 190, divider_x - 60, field_id="mp_join_ip")
+        self.mp_join_port = self._draw_text_input(events, "Port:", self.mp_join_port, divider_x + 30, 250, divider_x - 60, field_id="mp_join_port", numeric=True)
+
+        def do_connect():
+            name = self.mp_name_input.strip() or "Player"
+            ip = self.mp_join_ip.strip() or "127.0.0.1"
+            try:
+                port = int(self.mp_join_port) if self.mp_join_port else DEFAULT_PORT
+            except ValueError:
+                port = DEFAULT_PORT
+            GAME._do_connect(ip, port, name)
+        self._draw_button_custom(events, "JOIN GAME", divider_x + 30, 320, divider_x - 60, 50, do_connect)
+
+        # Status messages
+        if self.mp_status:
+            color = (0, 200, 0) if "gelukt" in self.mp_status else (200, 0, 0)
+            status = pygame.font.Font(FONT, 22).render(self.mp_status, True, color)
+            SCREEN.blit(status, (WIDTH//2 - status.get_width()//2, 400))
+
+        # BACK button
+        self._draw_button_custom(events, "BACK", WIDTH//2 - 60, HEIGHT - 50, 120, 35, lambda: setattr(GAME, 'state', 'menu'))
+
+    def draw_host_lobby(self, events, GAME):
+        self.game = GAME
+        SCREEN.fill(self.bg_color)
+        title = pygame.font.Font(FONT, 50).render("LOBBY", True, 'white')
+        SCREEN.blit(title, (WIDTH/2 - title.get_width()//2, 100))
+        port_text = pygame.font.Font(FONT, 25).render(f"Port: {GAME.host_port}", True, (200, 200, 200))
+        SCREEN.blit(port_text, (WIDTH/2 - port_text.get_width()//2, 160))
+        ip_text = pygame.font.Font(FONT, 20).render("Deel je IP-adres met vrienden", True, (150, 150, 150))
+        SCREEN.blit(ip_text, (WIDTH/2 - ip_text.get_width()//2, 200))
+        players = GAME.network_server.get_lobby_players() if GAME.network_server else [("You (Host)", 0)]
+        y = 260
+        for name, pid in players:
+            color = (0, 200, 255) if pid == 0 else (255, 255, 255)
+            p_text = pygame.font.Font(FONT, 30).render(f"[P{pid}] {name}", True, color)
+            SCREEN.blit(p_text, (WIDTH/2 - p_text.get_width()//2, y))
+            y += 45
+        if y == 260:
+            wait = pygame.font.Font(FONT, 22).render("Wachten op spelers...", True, (150, 150, 150))
+            SCREEN.blit(wait, (WIDTH/2 - wait.get_width()//2, y))
+        def start_multi_game():
+            GAME._start_multiplayer_game()
+        if self.lobby_status:
+            status = pygame.font.Font(FONT, 22).render(self.lobby_status, True, (0, 200, 0))
+            SCREEN.blit(status, (WIDTH/2 - status.get_width()//2, HEIGHT - 120))
+        if players:  # only host can start
+            self._draw_button_custom(events, "START GAME", WIDTH/2 - 100, HEIGHT - 90, 200, 50, start_multi_game)
+        self._draw_button_custom(events, "QUIT", WIDTH/2 - 60, HEIGHT - 40, 120, 30, lambda: (GAME._stop_hosting(), setattr(GAME, 'state', 'menu')))
+
+    def draw_waiting_lobby(self, events, GAME):
+        self.game = GAME
+        SCREEN.fill(self.bg_color)
+        title = pygame.font.Font(FONT, 50).render("CONNECTED", True, 'green')
+        SCREEN.blit(title, (WIDTH/2 - title.get_width()//2, 150))
+        info = pygame.font.Font(FONT, 25).render("Wachten op host om te starten...", True, (200, 200, 200))
+        SCREEN.blit(info, (WIDTH/2 - info.get_width()//2, 220))
+        if self.client_list:
+            y = 300
+            for name, pid in self.client_list:
+                p_text = pygame.font.Font(FONT, 28).render(f"[P{pid}] {name}", True, 'white')
+                SCREEN.blit(p_text, (WIDTH/2 - p_text.get_width()//2, y))
+                y += 40
+        def dc():
+            GAME._disconnect()
+        self._draw_button_custom(events, "DISCONNECT", WIDTH/2 - 80, HEIGHT - 80, 160, 40, dc)
+
+    #  Settings 
+
     def draw_settings(self, events, GAME):
         self.game = GAME
         SCREEN.fill(self.bg_color)
@@ -75,12 +277,26 @@ class Menu:
         Silly_button = Button(210, 250, 60, silly_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "silly")
         volume_slider = self.get_volume_slider(self.game)
         volume_slider.draw(events)
-        Menu_button = Button(320, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+
+        back_target = getattr(GAME, '_settings_return', 'menu')
+        def go_back():
+            GAME.state = back_target
+            if back_target == "game":
+                pygame.mouse.set_visible(False)
+                pygame.event.set_grab(True)
+                pygame.mixer.unpause()
+            elif back_target == "paused":
+                pygame.mouse.set_visible(True)
+                pygame.event.set_grab(False)
+            else:
+                pygame.mouse.set_visible(True)
+                pygame.event.set_grab(False)
+            GAME._settings_return = "menu"
+        self._draw_main_button(events, "BACK", HEIGHT - 95, 220, go_back, font_size=34)
         
         Tutorial_button.draw_button(events)
         Res_high.draw_button(events)
         Res_low.draw_button(events)
-        Menu_button.draw_button(events)
         Silly_button.draw_button(events)
 
     def draw_credits(self, events, GAME):
@@ -151,14 +367,58 @@ class Menu:
         SCREEN.blit(self.fps_font.render(f"{round(self.game.clock.get_fps())}", True, 'green'),(20, 20))
         SCREEN.blit(self.hp_font.render(f"{round(self.game.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH-280, 20))
         SCREEN.blit(self.hp_font.render(f"{round(self.game.player.ammo)}/{AMMO_CAP}", True, 'grey'),(20, HEIGHT-100))
-    def draw_paused_screen(self, events,GAME):
+        # Elevator multiplayer warnings
+        if getattr(self.game, 'elevator_waiting', False):
+            warn_font = pygame.font.Font(FONT, 36)
+            elev_ready = getattr(self.game, 'elevator_ready', False)
+            wait_timer = getattr(self.game, 'elevator_wait_timer', 0)
+            player_near = getattr(self.game, 'player_near_exit', False)
+            if elev_ready and wait_timer > 0:
+                msg = f"Lift vertrekt in {wait_timer//60 + 1}..."
+                color = (255, 200, 0)
+            elif not player_near:
+                msg = "GA NAAR DE LIFT!"
+                color = (255, 80, 80)
+            else:
+                msg = "Wacht op teamgenoten..."
+                color = (200, 200, 80)
+            warn_surf = warn_font.render(msg, True, color)
+            SCREEN.blit(warn_surf, (WIDTH//2 - warn_surf.get_width()//2, HEIGHT//2 - 200))
+        # Global pause overlay (multiplayer)
+        if getattr(self.game, 'global_paused', False):
+            s = pygame.Surface((WIDTH, HEIGHT))
+            s.set_alpha(120)
+            s.fill((200, 200, 200))
+            SCREEN.blit(s, (0, 0))
+            paused_by = getattr(self.game, 'paused_by', "")
+            pause_font = pygame.font.Font(FONT, 44)
+            pause_text = f"{paused_by} paused. Waiting..." if paused_by else "Paused. Waiting..."
+            pause_surf = pause_font.render(pause_text, True, 'white')
+            SCREEN.blit(pause_surf, (WIDTH//2 - pause_surf.get_width()//2, HEIGHT//2 - pause_surf.get_height()//2))
+    def draw_paused_screen(self, events, GAME):
         self.game = GAME
-        Restart_knop = Button(0, 200, 100, "Resume", 35, "black", 'white', 'white', 'black', self.game, "game", False)
-        Restart_knop.draw_button(events)
+        c = WIDTH//2
+        def resume():
+            pygame.mouse.set_visible(False)
+            pygame.event.set_grab(True)
+            GAME.state = "game"
+            pygame.mixer.unpause()
+        self._draw_main_button(events, "RESUME", HEIGHT//2 - 100, 220, resume, font_size=34)
 
-        Menu_button = Button(100, 140, 60, "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
-        Menu_button.draw_button(events)
+        def open_settings():
+            GAME._settings_return = "paused"
+            GAME.state = "settings"
+        self._draw_main_button(events, "SETTINGS", HEIGHT//2 - 20, 220, open_settings, font_size=34)
+
+        def go_menu():
+            pygame.mixer.stop()
+            GAME.state = "menu"
+        self._draw_main_button(events, "MENU", HEIGHT//2 + 60, 220, go_menu, font_size=34)
     def draw_elevator(self, events, player):
+        game = getattr(self, 'game', None)
+        if game is None:
+            return
+        is_client = game.multiplayer and not game.is_host
         self.elev_color = "pink" if self.silly_mode else (20,20,20)
         if player.door_pos <= WIDTH/2:
             pygame.draw.rect(SCREEN,self.elev_color,[0,0,player.door_pos,HEIGHT])
@@ -169,25 +429,29 @@ class Menu:
             if M.map_level < MAX_LEVEL:
                 SCREEN.fill(self.elev_color)
                 if self.lift_time == 0:
-                    self.game.level_up()
-                    self.game.player.door_pos += ELEV_SPEED
-                    pygame.mixer.Sound("assets/silly/toot_toot.mp3" if self.silly_mode else "assets/elev_ding.mp3").play()
+                    if not is_client:
+                        game.level_up()
+                        game.player.door_pos += ELEV_SPEED
+                        pygame.mixer.Sound("assets/silly/toot_toot.mp3" if self.silly_mode else "assets/elev_ding.mp3").play()
                 self.lift_time -= 1
             else:
-                pygame.mixer.stop()
-                self.game.player.door_pos += ELEV_SPEED
-                self.game.escaped = True
-                pygame.mixer.Sound("assets/silly/Banjo.mp3" if self.silly_mode else "assets/Motivator.mp3").play()
-                pygame.mouse.set_visible(True)
-                pygame.event.set_grab(False)
-                
+                if not is_client:
+                    pygame.mixer.stop()
+                    game.player.door_pos += ELEV_SPEED
+                    game.escaped = True
+                    pygame.mixer.Sound("assets/silly/Banjo.mp3" if self.silly_mode else "assets/Motivator.mp3").play()
+                    pygame.mouse.set_visible(True)
+                    pygame.event.set_grab(False)
+                else:
+                    player.door_pos += ELEV_SPEED
+
         elif WIDTH/2 + ELEV_SPEED <= player.door_pos < WIDTH:
             pygame.draw.rect(SCREEN,self.elev_color,[0,0,WIDTH-player.door_pos,HEIGHT])
             pygame.draw.rect(SCREEN,self.elev_color,[player.door_pos,0,WIDTH-player.door_pos,HEIGHT])
             player.door_pos += ELEV_SPEED
 
         elif player.door_pos >= WIDTH:
-            if not self.game.escaped:
+            if not game.escaped:
                 player.door_pos = 0
             self.lift_time = ELEV_TIME
     def draw_dead_screen(self,events,GAME):
@@ -406,7 +670,7 @@ class Tekstballon:
                 (x + self.padding, y + self.padding + i * line_height)
             )
 
-        # 4. “Staart” van de ballon (automatisch gecentreerd)
+        # 4. Staart van de ballon (automatisch gecentreerd)
         tail_x = x + box_w // 2
         tail_y = y + box_h
 
@@ -511,7 +775,7 @@ class Bilal:
 
         elif event_name == "monster":
             self.interrupt(
-                "Door Monster Energy™ te drinken krijg je twee HP terug!", 200
+                "Door Monster Energy te drinken krijg je twee HP terug!", 200
             )
 
         elif event_name == "keycard":

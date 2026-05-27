@@ -90,3 +90,9 @@ HEALTH_FLASH.fill((0,255,0), special_flags=pygame.BLEND_MULT)
 #Enemy instellingen
 AGGRO_DIST = 1000
 
+# Multiplayer instellingen
+DEFAULT_PORT = 5555
+MAX_PLAYERS = 4
+ELEVATOR_WAIT_DIST = 200   # pixels van exit tot speler
+ELEVATOR_WAIT_FRAMES = 90  # frames na "allemaal klaar" voor lift vertrekt
+
