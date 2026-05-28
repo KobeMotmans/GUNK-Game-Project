@@ -69,14 +69,14 @@ class Player:
     def get_angle(self):
         return self.angle
 
-    def take_damage(self, damage):
+    def take_damage(self, damage, game):
         if self.inv_time == 0:
             self.inv_time = 60
-            self.health -= damage
+            game.global_health -= damage
             s = pygame.mixer.Sound("assets/damage.ogg" if not Menu_inst.silly_mode else "assets/silly/ah.ogg")
             s.set_volume(SFX_VOLUME)
             s.play()
-            if self.health <= 0:
+            if game.global_health <= 0:
                 pygame.mixer.stop()
                 s = pygame.mixer.Sound("assets/damage.ogg" if not Menu_inst.silly_mode else "assets/silly/ah.ogg")
                 s.set_volume(SFX_VOLUME)

@@ -44,7 +44,6 @@ class Gun:
     def shoot(self, pos, angle, enemies, player, current_gun):
         """Start schiet animatie als wapen in rust is"""
         if self.weapon_state == 0:
-            player.ammo -= current_gun.ammo_weight
             self.weapon_state = 1
             self.temp_flash_time = self.flash_time
             self.temp_recoil_time = self.recoil_time

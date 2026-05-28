@@ -115,7 +115,7 @@ class Enemy(RenderObject):
             return True
         return False
 
-    def find_path(self, player):
+    def find_path(self, player, game, deal_damage=True, do_movement=True):
         player_pos = player.pos
 
         # LOS slechts 1 keer berekenen per frame
@@ -130,27 +130,29 @@ class Enemy(RenderObject):
             self._full_path = []
             self.target = None
 
-        if self.is_los and dist > ATTACK_DIST:
-            self.move_towards(player_pos)
+        if do_movement:
+            if self.is_los and dist > ATTACK_DIST:
+                self.move_towards(player_pos)
+
+            # A* throttlen: herbereken periodiek of als enemy geen target meer heeft
+            if self.spotted_player and dist < AGGRO_DIST and not self.is_los:
+                self._path_timer -= 1
+                if not self.has_target() or self._path_timer <= 0:
+                    path = self.A_star(player)
+                    if path:
+                        self._full_path = path[1:]
+                        self.target = path[0]
+                    else:
+                        self._full_path = []
+                        self.target = None
+                    self._path_timer = PATHFIND_INTERVAL
+
+            if self.has_target() and not self.is_los:
+                self.move_towards(self.target)
 
         if self.is_los and dist <= ATTACK_DIST:
-            player.take_damage(self.damage)
-
-        # A* throttlen: herbereken periodiek of als enemy geen target meer heeft
-        if self.spotted_player and dist < AGGRO_DIST and not self.is_los:
-            self._path_timer -= 1
-            if not self.has_target() or self._path_timer <= 0:
-                path = self.A_star(player)
-                if path:
-                    self._full_path = path[1:]
-                    self.target = path[0]
-                else:
-                    self._full_path = []
-                    self.target = None
-                self._path_timer = PATHFIND_INTERVAL
-
-        if self.has_target() and not self.is_los:
-            self.move_towards(self.target)
+            if deal_damage:
+                player.take_damage(self.damage, game)
 
     def is_hit(self, pos):
         return (self.pos - pos).norm() < self.size

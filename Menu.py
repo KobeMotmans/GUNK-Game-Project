@@ -22,7 +22,7 @@ class Menu:
         self.mp_join_port = "5555"
         self.input_focus = None
         self.lobby_status = ""
-        self.client_list = [("You (Host)", 0)]
+        self.client_list = []
         self.waiting_text = "Verbinden..."
         self.mp_status = ""
 
@@ -216,7 +216,7 @@ class Menu:
         SCREEN.blit(port_text, (WIDTH//2 - port_text.get_width()//2, int(HEIGHT * 0.16)))
         ip_text = pygame.font.Font(FONT, 20).render("Deel je IP-adres met vrienden", True, (150, 150, 150))
         SCREEN.blit(ip_text, (WIDTH//2 - ip_text.get_width()//2, int(HEIGHT * 0.19)))
-        players = GAME.network_server.get_lobby_players() if GAME.network_server else [("You (Host)", 0)]
+        players = self.client_list if self.client_list else []
         y = int(HEIGHT * 0.25)
         for name, pid in players:
             color = (0, 200, 255) if pid == 0 else (255, 255, 255)
@@ -227,7 +227,7 @@ class Menu:
             wait = pygame.font.Font(FONT, 22).render("Wachten op spelers...", True, (150, 150, 150))
             SCREEN.blit(wait, (WIDTH//2 - wait.get_width()//2, y))
         def start_multi_game():
-            GAME._start_multiplayer_game()
+            GAME._primary_start_game()
         if self.lobby_status:
             status = pygame.font.Font(FONT, 22).render(self.lobby_status, True, (0, 200, 0))
             SCREEN.blit(status, (WIDTH//2 - status.get_width()//2, HEIGHT - int(HEIGHT * 0.12)))
@@ -356,8 +356,8 @@ class Menu:
         self.hp_font = pygame.font.Font(FONT, int(HEIGHT * 0.08))
         self.hp_font.set_bold(True)
         SCREEN.blit(self.fps_font.render(f"{round(self.game.clock.get_fps())}", True, 'green'),(int(WIDTH * 0.01), int(HEIGHT * 0.02)))
-        SCREEN.blit(self.hp_font.render(f"{round(self.game.player.health)}/{START_HEALTH}", True, 'red'),(WIDTH - int(WIDTH * 0.15), int(HEIGHT * 0.02)))
-        SCREEN.blit(self.hp_font.render(f"{round(self.game.player.ammo)}/{AMMO_CAP}", True, 'grey'),(int(WIDTH * 0.01), HEIGHT - int(HEIGHT * 0.1)))
+        SCREEN.blit(self.hp_font.render(f"{round(self.game.global_health)}/{START_HEALTH}", True, 'red'),(WIDTH - int(WIDTH * 0.15), int(HEIGHT * 0.02)))
+        SCREEN.blit(self.hp_font.render(f"{round(self.game.global_ammo)}/{AMMO_CAP}", True, 'grey'),(int(WIDTH * 0.01), HEIGHT - int(HEIGHT * 0.1)))
         if getattr(self.game, 'elevator_waiting', False):
             warn_font = pygame.font.Font(FONT, 36)
             elev_ready = getattr(self.game, 'elevator_ready', False)
@@ -392,7 +392,7 @@ class Menu:
             pygame.event.set_grab(True)
             GAME.state = "game"
             pygame.mixer.unpause()
-            if GAME.multiplayer and GAME.is_host:
+            if GAME.multiplayer and GAME.player_id == 0:
                 GAME.global_paused = False
                 GAME.paused_by = ""
         self._draw_main_button(events, "RESUME", HEIGHT//2 - int(HEIGHT * 0.1), int(WIDTH * 0.11), resume, font_size=34)
@@ -405,10 +405,7 @@ class Menu:
         def go_menu():
             pygame.mixer.stop()
             if GAME.multiplayer:
-                if GAME.is_host:
-                    GAME._stop_hosting()
-                else:
-                    GAME._disconnect()
+                GAME._stop_hosting()
             else:
                 GAME.state = "menu"
         self._draw_main_button(events, "MENU", HEIGHT//2 + int(HEIGHT * 0.06), int(WIDTH * 0.11), go_menu, font_size=34)
@@ -416,7 +413,7 @@ class Menu:
         game = getattr(self, 'game', None)
         if game is None:
             return
-        is_client = game.multiplayer and not game.is_host
+        is_client = game.multiplayer and game.player_id != 0
         self.elev_color = "pink" if self.silly_mode else (20,20,20)
         if player.door_pos <= WIDTH/2:
             pygame.draw.rect(SCREEN,self.elev_color,[0,0,player.door_pos,HEIGHT])
@@ -463,7 +460,7 @@ class Menu:
         SCREEN.blit(SCREEN_DEAD, (0,0)) if not self.silly_mode else SCREEN.blit(SCREEN_DEAD_SILLY, (0,0))
         self.score_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.08))
         self.score_font.set_bold(True)
-        Menu_button = Button(int(HEIGHT * 0.1), int(WIDTH * 0.07), int(HEIGHT * 0.06), "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+        Menu_button = Button(int(HEIGHT * 0.1), int(WIDTH * 0.07), int(HEIGHT * 0.06), "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True, function="disconnect")
         Menu_button.draw_button(events)
         score_surf = self.score_font.render(f"Score:{self.game.player.score}", True, 'black')
         SCREEN.blit(score_surf, (WIDTH//2 - score_surf.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.04)))
@@ -484,7 +481,7 @@ class Menu:
         SCREEN.blit(s1, (WIDTH//2 - s1.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.45)))
         SCREEN.blit(s2, (WIDTH//2 - s2.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.27)))
         SCREEN.blit(score_surf, (WIDTH//2 - score_surf.get_width()//2, HEIGHT//2 + int(HEIGHT * 0.01)))
-        Menu_button = Button(int(HEIGHT * 0.15), int(WIDTH * 0.07), int(HEIGHT * 0.06), "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True)
+        Menu_button = Button(int(HEIGHT * 0.15), int(WIDTH * 0.07), int(HEIGHT * 0.06), "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True, function="disconnect")
         Menu_button.draw_button(events)
     def get_volume_slider(self, GAME):
         if self.volume_slider is None:
@@ -535,6 +532,9 @@ class Button:
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
                 if hovering:
+                    if self.function == "disconnect":
+                        if self.GAME.multiplayer:
+                            self.GAME._stop_hosting()
                     pygame.mouse.set_visible(self.mouse_vis)
                     pygame.event.set_grab(self.state_change == "game")
                     self.GAME.state = self.state_change
@@ -761,8 +761,8 @@ class Bilal:
             text = self.current
 
         if text:
-            Tekstballon(text, HEIGHT - int(HEIGHT * 0.39), int(WIDTH * 0.01), self.Game).draw()
-            SCREEN.blit(BILAL, (0, HEIGHT - int(HEIGHT * 0.29)))
+            Tekstballon(text, HEIGHT - int(HEIGHT * 0.43), int(WIDTH * 0.01), self.Game).draw()
+            SCREEN.blit(BILAL, (0, HEIGHT - int(HEIGHT * 0.33)))
 
     def trigger(self, event_name):
         if self.flags.get(event_name):

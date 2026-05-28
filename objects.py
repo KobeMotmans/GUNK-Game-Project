@@ -95,9 +95,9 @@ class RenderObject:
 class PickupObject(RenderObject):
     def __init__(self, type, x, y):
         super().__init__(type, x, y)
-    def interact(self, player):
+    def interact(self, player, game):
         if self.type == "objects/ammo":
-            player.ammo = min(player.ammo+50, 200)
+            game.global_ammo = min(game.global_ammo + 50, 200)
             s = pygame.mixer.Sound("assets/ammo.ogg")
             s.set_volume(SFX_VOLUME)
             s.play()
@@ -116,7 +116,7 @@ class PickupObject(RenderObject):
                 SCREEN.blit(no_kc, (WIDTH//2 - no_kc.get_width()//2, HEIGHT//2))
                 return "fail"
         if self.type == "objects/health":
-            player.health = min(player.health+HEALTH_REGEN, START_HEALTH)
+            game.global_health = min(game.global_health + HEALTH_REGEN, START_HEALTH)
             s = pygame.mixer.Sound("assets/drink.ogg")
             s.set_volume(SFX_VOLUME)
             s.play()
@@ -140,6 +140,9 @@ class PlayerSprite(RenderObject):
         self._cached_dist = -1
         self.size = SPRITE_SIZE
         self.dist = 100000000
+
+    def take_damage(self, damage, game):
+        game.global_health -= damage
 
     def render_fast(self, dist, screen_x):
         super().render_fast(dist, screen_x)
