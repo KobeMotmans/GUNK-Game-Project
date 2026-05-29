@@ -4,6 +4,7 @@ game.py - Hoofd game loop en initialisatie
 
 import pygame
 import random
+import time
 
 from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
@@ -16,6 +17,7 @@ from player import Player
 from Menu import Menu_inst, Bilal
 from map_loader import M, png_to_list_fast
 from objects import PickupObject, PlayerSprite
+from skin_manager import SkinManager
 from vector import Vector
 from network import NetworkClient
 
@@ -91,6 +93,7 @@ class Game:
         self.multiplayer = False
         self.player_id = 0
         self.player_name = "Player"
+        self.skin_id = 0
         self.network_server = None
         self.network_client = None
         self.remote_players = []
@@ -178,12 +181,10 @@ class Game:
                                 pygame.mouse.set_visible(True)
                                 pygame.event.set_grab(False)
                                 pygame.mixer.pause()
-                                self.state = "paused"
                             else:
                                 pygame.mouse.set_visible(False)
                                 pygame.event.set_grab(True)
                                 pygame.mixer.unpause()
-                                self.state = "game"
                         else:
                             pygame.mouse.set_visible(True)
                             pygame.event.set_grab(False)
@@ -204,17 +205,11 @@ class Game:
             elif self.state == "paused":
                  if event.type == pygame.KEYDOWN: #unpause
                       if event.key == pygame.K_ESCAPE:
-                          if self.multiplayer:
-                              self.global_paused = False
-                              self.paused_by = ""
-                              pygame.mouse.set_visible(False)
-                              pygame.event.set_grab(True)
-                              self.state = "game"
+                          pygame.mouse.set_visible(False)
+                          pygame.event.set_grab(True)
+                          self.state = "game"
+                          if not self.multiplayer:
                               pygame.mixer.unpause()
-                          else:
-                              pygame.mouse.set_visible(False)
-                              pygame.event.set_grab(True)
-                              self.state = "game"
 
         if self.state == "game":
             mouse_buttons = pygame.mouse.get_pressed()
@@ -545,8 +540,9 @@ class Game:
         self.main_music.play()
 
     def _do_connect(self, ip, port, name):
+        self.skin_id = self.Menu.mp_skin_id
         self.network_client = NetworkClient()
-        if self.network_client.connect(ip, port, name):
+        if self.network_client.connect(ip, port, name, self.skin_id):
             self.multiplayer = True
             self.player_id = self.network_client.player_id
             self.player_name = name
@@ -633,6 +629,9 @@ class Game:
         for i, pdata in enumerate(other_players):
             self.remote_players[i].pos = Vector(pdata["pos"][0], pdata["pos"][1])
             self.remote_players[i].name = pdata.get("name", f"Player {pdata['id']}")
+            skin_id = pdata.get("skin_id", 0)
+            if hasattr(self.remote_players[i], 'set_skin'):
+                self.remote_players[i].set_skin(skin_id)
 
         # 3. Enemies — full sync from server (ALL clients)
         enemies_data = state.get("enemies", [])
@@ -759,6 +758,12 @@ class Game:
                             self._start_multiplayer_client()
                         elif packet.get("type") == "server_stopped":
                             self._disconnect()
+                        elif packet.get("type") == "skin_manifest_update":
+                            SkinManager.set_manifest(packet.get("skin_manifest", []))
+                    now = time.time()
+                    if now - getattr(self, '_last_lobby_ping', 0) > 2.0:
+                        self.network_client.send({"type": "ping"})
+                        self._last_lobby_ping = now
                 self.Menu.draw_waiting_lobby(events, self)
 
             elif self.state == "game":

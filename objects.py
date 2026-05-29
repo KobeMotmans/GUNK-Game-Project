@@ -5,6 +5,7 @@ import config
 from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, FONT, SFX_VOLUME
 from vector import Vector
 from Menu import Menu_inst
+from skin_manager import SkinManager
 
 class RenderObject:
     def __init__(self, type, x, y):
@@ -125,12 +126,20 @@ class PickupObject(RenderObject):
 
 class PlayerSprite(RenderObject):
     """Sprite voor remote spelers in de 3D wereld"""
-    def __init__(self, name, x=0, y=0):
+    def __init__(self, name, x=0, y=0, skin_id=0):
         self.pos = Vector(x, y)
         self.name = name
         self.type = "player"
+        self._skin_id = skin_id
+        self._load_skin()
+        self._cached_scale = None
+        self._cached_dist = -1
+        self.size = SPRITE_SIZE
+        self.dist = 100000000
+
+    def _load_skin(self):
         try:
-            self.sprite = pygame.image.load("assets/player.png").convert_alpha()
+            self.sprite = SkinManager.load_skin_sprite(self._skin_id)
         except (FileNotFoundError, pygame.error):
             sprite = pygame.Surface((SPRITE_SIZE, SPRITE_SIZE * 2), pygame.SRCALPHA)
             pygame.draw.ellipse(sprite, (0, 150, 255), (0, 0, SPRITE_SIZE, SPRITE_SIZE * 2))
@@ -138,8 +147,11 @@ class PlayerSprite(RenderObject):
             self.sprite = sprite
         self._cached_scale = None
         self._cached_dist = -1
-        self.size = SPRITE_SIZE
-        self.dist = 100000000
+
+    def set_skin(self, skin_id):
+        if skin_id != self._skin_id:
+            self._skin_id = skin_id
+            self._load_skin()
 
     def take_damage(self, damage, game):
         game.global_health -= damage

@@ -1,7 +1,11 @@
 import pygame
+import tkinter as tk
+from tkinter import filedialog
 from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME
 from collections import deque
 from map_loader import M
+from skin_manager import SkinManager
+from network import NetworkClient
 class Menu:
     def __init__(self, color):
         self.bg_color = color
@@ -15,16 +19,24 @@ class Menu:
         self.silly_mode = False
         self.loading_progress = 0
 
-        # Multiplayer input fields
-        self.mp_name_input = ""
+        # Multiplayer input fields + disk cache
+        cfg = NetworkClient.load_config()
+        self.mp_name_input = cfg.get("last_name", "")
         self.mp_host_port = "5555"
-        self.mp_join_ip = "127.0.0.1"
-        self.mp_join_port = "5555"
+        self.mp_join_ip = cfg.get("last_ip", "127.0.0.1")
+        self.mp_join_port = cfg.get("last_port", "5555")
+        self.mp_skin_id = cfg.get("last_skin_id", 0)
         self.input_focus = None
         self.lobby_status = ""
         self.client_list = []
         self.waiting_text = "Verbinden..."
         self.mp_status = ""
+        self._skin_thumbnails = {}
+        self._skin_page = 0
+        self._skin_downloading = False
+        self.mp_skin_search = ""
+        self.mp_skin_upload_name = ""
+        self._upload_status = None
 
     def draw_loading_screen(self):
         SCREEN.fill(self.bg_color)
@@ -181,7 +193,7 @@ class Menu:
             status = pygame.font.Font(FONT, 22).render(self.mp_status, True, color)
             SCREEN.blit(status, (WIDTH//2 - status.get_width()//2, int(HEIGHT * 0.48)))
 
-        self._draw_button_custom(events, "BACK", WIDTH//2 - int(WIDTH * 0.03), HEIGHT - int(HEIGHT * 0.05), int(WIDTH * 0.06), int(HEIGHT * 0.03), lambda: setattr(GAME, 'state', 'menu'))
+        self._draw_button_custom(events, "BACK", WIDTH//2 - int(WIDTH * 0.03), HEIGHT - int(HEIGHT * 0.08), int(WIDTH * 0.06), int(HEIGHT * 0.03), lambda: setattr(GAME, 'state', 'menu'))
 
     def draw_waiting_lobby(self, events, GAME):
         self.game = GAME
@@ -189,16 +201,221 @@ class Menu:
         title = pygame.font.Font(FONT, 50).render("LOBBY", True, 'white')
         SCREEN.blit(title, (WIDTH//2 - title.get_width()//2, int(HEIGHT * 0.08)))
 
+        mouse = pygame.mouse.get_pos()
+
+        # ── Left column: player list ──────────────────────────────
+        left_x = int(WIDTH * 0.04)
+        left_cx = int(WIDTH * 0.20)
+        y_left = int(HEIGHT * 0.15)
         players = self.client_list if self.client_list else []
-        y = int(HEIGHT * 0.17)
-        for name, pid in players:
+        thumb_size = 36
+        for pd in players:
+            pid = pd["pid"] if isinstance(pd, dict) else pd[1]
+            name = pd["name"] if isinstance(pd, dict) else pd[0]
+            skin_id = pd.get("skin_id", 0) if isinstance(pd, dict) else (pd[2] if len(pd) > 2 else 0)
             color = (0, 200, 255) if pid == GAME.player_id else (255, 255, 255)
-            p_text = pygame.font.Font(FONT, 30).render(f"[P{pid}] {name}", True, color)
-            SCREEN.blit(p_text, (WIDTH//2 - p_text.get_width()//2, y))
-            y += int(HEIGHT * 0.04)
+            thumb = SkinManager.create_thumbnail(skin_id, (thumb_size, thumb_size))
+            SCREEN.blit(thumb, (left_x, y_left - 4))
+            p_text = pygame.font.Font(FONT, 26).render(f"[P{pid}] {name}", True, color)
+            SCREEN.blit(p_text, (left_x + thumb_size + 10, y_left))
+            y_left += int(HEIGHT * 0.045)
         if not players:
             wait = pygame.font.Font(FONT, 22).render("Wachten op spelers...", True, (150, 150, 150))
-            SCREEN.blit(wait, (WIDTH//2 - wait.get_width()//2, y))
+            SCREEN.blit(wait, (left_cx - wait.get_width()//2, y_left))
+
+        # ── Right column: skin selector ───────────────────────────
+        right_cx = int(WIDTH * 0.66)
+        y_right = int(HEIGHT * 0.15)
+
+        sel_label = pygame.font.Font(FONT, 22).render("KIEZEN", True, (200, 200, 200))
+        SCREEN.blit(sel_label, (right_cx - sel_label.get_width()//2, y_right))
+        y_right += 28
+
+        avail = SkinManager.get_available_skins()
+        builtin = [s for s in avail if s.get("type") == "builtin"]
+        custom = [s for s in avail if s.get("type") == "custom"]
+        t_size_b = int(min(WIDTH * 0.04, HEIGHT * 0.055))
+        gap_b = int(t_size_b * 0.25)
+
+        # ── Built-in skins row ─────────────────────────────────────
+        total_bw = len(builtin) * (t_size_b + gap_b)
+        start_bx = right_cx - total_bw//2 + gap_b//2
+        self._skin_builtin_rects = []
+        for si, info in enumerate(builtin):
+            sid = info["id"]
+            x = start_bx + si * (t_size_b + gap_b)
+            rect = pygame.Rect(x, y_right, t_size_b, t_size_b)
+            self._skin_builtin_rects.append((sid, rect))
+            if sid not in self._skin_thumbnails or self._skin_thumbnails[sid].get_width() != t_size_b:
+                self._skin_thumbnails[sid] = SkinManager.create_thumbnail(sid, (t_size_b, t_size_b))
+            SCREEN.blit(self._skin_thumbnails[sid], (x, y_right))
+            border_color = (0, 200, 255) if sid == GAME.skin_id else (60, 60, 60)
+            pygame.draw.rect(SCREEN, border_color, rect, 3, border_radius=4)
+            name_font = pygame.font.Font(FONT, 13)
+            name_surf = name_font.render(info.get("name", f"S{sid}"), True, (150, 150, 150))
+            SCREEN.blit(name_surf, (x + t_size_b//2 - name_surf.get_width()//2, y_right + t_size_b + 2))
+        y_right += t_size_b + 28
+
+        # ── Upload section (always visible) ─────────────────────────
+        upload_font = pygame.font.Font(FONT, 16)
+        upload_label = upload_font.render("NIEUWE SKIN", True, (200, 200, 200))
+        SCREEN.blit(upload_label, (right_cx - upload_label.get_width()//2, y_right))
+        y_right += 22
+        name_w = int(WIDTH * 0.08)
+        name_x = right_cx - name_w - int(WIDTH * 0.02)
+        self.mp_skin_upload_name = self._draw_text_input(events, "",
+            self.mp_skin_upload_name, name_x, y_right, name_w,
+            height=26, field_id="mp_skin_upload_name")
+        btn_w = int(WIDTH * 0.08)
+        btn_x = right_cx + int(WIDTH * 0.02)
+        up_rect = pygame.Rect(btn_x, y_right, btn_w, 26)
+        hover = up_rect.collidepoint(mouse)
+        pygame.draw.rect(SCREEN, (80, 120, 80) if hover else (60, 90, 60), up_rect, border_radius=4)
+        up_surf = upload_font.render("UPLOAD", True, (200, 255, 200))
+        SCREEN.blit(up_surf, (btn_x + btn_w//2 - up_surf.get_width()//2, y_right + 5))
+        self._skin_upload_rect = up_rect
+        y_right += 32
+
+        if self._upload_status:
+            col = (0, 200, 0) if "gelukt" in self._upload_status.lower() else (200, 100, 0)
+            st = pygame.font.Font(FONT, 15).render(self._upload_status, True, col)
+            SCREEN.blit(st, (right_cx - st.get_width()//2, y_right))
+            y_right += 20
+
+        # ── Custom skins browser ────────────────────────────────────
+        self._skin_custom_rects = []
+        self._skin_custom_info = []
+        if custom:
+            cus_label = pygame.font.Font(FONT, 18).render("CUSTOM", True, (160, 140, 255))
+            SCREEN.blit(cus_label, (right_cx - cus_label.get_width()//2, y_right))
+            y_right += 24
+
+            search_w = int(WIDTH * 0.12)
+            search_x = right_cx - search_w//2
+            self.mp_skin_search = self._draw_text_input(events, "",
+                getattr(self, 'mp_skin_search', ""), search_x, y_right, search_w,
+                height=26, field_id="mp_skin_search")
+            y_right += 32
+
+            filter_text = getattr(self, 'mp_skin_search', "").lower()
+            filtered = [s for s in custom if filter_text in s.get("name", "").lower()]
+
+            per_page = 4
+            total_pages = max(1, (len(filtered) + per_page - 1) // per_page)
+            page = getattr(self, '_skin_page', 0)
+            if page >= total_pages:
+                page = total_pages - 1
+            self._skin_page = page
+
+            t_size_c = int(WIDTH * 0.06)
+            gap_c = int(t_size_c * 0.25)
+            row_start = page * per_page
+            row_end = min(row_start + per_page, len(filtered))
+            row_items = filtered[row_start:row_end]
+
+            row_w = len(row_items) * (t_size_c + gap_c)
+            start_cx = right_cx - row_w//2 + gap_c//2
+            for si, info in enumerate(row_items):
+                sid = info["id"]
+                x = start_cx + si * (t_size_c + gap_c)
+                rect = pygame.Rect(x, y_right, t_size_c, t_size_c)
+                self._skin_custom_rects.append((sid, rect))
+                self._skin_custom_info.append(info)
+                has_local = SkinManager.has_skin_locally(sid)
+                if sid not in self._skin_thumbnails or self._skin_thumbnails[sid].get_width() != t_size_c:
+                    if has_local:
+                        self._skin_thumbnails[sid] = SkinManager.create_thumbnail(sid, (t_size_c, t_size_c))
+                    else:
+                        ph = pygame.Surface((t_size_c, t_size_c), pygame.SRCALPHA)
+                        ph.fill((40, 40, 50, 220))
+                        dl = pygame.font.Font(FONT, 11).render("DL", True, (120, 120, 140))
+                        ph.blit(dl, (t_size_c//2 - dl.get_width()//2, t_size_c//2 - dl.get_height()//2))
+                        self._skin_thumbnails[sid] = ph
+                SCREEN.blit(self._skin_thumbnails[sid], (x, y_right))
+                border_color = (0, 200, 255) if sid == GAME.skin_id else (40, 40, 50)
+                pygame.draw.rect(SCREEN, border_color, rect, 2, border_radius=4)
+                name_font = pygame.font.Font(FONT, 12)
+                label = info.get("name", f"S{sid}")
+                if len(label) > 14:
+                    label = label[:13] + "..."
+                name_surf = name_font.render(label, True, (160, 160, 160))
+                SCREEN.blit(name_surf, (x + t_size_c//2 - name_surf.get_width()//2, y_right + t_size_c + 2))
+
+            y_right += t_size_c + 22
+
+            # Pagination controls
+            self._skin_prev_rect = None
+            self._skin_next_rect = None
+            if total_pages > 1:
+                arr_font = pygame.font.Font(FONT, 20)
+                prev_surf = arr_font.render("<", True, (200, 200, 200))
+                prev_rect = pygame.Rect(right_cx - int(WIDTH * 0.08), y_right - 6,
+                                        prev_surf.get_width() + 8, prev_surf.get_height() + 4)
+                pygame.draw.rect(SCREEN, (70, 70, 70) if page > 0 else (40, 40, 40), prev_rect, border_radius=4)
+                SCREEN.blit(prev_surf, (prev_rect.x + 4, prev_rect.y + 2))
+                self._skin_prev_rect = prev_rect
+                self._skin_prev_page = page > 0
+
+                page_surf = arr_font.render(f"{page + 1}/{total_pages}", True, (180, 180, 180))
+                SCREEN.blit(page_surf, (right_cx - page_surf.get_width()//2, y_right - 4))
+
+                next_surf = arr_font.render(">", True, (200, 200, 200))
+                next_rect = pygame.Rect(right_cx + int(WIDTH * 0.06), y_right - 6,
+                                        next_surf.get_width() + 8, next_surf.get_height() + 4)
+                pygame.draw.rect(SCREEN, (70, 70, 70) if page < total_pages - 1 else (40, 40, 40),
+                                 next_rect, border_radius=4)
+                SCREEN.blit(next_surf, (next_rect.x + 4, next_rect.y + 2))
+                self._skin_next_rect = next_rect
+                self._skin_next_page = page < total_pages - 1
+
+            if getattr(self, '_skin_downloading', False):
+                dl_surf = pygame.font.Font(FONT, 16).render("Downloaden...", True, (200, 200, 80))
+                SCREEN.blit(dl_surf, (right_cx - dl_surf.get_width()//2, y_right + 8))
+
+        # ── Click handling ─────────────────────────────────────────
+        for ev in events:
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                for sid, rect in self._skin_builtin_rects:
+                    if rect.collidepoint(mouse):
+                        self._select_skin(GAME, sid)
+
+                if getattr(self, '_skin_upload_rect', None) and self._skin_upload_rect.collidepoint(mouse):
+                    skin_name = self.mp_skin_upload_name.strip()
+                    if not skin_name:
+                        self._upload_status = "Vul een naam in"
+                    else:
+                        root = tk.Tk()
+                        root.withdraw()
+                        filepath = filedialog.askopenfilename(
+                            title="Selecteer een afbeelding",
+                            filetypes=[("Afbeeldingen", "*.png *.jpg *.jpeg *.gif *.bmp"), ("Alle bestanden", "*.*")]
+                        )
+                        root.destroy()
+                        if filepath:
+                            uploader = GAME.player_name
+                            self._upload_status = "Bezig met uploaden..."
+                            ok, msg, *rest = GAME.network_client.upload_skin(skin_name, uploader, filepath)
+                            self._upload_status = msg
+                            if ok:
+                                self.mp_skin_upload_name = ""
+                                sid = rest[0] if rest else None
+                                if sid is not None:
+                                    SkinManager.download_skin(sid)
+                                    self._select_skin(GAME, sid)
+
+                if custom:
+                    for idx, (sid, rect) in enumerate(self._skin_custom_rects):
+                        if rect.collidepoint(mouse):
+                            if not SkinManager.has_skin_locally(sid):
+                                self._skin_downloading = True
+                                SkinManager.download_skin(sid)
+                                self._skin_downloading = False
+                            self._select_skin(GAME, sid)
+
+                    if self._skin_prev_rect and self._skin_prev_rect.collidepoint(mouse) and self._skin_prev_page:
+                        self._skin_page -= 1
+                    if self._skin_next_rect and self._skin_next_rect.collidepoint(mouse) and self._skin_next_page:
+                        self._skin_page += 1
 
         def dc():
             GAME._disconnect()
@@ -206,8 +423,19 @@ class Menu:
         def start_multi_game():
             GAME._primary_start_game()
         if players:
-            self._draw_button_custom(events, "START GAME", WIDTH//2 - int(WIDTH * 0.05), HEIGHT - int(HEIGHT * 0.09), int(WIDTH * 0.1), int(HEIGHT * 0.05), start_multi_game)
-        self._draw_button_custom(events, "DISCONNECT", WIDTH//2 - int(WIDTH * 0.04), HEIGHT - int(HEIGHT * 0.04), int(WIDTH * 0.08), int(HEIGHT * 0.03), dc)
+            self._draw_button_custom(events, "START GAME", WIDTH//2 - int(WIDTH * 0.05),
+                HEIGHT - int(HEIGHT * 0.13), int(WIDTH * 0.1), int(HEIGHT * 0.05), start_multi_game)
+        self._draw_button_custom(events, "DISCONNECT", WIDTH//2 - int(WIDTH * 0.04),
+            HEIGHT - int(HEIGHT * 0.07), int(WIDTH * 0.08), int(HEIGHT * 0.03), dc)
+
+    def _select_skin(self, GAME, skin_id):
+        GAME.skin_id = skin_id
+        self.mp_skin_id = skin_id
+        if GAME.network_client and GAME.network_client.connected:
+            GAME.network_client.send({"type": "select_skin", "skin_id": skin_id})
+            NetworkClient._save_config(GAME.player_name,
+                GAME.network_client.server_addr[0],
+                GAME.network_client.server_addr[1], skin_id)
 
     #  Settings 
 
@@ -341,6 +569,23 @@ class Menu:
             pause_text = f"{paused_by} paused. Waiting..." if paused_by else "Paused. Waiting..."
             pause_surf = pause_font.render(pause_text, True, 'white')
             SCREEN.blit(pause_surf, (WIDTH//2 - pause_surf.get_width()//2, HEIGHT//2 - pause_surf.get_height()//2))
+
+            def _resume_mp():
+                self.game.global_paused = False
+                self.game.paused_by = ""
+                pygame.mouse.set_visible(False)
+                pygame.event.set_grab(True)
+            self._draw_main_button(events, "RESUME", HEIGHT//2 - int(HEIGHT * 0.1), int(WIDTH * 0.11), _resume_mp, font_size=34)
+
+            def _settings_mp():
+                self.game._settings_return = "game"
+                self.game.state = "settings"
+            self._draw_main_button(events, "SETTINGS", HEIGHT//2 - int(HEIGHT * 0.02), int(WIDTH * 0.11), _settings_mp, font_size=34)
+
+            def _menu_mp():
+                pygame.mixer.stop()
+                self.game._disconnect()
+            self._draw_main_button(events, "MENU", HEIGHT//2 + int(HEIGHT * 0.06), int(WIDTH * 0.11), _menu_mp, font_size=34)
     def draw_paused_screen(self, events, GAME):
         self.game = GAME
         c = WIDTH//2

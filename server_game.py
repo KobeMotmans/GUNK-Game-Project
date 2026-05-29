@@ -165,6 +165,7 @@ class ServerGame:
         self.jan_spotted = False
         self.global_paused = False
         self.paused_by = ""
+        self._paused_player_id = None
         self.exit_pos = None
         self.initialized = False
         self._last_player_seq = {}
@@ -212,19 +213,25 @@ class ServerGame:
         self.jan_spotted = False
         self.global_paused = False
         self.paused_by = ""
+        self._paused_player_id = None
         self.initialized = True
 
-    def register_player(self, pid, name):
+    def register_player(self, pid, name, skin_id=0):
         self.players[pid] = {
             "pos": Vector(0, 0),
             "angle": 0.0,
             "name": name,
+            "skin_id": skin_id,
             "got_keycard": False,
             "door_closed": False,
             "state": "game",
             "score": 0,
         }
         self._last_player_seq[pid] = 0
+
+    def set_skin(self, pid, skin_id):
+        if pid in self.players:
+            self.players[pid]["skin_id"] = skin_id
 
     def remove_player(self, pid):
         self.players.pop(pid, None)
@@ -248,6 +255,7 @@ class ServerGame:
         self.jan_spotted = False
         self.global_paused = False
         self.paused_by = ""
+        self._paused_player_id = None
         self.exit_pos = None
         self.initialized = False
 
@@ -308,8 +316,14 @@ class ServerGame:
         if "elevator_waiting" in data:
             self.elevator_waiting = data["elevator_waiting"]
         if "paused" in data:
-            self.global_paused = data["paused"]
-            self.paused_by = data.get("paused_by", "")
+            if data["paused"] and not self.global_paused:
+                self.global_paused = True
+                self.paused_by = data.get("paused_by", "")
+                self._paused_player_id = pid
+            elif not data["paused"] and self.global_paused and pid == self._paused_player_id:
+                self.global_paused = False
+                self.paused_by = ""
+                self._paused_player_id = None
         if "escaped" in data:
             self.escaped = data["escaped"]
 
@@ -432,6 +446,7 @@ class ServerGame:
             "type": "state",
             "players": [{"id": pid, "pos": (p["pos"].x, p["pos"].y),
                          "angle": p["angle"], "name": p["name"],
+                         "skin_id": p["skin_id"],
                          "got_keycard": p["got_keycard"],
                          "state": p["state"],
                          "score": p["score"]}
