@@ -222,6 +222,7 @@ class ServerGame:
             "got_keycard": False,
             "door_closed": False,
             "state": "game",
+            "score": 0,
         }
         self._last_player_seq[pid] = 0
 
@@ -262,7 +263,9 @@ class ServerGame:
                 nearest = pdata["pos"]
         return nearest
 
-    def _handle_enemy_death(self, idx):
+    def _handle_enemy_death(self, idx, killer_pid=None):
+        if killer_pid is not None and killer_pid in self.players:
+            self.players[killer_pid]["score"] += 1
         enemy = self.enemies[idx]
         if enemy.type == "enemies/jan":
             self.objects["keycard"].append({"pos": (enemy.pos.x, enemy.pos.y)})
@@ -317,7 +320,7 @@ class ServerGame:
                     if (e.pos - hit_pos).norm() < TILE_SIZE:
                         e.health -= hit["damage"]
                         if e.health <= 0:
-                            self._handle_enemy_death(i)
+                            self._handle_enemy_death(i, pid)
                         break
 
         if "remove_pickup" in data:
@@ -430,7 +433,8 @@ class ServerGame:
             "players": [{"id": pid, "pos": (p["pos"].x, p["pos"].y),
                          "angle": p["angle"], "name": p["name"],
                          "got_keycard": p["got_keycard"],
-                         "state": p["state"]}
+                         "state": p["state"],
+                         "score": p["score"]}
                         for pid, p in self.players.items()],
             "enemies": [{"pos": (e.pos.x, e.pos.y), "health": e.health, "type": e.type}
                         for e in self.enemies],

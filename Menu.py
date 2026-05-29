@@ -78,8 +78,10 @@ class Menu:
         SCREEN.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, int(HEIGHT * 0.08)))
 
         c = WIDTH//2
-        self._draw_main_button(events, "SOLO", int(HEIGHT * 0.38), int(WIDTH * 0.09), lambda: GAME.reset_game(), font_size=36, x=c-int(WIDTH * 0.1))
-        self._draw_main_button(events, "MULTIPLAYER", int(HEIGHT * 0.38), int(WIDTH * 0.11), lambda: setattr(GAME, 'state', 'multiplayer_menu'), font_size=36, x=c+int(WIDTH * 0.01))
+        btn_w = int(WIDTH * 0.12)
+        gap = int(WIDTH * 0.03)
+        self._draw_main_button(events, "SOLO", int(HEIGHT * 0.38), btn_w, lambda: GAME.reset_game(), font_size=36, x=c - btn_w - gap//2)
+        self._draw_main_button(events, "MULTIPLAYER", int(HEIGHT * 0.38), btn_w, lambda: setattr(GAME, 'state', 'multiplayer_menu'), font_size=36, x=c + gap//2)
         self._draw_main_button(events, "OPTIONS", int(HEIGHT * 0.47), int(WIDTH * 0.11), lambda: setattr(GAME, 'state', 'settings'), font_size=36)
         self._draw_main_button(events, "CREDITS", int(HEIGHT * 0.54), int(WIDTH * 0.11), lambda: setattr(GAME, 'state', 'credits'), font_size=36)
         self._draw_main_button(events, "QUIT", int(HEIGHT * 0.62), int(WIDTH * 0.11), lambda: setattr(GAME, 'running', False), font_size=36)
@@ -158,11 +160,11 @@ class Menu:
 
         ip_label = pygame.font.Font(FONT, 20).render("SERVER IP", True, (200, 200, 200))
         SCREEN.blit(ip_label, (WIDTH//2 - ip_label.get_width()//2, int(HEIGHT * 0.22)))
-        self.mp_join_ip = self._draw_text_input(events, "IP Address:", self.mp_join_ip, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.25), int(WIDTH * 0.125), field_id="mp_join_ip")
+        self.mp_join_ip = self._draw_text_input(events, "", self.mp_join_ip, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.25), int(WIDTH * 0.125), field_id="mp_join_ip")
 
         port_label = pygame.font.Font(FONT, 20).render("POORT", True, (200, 200, 200))
         SCREEN.blit(port_label, (WIDTH//2 - port_label.get_width()//2, int(HEIGHT * 0.31)))
-        self.mp_join_port = self._draw_text_input(events, "Port:", self.mp_join_port, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.34), int(WIDTH * 0.125), field_id="mp_join_port", numeric=True)
+        self.mp_join_port = self._draw_text_input(events, "", self.mp_join_port, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.34), int(WIDTH * 0.125), field_id="mp_join_port", numeric=True)
 
         def do_connect():
             name = self.mp_name_input.strip() or "Player"

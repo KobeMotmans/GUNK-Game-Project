@@ -622,6 +622,7 @@ class Game:
         players_data = state.get("players", [])
         for pdata in players_data:
             if pdata.get("id") == self.player_id:
+                self.player.score = pdata.get("score", self.player.score)
                 if state.get("elevator_transition") and self.player.door_pos == 0:
                     self.player.door_pos = 1
         other_players = [p for p in players_data if p.get("id") != self.player_id]
@@ -779,7 +780,8 @@ class Game:
                 if self.player.got_keycard:
                     self.keycard_font = pygame.font.Font(SILLY_FONT if self.Menu.silly_mode else FONT, 20)
                     self.keycard_font.set_bold(True)
-                    SCREEN.blit(self.keycard_font.render("KEYCARD ACQUIRED", True, 'green'),(WIDTH - int(WIDTH * 0.11), HEIGHT - int(HEIGHT * 0.06)))
+                    kc_surf = self.keycard_font.render("KEYCARD ACQUIRED", True, 'green')
+                    SCREEN.blit(kc_surf, (WIDTH - kc_surf.get_width() - int(WIDTH * 0.04), HEIGHT - int(HEIGHT * 0.06)))
                     
                 if self.escaped:
                     self.Menu.draw_escaped_screen(events, self)
