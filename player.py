@@ -73,6 +73,7 @@ class Player:
         if self.inv_time == 0:
             self.inv_time = 60
             game.global_health -= damage
+            game._health_delta -= damage
             s = pygame.mixer.Sound("assets/damage.ogg" if not Menu_inst.silly_mode else "assets/silly/ah.ogg")
             s.set_volume(SFX_VOLUME)
             s.play()

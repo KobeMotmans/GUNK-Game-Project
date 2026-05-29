@@ -60,12 +60,19 @@ class ServerIO(threading.Thread):
         self.next_id = 0  # First client (host) gets 0
 
     def run(self):
+        TICK_RATE = 1 / 60  # ~60 Hz server tick
         while self.running:
+            t0 = time.perf_counter()
             self._accept_tcp()
             self._receive_udp()
-            self.server_game.apply_inputs(self.inputs)
-            self._send_server_state()
+            self.server_game.process_inputs(self.inputs)
+            self.server_game.tick()
+            if self.server_game.initialized:
+                self._send_server_state()
             self._cleanup_stale()
+            elapsed = time.perf_counter() - t0
+            if elapsed < TICK_RATE:
+                time.sleep(TICK_RATE - elapsed)
 
     # ── TCP handshake ──────────────────────────────────────────
 
@@ -140,7 +147,7 @@ class ServerIO(threading.Thread):
                         if c_pid == pid:
                             break
                     else:
-                        if len(self.clients) < self.max_players - 1 or pid == 0:
+                        if len(self.clients) < self.max_players:
                             self.clients.append((addr, pid, name))
                             self.lobby_updates.put(("player_joined", pid, name))
                             should_broadcast = True
@@ -157,25 +164,35 @@ class ServerIO(threading.Thread):
                 self.inputs[pid] = data
 
             elif ptype == "start_game":
+                self.server_game.init_world()
+                game_start_packet = pickle.dumps({"type": "game_start"})
                 with self.clients_lock:
                     for c_addr, _, _ in self.clients:
-                        try:
-                            self.udp_socket.sendto(pickle.dumps({"type": "game_start"}), c_addr)
-                        except OSError:
-                            pass
+                        for _ in range(3):
+                            try:
+                                self.udp_socket.sendto(game_start_packet, c_addr)
+                            except OSError:
+                                pass
 
             elif ptype == "disconnect":
                 should_broadcast = False
+                should_reset = False
                 with self.clients_lock:
                     for i, (c_addr, c_pid, c_name) in enumerate(self.clients):
                         if c_pid == pid:
                             self.clients.pop(i)
                             should_broadcast = True
                             break
+                    should_reset = len(self.clients) == 0
                 self.last_seen.pop(pid, None)
                 self.inputs.pop(pid, None)
                 self.server_game.remove_player(pid)
                 self.lobby_updates.put(("player_left", pid, ""))
+                if should_reset:
+                    self.server_game.reset_to_lobby()
+                    self.next_id = 0
+                    self.inputs.clear()
+                    self.last_seen.clear()
                 if should_broadcast:
                     self._broadcast_lobby()
 
@@ -213,6 +230,7 @@ class ServerIO(threading.Thread):
     def _cleanup_stale(self):
         now = time.time()
         stale = []
+        should_reset = False
         with self.clients_lock:
             for addr, pid, name in self.clients:
                 last = self.last_seen.get(pid, now)
@@ -224,6 +242,12 @@ class ServerIO(threading.Thread):
                 self.inputs.pop(pid, None)
                 self.server_game.remove_player(pid)
                 self.lobby_updates.put(("player_left", pid, name))
+            should_reset = len(self.clients) == 0 and stale
+        if should_reset:
+            self.server_game.reset_to_lobby()
+            self.next_id = 0
+            self.inputs.clear()
+            self.last_seen.clear()
         if stale:
             self._broadcast_lobby()
 

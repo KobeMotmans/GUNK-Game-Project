@@ -17,8 +17,7 @@ from Menu import Menu_inst, Bilal
 from map_loader import M, png_to_list_fast
 from objects import PickupObject, PlayerSprite
 from vector import Vector
-from network import ServerIO, NetworkClient
-from config import DEFAULT_PORT, MAX_PLAYERS
+from network import NetworkClient
 
 
 class Game:
@@ -95,7 +94,6 @@ class Game:
         self.network_server = None
         self.network_client = None
         self.remote_players = []
-        self.host_port = DEFAULT_PORT
 
         # Elevator wait (multiplayer)
         self.elevator_waiting = False
@@ -111,6 +109,12 @@ class Game:
 
         # Pos update rate limiting
         self._pos_seq = 0
+
+        # Delta accumulatoren voor server sync
+        self._health_delta = 0
+        self._ammo_delta = 0
+        self._enemy_damage = []
+        self._remove_pickup = []
 
         self.state = "menu"
 
@@ -168,19 +172,18 @@ class Game:
                             self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
                     if event.key == pygame.K_ESCAPE:
                         if self.multiplayer:
-                            if self.player_id == 0:
-                                self.global_paused = not self.global_paused
-                                self.paused_by = self.player_name if self.global_paused else ""
-                                if self.global_paused:
-                                    pygame.mouse.set_visible(True)
-                                    pygame.event.set_grab(False)
-                                    pygame.mixer.pause()
-                                    self.state = "paused"
-                                else:
-                                    pygame.mouse.set_visible(False)
-                                    pygame.event.set_grab(True)
-                                    pygame.mixer.unpause()
-                                    self.state = "game"
+                            self.global_paused = not self.global_paused
+                            self.paused_by = self.player_name if self.global_paused else ""
+                            if self.global_paused:
+                                pygame.mouse.set_visible(True)
+                                pygame.event.set_grab(False)
+                                pygame.mixer.pause()
+                                self.state = "paused"
+                            else:
+                                pygame.mouse.set_visible(False)
+                                pygame.event.set_grab(True)
+                                pygame.mixer.unpause()
+                                self.state = "game"
                         else:
                             pygame.mouse.set_visible(True)
                             pygame.event.set_grab(False)
@@ -189,35 +192,41 @@ class Game:
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        if not self.current_gun.auto:
+                        if not self.current_gun.auto and self.current_gun.weapon_state == 0:
                             if self.global_ammo >= self.current_gun.ammo_weight:
-                                self.global_ammo -= self.current_gun.ammo_weight
-                                self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]),self.player,self.current_gun)
+                                if not self.multiplayer:
+                                    self.global_ammo -= self.current_gun.ammo_weight
+                                self._ammo_delta -= self.current_gun.ammo_weight
+                                hit_pos = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]),self.player,self.current_gun, apply_damage=not self.multiplayer)
+                                if hit_pos:
+                                    self._enemy_damage.append({"pos": hit_pos, "damage": self.current_gun.damage})
 
             elif self.state == "paused":
                  if event.type == pygame.KEYDOWN: #unpause
-                     if event.key == pygame.K_ESCAPE:
-                         if self.multiplayer:
-                             if self.player_id == 0:
-                                 self.global_paused = False
-                                 self.paused_by = ""
-                                 pygame.mouse.set_visible(False)
-                                 pygame.event.set_grab(True)
-                                 self.state = "game"
-                                 pygame.mixer.unpause()
-                         else:
-                             pygame.mouse.set_visible(False)
-                             pygame.event.set_grab(True)
-                             self.state = "game"
-                             pygame.mixer.unpause()
+                      if event.key == pygame.K_ESCAPE:
+                          if self.multiplayer:
+                              self.global_paused = False
+                              self.paused_by = ""
+                              pygame.mouse.set_visible(False)
+                              pygame.event.set_grab(True)
+                              self.state = "game"
+                              pygame.mixer.unpause()
+                          else:
+                              pygame.mouse.set_visible(False)
+                              pygame.event.set_grab(True)
+                              self.state = "game"
 
         if self.state == "game":
             mouse_buttons = pygame.mouse.get_pressed()
             if self.current_gun.auto: #Pressed to shoot
                 if mouse_buttons[0] and self.current_gun.weapon_state == 0:
                     if self.global_ammo >= self.current_gun.ammo_weight:
-                        self.global_ammo -= self.current_gun.ammo_weight
-                        self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun)
+                        if not self.multiplayer:
+                            self.global_ammo -= self.current_gun.ammo_weight
+                        self._ammo_delta -= self.current_gun.ammo_weight
+                        hit_pos = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun, apply_damage=not self.multiplayer)
+                        if hit_pos:
+                            self._enemy_damage.append({"pos": hit_pos, "damage": self.current_gun.damage})
         return events
     
     def handle_input(self):
@@ -247,40 +256,20 @@ class Game:
                 mouse_buttons = pygame.mouse.get_pressed()
                 if self.current_gun.auto and mouse_buttons[0] and self.current_gun.weapon_state == 0:
                     if self.global_ammo >= self.current_gun.ammo_weight:
-                        self.global_ammo -= self.current_gun.ammo_weight
-                        self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), self.player, self.current_gun)
+                        if not self.multiplayer:
+                            self.global_ammo -= self.current_gun.ammo_weight
+                        self._ammo_delta -= self.current_gun.ammo_weight
+                        hit_pos = self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), self.player, self.current_gun, apply_damage=not self.multiplayer)
+                        if hit_pos:
+                            self._enemy_damage.append({"pos": hit_pos, "damage": self.current_gun.damage})
 
             # === Client: send position + state to server (rate-limited) ===
             if self.network_client:
                 self._send_client_state()
 
-    def update(self):   #Update game state
+    def update(self):
         self.current_gun.update()
         self.player.tick()
-        # Elevator wait logic (primary client only)
-        if self.multiplayer and self.player_id == 0 and self.elevator_waiting and not self.elevator_ready:
-            self.player_near_exit = False
-            all_near = True
-            if self.exit_pos:
-                host_dist = (self.player.pos - self.exit_pos).norm()
-                self.player_near_exit = host_dist < ELEVATOR_WAIT_DIST
-                all_near = all_near and self.player_near_exit
-                for rp in self.remote_players:
-                    if rp is None:
-                        continue
-                    dist = (rp.pos - self.exit_pos).norm()
-                    if dist >= ELEVATOR_WAIT_DIST:
-                        all_near = False
-            if all_near:
-                if self.elevator_wait_timer <= 0:
-                    self.elevator_wait_timer = ELEVATOR_WAIT_FRAMES
-                self.elevator_wait_timer -= 1
-                if self.elevator_wait_timer <= 0:
-                    self.elevator_ready = True
-                    self.player.door_pos = 1
-                    self.objects["exit"] = None
-            else:
-                self.elevator_wait_timer = 0
 
     def render(self):   #Render alle game elementen
         SCREEN.fill((0, 255, 255) if self.Menu.silly_mode else 'black')
@@ -298,7 +287,7 @@ class Game:
             if obj == "enemies":
                 for enemy in list(self.objects[obj]):
                     if enemy.health <= 0:
-                        if not self.multiplayer or self.player_id == 0:
+                        if not self.multiplayer:
                             self.player.score += 1
                             self.objects["enemies"].remove(enemy)
                             if enemy.type == "enemies/jan":
@@ -312,12 +301,7 @@ class Game:
                         continue
                     if self.state == "game" and not self.global_paused:
                         if self.multiplayer:
-                            if self.player_id == 0:
-                                nearest = self._get_closest_player(enemy)
-                                enemy.find_path(nearest, self, True, True)
-                                enemy.is_los, _ = enemy.is_in_los(self.player.pos)
-                            else:
-                                enemy.find_path(self.player, self, True, False)
+                            enemy.find_path(self.player, self, True, False)
                         else:
                             enemy.find_path(self.player, self, True, True)
                     dist, SCREEN_x, angle, _ = enemy.get_render_data_fast(
@@ -330,7 +314,7 @@ class Game:
                             self.jan_spotted = True
                             self.bilal.trigger("boss_warning")
             elif obj == "ammo":
-                for item in self.objects["ammo"]:
+                for item in list(self.objects["ammo"]):
                     dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
@@ -339,10 +323,16 @@ class Game:
                     if is_hit:
                         self.curr_flash = "ammo"
                         self.flash_time = 60
+                        old = self.global_ammo
                         item.interact(self.player, self)
+                        if self.multiplayer:
+                            self.global_ammo = old
+                            self._remove_pickup.append({"type": "ammo", "pos": (item.pos.x, item.pos.y)})
+                        else:
+                            self._ammo_delta += self.global_ammo - old
                         self.objects["ammo"].remove(item)
             elif obj == "health":
-                for item in self.objects["health"]:
+                for item in list(self.objects["health"]):
                     dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
@@ -351,10 +341,16 @@ class Game:
                     if is_hit:
                         self.curr_flash = "health"
                         self.flash_time = 60
+                        old = self.global_health
                         item.interact(self.player, self)
+                        if self.multiplayer:
+                            self.global_health = old
+                            self._remove_pickup.append({"type": "health", "pos": (item.pos.x, item.pos.y)})
+                        else:
+                            self._health_delta += self.global_health - old
                         self.objects["health"].remove(item)
             elif obj == "keycard":
-                for item in self.objects["keycard"]:
+                for item in list(self.objects["keycard"]):
                     dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
@@ -364,6 +360,8 @@ class Game:
                         self.curr_flash = "keycard"
                         self.flash_time = 60
                         item.interact(self.player, self)
+                        if self.multiplayer:
+                            self._remove_pickup.append({"type": "keycard", "pos": (item.pos.x, item.pos.y)})
                         self.objects["keycard"].remove(item)
             else:
                 item = self.objects[obj]
@@ -378,12 +376,13 @@ class Game:
                     if is_hit:
                         if self.multiplayer:
                             if obj == "exit":
-                                if self.player.got_keycard and not self.elevator_waiting and not self.elevator_ready:
-                                    self.elevator_waiting = True
-                                    self.exit_pos = Vector(item.pos.x, item.pos.y)
-                                    self.objects[obj] = None
+                                if self.player.got_keycard:
+                                    if not self.elevator_waiting and not self.elevator_ready:
+                                        self.elevator_waiting = True
+                                        self.exit_pos = Vector(item.pos.x, item.pos.y)
+                                        self.objects[obj] = None
                                 else:
-                                    pass  # NO KEYCARD handled by server
+                                    item.interact(self.player, self)  # Renders NO KEYCARD
                             else:
                                 interaction = item.interact(self.player, self)
                                 if interaction == "succes":
@@ -455,6 +454,7 @@ class Game:
         self.objects = self.create_objects()
         self.elevator_waiting = False
         self.elevator_ready = False
+        self.elevator_transition = False
         self.elevator_wait_timer = 0
         self.player_near_exit = False
         self.exit_pos = None
@@ -491,6 +491,7 @@ class Game:
         self.objects = self.create_objects()
         self.elevator_waiting = False
         self.elevator_ready = False
+        self.elevator_transition = False
         self.elevator_wait_timer = 0
         self.player_near_exit = False
         self.exit_pos = None
@@ -498,32 +499,6 @@ class Game:
         self.paused_by = ""
 
     #  Multiplayer methods 
-
-    def _start_hosting(self):
-        self.multiplayer = True
-        self.network_server = ServerIO(self.host_port, MAX_PLAYERS)
-        self.network_server.set_host_name(self.player_name)
-        self.network_server.start()
-        self.network_client = NetworkClient()
-        if self.network_client.connect("127.0.0.1", self.host_port, self.player_name):
-            self.player_id = self.network_client.player_id
-            self.state = "host_lobby"
-
-    def _stop_hosting(self):
-        if self.network_client:
-            self.network_client.send({"type": "disconnect"})
-            self.network_client.disconnect()
-            self.network_client = None
-        if self.network_server:
-            self.network_server.stop()
-            self.network_server = None
-        self.multiplayer = False
-        self.player_id = 0
-        self.remote_players = []
-        self.global_paused = False
-        self.paused_by = ""
-        self._pos_seq = 0
-        self.state = "menu"
 
     def _primary_start_game(self):
         """Primary client (player_id=0) sends start_game to server.
@@ -539,7 +514,6 @@ class Game:
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
-        self._prev_global_health = START_HEALTH
         self.player.door_pos = 0
         self.player.got_keycard = False
         self.current_gun = self.pistol
@@ -550,17 +524,18 @@ class Game:
         self.escaped = False
         self.elevator_waiting = False
         self.elevator_ready = False
+        self.elevator_transition = False
         self.elevator_wait_timer = 0
-        self.player_near_exit = False
         self.exit_pos = None
         self.global_paused = False
         self.paused_by = ""
         self._pos_seq = 0
-        # Primary client creates objects; remote clients get them via state sync
-        if self.player_id == 0:
-            self.objects = self.create_objects()
-        else:
-            self.objects = {"enemies": [], "ammo": [], "keycard": [], "exit": None, "health": []}
+        self._health_delta = 0
+        self._ammo_delta = 0
+        self._enemy_damage = []
+        self._remove_pickup = []
+        # All objects come from server sync — start empty
+        self.objects = {"enemies": [], "ammo": [], "keycard": [], "exit": None, "health": []}
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
         if self.Menu.silly_mode:
@@ -599,18 +574,6 @@ class Game:
         pygame.mouse.set_visible(True)
         pygame.event.set_grab(False)
 
-    def _get_closest_player(self, enemy):
-        closest = self.player
-        min_dist = (enemy.pos - closest.pos).norm()
-        for rp in self.remote_players:
-            if rp is None:
-                continue
-            dist = (enemy.pos - rp.pos).norm()
-            if dist < min_dist:
-                min_dist = dist
-                closest = rp
-        return closest
-
     def _create_enemy_from_type(self, type_str, pos):
         mapping = {
             "enemies/andrei": Andrei,
@@ -622,60 +585,46 @@ class Game:
         return cls(pos[0], pos[1])
 
     def _send_client_state(self):
-        """Send our state to the server. Rate-limited to every 2 frames."""
+        """Send deltas to the server. Rate-limited to every 2 frames."""
         self._pos_seq += 1
         if self._pos_seq % 2 != 0:
             return
         packet = {
+            "seq": self._pos_seq,
             "pos": (self.player.pos.x, self.player.pos.y),
-            "angle": self.player.angle,
-            "health": self.global_health,
-            "ammo": self.global_ammo,
+            "health_delta": self._health_delta,
+            "ammo_delta": self._ammo_delta,
+            "enemy_damage": self._enemy_damage,
+            "remove_pickup": self._remove_pickup,
             "got_keycard": self.player.got_keycard,
-            "door_pos": self.player.door_pos,
+            "door_closed": self.player.door_pos > WIDTH // 2,
+            "elevator_waiting": self.elevator_waiting,
             "state": self.state,
-            "enemies": [{"pos": (e.pos.x, e.pos.y), "health": e.health, "type": e.type}
-                        for e in self.objects.get("enemies", [])],
+            "paused": self.global_paused,
+            "paused_by": self.paused_by,
         }
-        if self.player_id == 0:
-            obj_data = {}
-            for ot in ["ammo", "keycard", "health"]:
-                obj_data[ot] = [{"pos": (o.pos.x, o.pos.y)} for o in self.objects.get(ot, [])]
-            obj_data["exit"] = {"pos": (self.objects["exit"].pos.x, self.objects["exit"].pos.y)} if self.objects.get("exit") else None
-            packet.update({
-                "objects": obj_data,
-                "level": M.map_level,
-                "escaped": self.escaped,
-                "jan_spotted": self.jan_spotted,
-                "elevator_waiting": self.elevator_waiting,
-                "elevator_ready": self.elevator_ready,
-                "elevator_wait_timer": self.elevator_wait_timer,
-                "exit_pos": (self.exit_pos.x, self.exit_pos.y) if self.exit_pos else None,
-                "global_paused": self.global_paused,
-                "paused_by": self.paused_by,
-            })
+        self._health_delta = 0
+        self._ammo_delta = 0
+        self._enemy_damage = []
+        self._remove_pickup = []
         self.network_client.send_input(packet)
 
     def apply_state(self, state):
         if not state:
             return
 
-        # 1. Per-player health/ammo from server (server is relay, each client is authoritative for own)
-        for pdata in state.get("players", []):
-            if pdata.get("id") == self.player_id:
-                new_health = pdata.get("health", self.global_health)
-                if new_health < self.global_health:
-                    if new_health < self._prev_global_health:
-                        self.player.inv_time = 60
-                    self.global_health = new_health
-                    self._prev_global_health = self.global_health
-                new_ammo = pdata.get("ammo", self.global_ammo)
-                if new_ammo < self.global_ammo:
-                    self.global_ammo = new_ammo
-                break
+        # 1. Overwrite shared resources from server (absolute values)
+        self.global_health = state.get("global_health", self.global_health)
+        self.global_ammo = state.get("global_ammo", self.global_ammo)
+        self.player.got_keycard = state.get("keycard_acquired", self.player.got_keycard)
 
-        # 2. Remote player sprites
-        other_players = [p for p in state.get("players", []) if p.get("id") != self.player_id]
+        # 2. Players — sync own state flags from server (not pos/angle — client-authoritative movement)
+        players_data = state.get("players", [])
+        for pdata in players_data:
+            if pdata.get("id") == self.player_id:
+                if state.get("elevator_transition") and self.player.door_pos == 0:
+                    self.player.door_pos = 1
+        other_players = [p for p in players_data if p.get("id") != self.player_id]
         while len(self.remote_players) < len(other_players):
             self.remote_players.append(PlayerSprite(""))
         while len(self.remote_players) > len(other_players):
@@ -684,69 +633,87 @@ class Game:
             self.remote_players[i].pos = Vector(pdata["pos"][0], pdata["pos"][1])
             self.remote_players[i].name = pdata.get("name", f"Player {pdata['id']}")
 
-        # 3. Enemies — primary manages list, non-primary syncs from server
+        # 3. Enemies — full sync from server (ALL clients)
         enemies_data = state.get("enemies", [])
-        if self.player_id != 0:
-            while len(self.objects["enemies"]) < len(enemies_data):
-                edata = enemies_data[len(self.objects["enemies"])]
-                self.objects["enemies"].append(self._create_enemy_from_type(edata["type"], edata["pos"]))
-            while len(self.objects["enemies"]) > len(enemies_data):
-                self.objects["enemies"].pop()
-            for i, edata in enumerate(enemies_data):
-                self.objects["enemies"][i].pos = Vector(edata["pos"][0], edata["pos"][1])
-                self.objects["enemies"][i].health = edata.get("health", 10)
-        else:
-            for i, edata in enumerate(enemies_data):
-                if i < len(self.objects["enemies"]):
-                    self.objects["enemies"][i].health = edata.get("health", 10)
+        while len(self.objects["enemies"]) < len(enemies_data):
+            edata = enemies_data[len(self.objects["enemies"])]
+            self.objects["enemies"].append(self._create_enemy_from_type(edata["type"], edata["pos"]))
+        while len(self.objects["enemies"]) > len(enemies_data):
+            self.objects["enemies"].pop()
+        self.jan = None
+        for i, edata in enumerate(enemies_data):
+            new_type = edata.get("type", "")
+            if self.objects["enemies"][i].type != new_type:
+                self.objects["enemies"][i] = self._create_enemy_from_type(new_type, edata["pos"])
+            self.objects["enemies"][i].pos = Vector(edata["pos"][0], edata["pos"][1])
+            self.objects["enemies"][i].health = edata.get("health", 10)
+            if new_type == "enemies/jan":
+                self.jan = self.objects["enemies"][i]
 
-        # 4. Objects — primary manages, non-primary syncs from server
-        if self.player_id != 0:
-            obj_data = state.get("objects", {})
-            for ot in ["ammo", "keycard", "health"]:
-                server_list = obj_data.get(ot, [])
-                while len(self.objects[ot]) < len(server_list):
-                    self.objects[ot].append(PickupObject(f"objects/{ot}", 0, 0))
-                while len(self.objects[ot]) > len(server_list):
-                    self.objects[ot].pop()
-                for i, odata in enumerate(server_list):
-                    self.objects[ot][i].pos = Vector(odata["pos"][0], odata["pos"][1])
-            exit_data = obj_data.get("exit")
-            if exit_data and not self.objects["exit"]:
-                self.objects["exit"] = PickupObject("objects/exit", exit_data["pos"][0], exit_data["pos"][1])
-            elif exit_data and self.objects["exit"]:
-                self.objects["exit"].pos = Vector(exit_data["pos"][0], exit_data["pos"][1])
-            elif not exit_data:
-                self.objects["exit"] = None
+        # 4. Objects — full sync from server (ALL clients)
+        obj_data = state.get("objects", {})
+        for ot in ["ammo", "keycard", "health"]:
+            server_list = obj_data.get(ot, [])
+            while len(self.objects[ot]) < len(server_list):
+                self.objects[ot].append(PickupObject(f"objects/{ot}", 0, 0))
+            while len(self.objects[ot]) > len(server_list):
+                self.objects[ot].pop()
+            for i, odata in enumerate(server_list):
+                self.objects[ot][i].pos = Vector(odata["pos"][0], odata["pos"][1])
+        exit_data = obj_data.get("exit")
+        if exit_data and not self.objects["exit"]:
+            self.objects["exit"] = PickupObject("objects/exit", exit_data["pos"][0], exit_data["pos"][1])
+        elif exit_data and self.objects["exit"]:
+            self.objects["exit"].pos = Vector(exit_data["pos"][0], exit_data["pos"][1])
+        elif not exit_data:
+            self.objects["exit"] = None
 
-        # 5. Game flags
+        # 5. World state
         new_level = state.get("level", M.map_level)
         if new_level != M.map_level:
             M.map_level = new_level
             M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[new_level])
             M.start_angle = START_ANGLES[new_level]
-        self.escaped = state.get("escaped", False)
-        self.jan_spotted = state.get("jan_spotted", False)
-        self.player.got_keycard = state.get("got_keycard", self.player.got_keycard)
-        self.elevator_waiting = state.get("elevator_waiting", False)
-        self.elevator_ready = state.get("elevator_ready", False)
-        self.elevator_wait_timer = state.get("elevator_wait_timer", 0)
-        new_state = state.get("state")
-        if new_state and new_state != self.state:
-            self.state = new_state
-            if new_state == "dead":
-                self.global_health = 0
-                pygame.mouse.set_visible(True)
-        self.global_paused = state.get("global_paused", False)
-        self.paused_by = state.get("paused_by", "")
-        exit_pos_data = state.get("exit_pos")
-        if exit_pos_data:
-            self.exit_pos = Vector(exit_pos_data[0], exit_pos_data[1])
-        if self.elevator_waiting and self.exit_pos:
-            dist = (self.player.pos - self.exit_pos).norm()
-            self.player_near_exit = dist < ELEVATOR_WAIT_DIST
-        else:
+            for pdata in players_data:
+                if pdata.get("id") == self.player_id:
+                    self.player.pos = Vector(pdata["pos"][0], pdata["pos"][1])
+                    self.player.angle = pdata.get("angle", M.start_angle)
+                    break
+            if M.map_level == 1:
+                if self.minigun not in self.unlocked_guns:
+                    self.unlocked_guns.append(self.minigun)
+                self.bilal.trigger("floor_3")
+            elif M.map_level == 3:
+                if self.rifle not in self.unlocked_guns:
+                    self.unlocked_guns.append(self.rifle)
+                self.bilal.trigger("floor_1")
+            elif M.map_level == 4:
+                self.bilal.trigger("floor_0")
+            self.elevator_waiting = False
+            self.elevator_ready = False
+            self.elevator_transition = False
+            self.elevator_wait_timer = 0
             self.player_near_exit = False
+            self.player.got_keycard = False
+            self.exit_pos = None
+        self.state = state.get("state", self.state)
+        self.escaped = state.get("escaped", self.escaped)
+        self.elevator_waiting = state.get("elevator_waiting", self.elevator_waiting)
+        self.elevator_ready = state.get("elevator_ready", self.elevator_ready)
+        self.elevator_transition = state.get("elevator_transition", False)
+        self.elevator_wait_timer = state.get("elevator_wait_timer", self.elevator_wait_timer)
+        self.global_paused = state.get("global_paused", self.global_paused)
+        self.paused_by = state.get("paused_by", self.paused_by)
+
+        # 6. Player proximity to exit (for UI message)
+        exit_data = state.get("exit_pos")
+        if exit_data:
+            self.exit_pos = Vector(exit_data[0], exit_data[1])
+        self.player_near_exit = (
+            self.elevator_waiting
+            and self.exit_pos is not None
+            and (self.player.pos - self.exit_pos).norm() < ELEVATOR_WAIT_DIST
+        )
 
     def handle_network(self):
         if not self.network_client:
@@ -759,7 +726,6 @@ class Game:
                 self._start_multiplayer_client()
             elif packet.get("type") in ("server_stopped", "disconnect"):
                 self._disconnect()
-        # Death check: runs on ALL clients; server merges global_health via min()
         if self.global_health <= 0 and self.state == "game":
             self.global_health = 0
             pygame.mouse.set_visible(True)
@@ -781,20 +747,6 @@ class Game:
 
             elif self.state == "multiplayer_menu":
                 self.Menu.draw_multiplayer_menu(events, self)
-
-            elif self.state == "host_lobby":
-                if self.network_client:
-                    if not self.Menu.client_list:
-                        self.network_client.send({"type": "request_lobby"})
-                    packet = self.network_client.try_recv()
-                    if packet:
-                        if packet.get("type") == "lobby_info":
-                            self.Menu.client_list = packet.get("players", [])
-                        elif packet.get("type") == "game_start":
-                            self._start_multiplayer_client()
-                        elif packet.get("type") == "server_stopped":
-                            self._disconnect()
-                self.Menu.draw_host_lobby(events, self)
 
             elif self.state == "waiting_lobby":
                 if self.network_client:

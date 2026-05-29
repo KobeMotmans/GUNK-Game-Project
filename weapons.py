@@ -41,8 +41,8 @@ class Gun:
         tex = pygame.image.load(path).convert_alpha()
         return pygame.transform.scale(tex, WEAPON_SIZE)
 
-    def shoot(self, pos, angle, enemies, player, current_gun):
-        """Start schiet animatie als wapen in rust is"""
+    def shoot(self, pos, angle, enemies, player, current_gun, apply_damage=True):
+        """Start schiet animatie als wapen in rust is. Returnt hit enemy pos of None."""
         if self.weapon_state == 0:
             self.weapon_state = 1
             self.temp_flash_time = self.flash_time
@@ -50,17 +50,18 @@ class Gun:
             ray_pos = pos
             dx = cos(angle)
             dy = sin(angle)
-            enemy_hit = False
             while (ray_pos - pos).norm() < MAX_DEPTH:
                 ray_pos = Vector(ray_pos.x + dx, ray_pos.y + dy)
                 for enemy in enemies:
                     if enemy.is_los:
                         if enemy.is_hit(ray_pos):
-                            enemy.take_dmg(self.damage)
-                            enemy_hit = True
-                            break
-                if enemy_hit:
-                    break
+                            if apply_damage:
+                                enemy.take_dmg(self.damage)
+                            return (enemy.pos.x, enemy.pos.y)
+                else:
+                    continue
+                break
+        return None
 
     def update(self):
         """Update wapen staat (animatie timing)"""

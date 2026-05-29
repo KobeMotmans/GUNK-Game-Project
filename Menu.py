@@ -144,51 +144,25 @@ class Menu:
         self.game = GAME
         SCREEN.fill(self.bg_color)
 
+        join_font = pygame.font.Font(FONT, 36)
+        join_label = join_font.render("JOIN SERVER", True, 'white')
+        SCREEN.blit(join_label, (WIDTH//2 - join_label.get_width()//2, int(HEIGHT * 0.04)))
+
+        info_text = "Start de server apart: python run_server.py"
+        info = pygame.font.Font(FONT, 16).render(info_text, True, (150, 150, 150))
+        SCREEN.blit(info, (WIDTH//2 - info.get_width()//2, int(HEIGHT * 0.08)))
+
         name_label = pygame.font.Font(FONT, 22).render("JOUW NAAM", True, (200, 200, 200))
-        SCREEN.blit(name_label, (WIDTH//2 - name_label.get_width()//2, int(HEIGHT * 0.04)))
-        self.mp_name_input = self._draw_text_input(events, "", self.mp_name_input, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.07), int(WIDTH * 0.125), field_id="mp_name")
+        SCREEN.blit(name_label, (WIDTH//2 - name_label.get_width()//2, int(HEIGHT * 0.13)))
+        self.mp_name_input = self._draw_text_input(events, "", self.mp_name_input, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.16), int(WIDTH * 0.125), field_id="mp_name")
 
-        divider_x = WIDTH // 2
-        pygame.draw.line(SCREEN, (100, 100, 100), (divider_x, int(HEIGHT * 0.13)), (divider_x, HEIGHT - int(HEIGHT * 0.04)), 2)
+        ip_label = pygame.font.Font(FONT, 20).render("SERVER IP", True, (200, 200, 200))
+        SCREEN.blit(ip_label, (WIDTH//2 - ip_label.get_width()//2, int(HEIGHT * 0.22)))
+        self.mp_join_ip = self._draw_text_input(events, "IP Address:", self.mp_join_ip, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.25), int(WIDTH * 0.125), field_id="mp_join_ip")
 
-        host_font = pygame.font.Font(FONT, 36)
-        host_label = host_font.render("HOST", True, 'white')
-        SCREEN.blit(host_label, (divider_x//2 - host_label.get_width()//2, int(HEIGHT * 0.13)))
-
-        host_info = pygame.font.Font(FONT, 18).render(f"Port: {self.mp_host_port}", True, (180, 180, 180))
-        SCREEN.blit(host_info, (divider_x//2 - host_info.get_width()//2, int(HEIGHT * 0.17)))
-
-        local_ip = "0.0.0.0"
-        try:
-            import socket
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            local_ip = s.getsockname()[0]
-            s.close()
-        except:
-            pass
-        ip_info = pygame.font.Font(FONT, 16).render(f"IP: {local_ip}", True, (140, 140, 140))
-        SCREEN.blit(ip_info, (divider_x//2 - ip_info.get_width()//2, int(HEIGHT * 0.19)))
-
-        self.mp_host_port = self._draw_text_input(events, "Port:", self.mp_host_port, int(WIDTH * 0.02), int(HEIGHT * 0.24), divider_x - int(WIDTH * 0.03), field_id="mp_host_port", numeric=True)
-
-        def start_host():
-            try:
-                port = int(self.mp_host_port) if self.mp_host_port else DEFAULT_PORT
-            except ValueError:
-                port = DEFAULT_PORT
-            name = self.mp_name_input.strip() or "Host"
-            GAME.host_port = port
-            GAME.player_name = name
-            GAME._start_hosting()
-        start_y = int(HEIGHT * 0.31)
-        self._draw_button_custom(events, "HOST GAME", int(WIDTH * 0.02), start_y, divider_x - int(WIDTH * 0.03), int(HEIGHT * 0.05), start_host)
-
-        join_label = host_font.render("JOIN", True, 'white')
-        SCREEN.blit(join_label, (divider_x + (divider_x//2) - join_label.get_width()//2, int(HEIGHT * 0.13)))
-
-        self.mp_join_ip = self._draw_text_input(events, "IP Address:", self.mp_join_ip, divider_x + int(WIDTH * 0.02), int(HEIGHT * 0.18), divider_x - int(WIDTH * 0.03), field_id="mp_join_ip")
-        self.mp_join_port = self._draw_text_input(events, "Port:", self.mp_join_port, divider_x + int(WIDTH * 0.02), int(HEIGHT * 0.24), divider_x - int(WIDTH * 0.03), field_id="mp_join_port", numeric=True)
+        port_label = pygame.font.Font(FONT, 20).render("POORT", True, (200, 200, 200))
+        SCREEN.blit(port_label, (WIDTH//2 - port_label.get_width()//2, int(HEIGHT * 0.31)))
+        self.mp_join_port = self._draw_text_input(events, "Port:", self.mp_join_port, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.34), int(WIDTH * 0.125), field_id="mp_join_port", numeric=True)
 
         def do_connect():
             name = self.mp_name_input.strip() or "Player"
@@ -198,59 +172,40 @@ class Menu:
             except ValueError:
                 port = DEFAULT_PORT
             GAME._do_connect(ip, port, name)
-        self._draw_button_custom(events, "JOIN GAME", divider_x + int(WIDTH * 0.02), int(HEIGHT * 0.31), divider_x - int(WIDTH * 0.03), int(HEIGHT * 0.05), do_connect)
+        self._draw_button_custom(events, "JOIN GAME", WIDTH//2 - int(WIDTH * 0.05), int(HEIGHT * 0.40), int(WIDTH * 0.1), int(HEIGHT * 0.05), do_connect)
 
         if self.mp_status:
             color = (0, 200, 0) if "gelukt" in self.mp_status else (200, 0, 0)
             status = pygame.font.Font(FONT, 22).render(self.mp_status, True, color)
-            SCREEN.blit(status, (WIDTH//2 - status.get_width()//2, int(HEIGHT * 0.39)))
+            SCREEN.blit(status, (WIDTH//2 - status.get_width()//2, int(HEIGHT * 0.48)))
 
         self._draw_button_custom(events, "BACK", WIDTH//2 - int(WIDTH * 0.03), HEIGHT - int(HEIGHT * 0.05), int(WIDTH * 0.06), int(HEIGHT * 0.03), lambda: setattr(GAME, 'state', 'menu'))
-
-    def draw_host_lobby(self, events, GAME):
-        self.game = GAME
-        SCREEN.fill(self.bg_color)
-        title = pygame.font.Font(FONT, 50).render("LOBBY", True, 'white')
-        SCREEN.blit(title, (WIDTH//2 - title.get_width()//2, int(HEIGHT * 0.1)))
-        port_text = pygame.font.Font(FONT, 25).render(f"Port: {GAME.host_port}", True, (200, 200, 200))
-        SCREEN.blit(port_text, (WIDTH//2 - port_text.get_width()//2, int(HEIGHT * 0.16)))
-        ip_text = pygame.font.Font(FONT, 20).render("Deel je IP-adres met vrienden", True, (150, 150, 150))
-        SCREEN.blit(ip_text, (WIDTH//2 - ip_text.get_width()//2, int(HEIGHT * 0.19)))
-        players = self.client_list if self.client_list else []
-        y = int(HEIGHT * 0.25)
-        for name, pid in players:
-            color = (0, 200, 255) if pid == 0 else (255, 255, 255)
-            p_text = pygame.font.Font(FONT, 30).render(f"[P{pid}] {name}", True, color)
-            SCREEN.blit(p_text, (WIDTH//2 - p_text.get_width()//2, y))
-            y += int(HEIGHT * 0.04)
-        if y == int(HEIGHT * 0.25):
-            wait = pygame.font.Font(FONT, 22).render("Wachten op spelers...", True, (150, 150, 150))
-            SCREEN.blit(wait, (WIDTH//2 - wait.get_width()//2, y))
-        def start_multi_game():
-            GAME._primary_start_game()
-        if self.lobby_status:
-            status = pygame.font.Font(FONT, 22).render(self.lobby_status, True, (0, 200, 0))
-            SCREEN.blit(status, (WIDTH//2 - status.get_width()//2, HEIGHT - int(HEIGHT * 0.12)))
-        if players:
-            self._draw_button_custom(events, "START GAME", WIDTH//2 - int(WIDTH * 0.05), HEIGHT - int(HEIGHT * 0.09), int(WIDTH * 0.1), int(HEIGHT * 0.05), start_multi_game)
-        self._draw_button_custom(events, "QUIT", WIDTH//2 - int(WIDTH * 0.03), HEIGHT - int(HEIGHT * 0.04), int(WIDTH * 0.06), int(HEIGHT * 0.03), lambda: (GAME._stop_hosting(), setattr(GAME, 'state', 'menu')))
 
     def draw_waiting_lobby(self, events, GAME):
         self.game = GAME
         SCREEN.fill(self.bg_color)
-        title = pygame.font.Font(FONT, 50).render("CONNECTED", True, 'green')
-        SCREEN.blit(title, (WIDTH//2 - title.get_width()//2, int(HEIGHT * 0.15)))
-        info = pygame.font.Font(FONT, 25).render("Wachten op host om te starten...", True, (200, 200, 200))
-        SCREEN.blit(info, (WIDTH//2 - info.get_width()//2, int(HEIGHT * 0.21)))
-        if self.client_list:
-            y = int(HEIGHT * 0.29)
-            for name, pid in self.client_list:
-                p_text = pygame.font.Font(FONT, 28).render(f"[P{pid}] {name}", True, 'white')
-                SCREEN.blit(p_text, (WIDTH//2 - p_text.get_width()//2, y))
-                y += int(HEIGHT * 0.04)
+        title = pygame.font.Font(FONT, 50).render("LOBBY", True, 'white')
+        SCREEN.blit(title, (WIDTH//2 - title.get_width()//2, int(HEIGHT * 0.08)))
+
+        players = self.client_list if self.client_list else []
+        y = int(HEIGHT * 0.17)
+        for name, pid in players:
+            color = (0, 200, 255) if pid == GAME.player_id else (255, 255, 255)
+            p_text = pygame.font.Font(FONT, 30).render(f"[P{pid}] {name}", True, color)
+            SCREEN.blit(p_text, (WIDTH//2 - p_text.get_width()//2, y))
+            y += int(HEIGHT * 0.04)
+        if not players:
+            wait = pygame.font.Font(FONT, 22).render("Wachten op spelers...", True, (150, 150, 150))
+            SCREEN.blit(wait, (WIDTH//2 - wait.get_width()//2, y))
+
         def dc():
             GAME._disconnect()
-        self._draw_button_custom(events, "DISCONNECT", WIDTH//2 - int(WIDTH * 0.04), HEIGHT - int(HEIGHT * 0.08), int(WIDTH * 0.08), int(HEIGHT * 0.04), dc)
+
+        def start_multi_game():
+            GAME._primary_start_game()
+        if players:
+            self._draw_button_custom(events, "START GAME", WIDTH//2 - int(WIDTH * 0.05), HEIGHT - int(HEIGHT * 0.09), int(WIDTH * 0.1), int(HEIGHT * 0.05), start_multi_game)
+        self._draw_button_custom(events, "DISCONNECT", WIDTH//2 - int(WIDTH * 0.04), HEIGHT - int(HEIGHT * 0.04), int(WIDTH * 0.08), int(HEIGHT * 0.03), dc)
 
     #  Settings 
 
@@ -392,7 +347,7 @@ class Menu:
             pygame.event.set_grab(True)
             GAME.state = "game"
             pygame.mixer.unpause()
-            if GAME.multiplayer and GAME.player_id == 0:
+            if GAME.multiplayer:
                 GAME.global_paused = False
                 GAME.paused_by = ""
         self._draw_main_button(events, "RESUME", HEIGHT//2 - int(HEIGHT * 0.1), int(WIDTH * 0.11), resume, font_size=34)
@@ -405,7 +360,7 @@ class Menu:
         def go_menu():
             pygame.mixer.stop()
             if GAME.multiplayer:
-                GAME._stop_hosting()
+                GAME._disconnect()
             else:
                 GAME.state = "menu"
         self._draw_main_button(events, "MENU", HEIGHT//2 + int(HEIGHT * 0.06), int(WIDTH * 0.11), go_menu, font_size=34)
@@ -413,7 +368,7 @@ class Menu:
         game = getattr(self, 'game', None)
         if game is None:
             return
-        is_client = game.multiplayer and game.player_id != 0
+        is_client = game.multiplayer
         self.elev_color = "pink" if self.silly_mode else (20,20,20)
         if player.door_pos <= WIDTH/2:
             pygame.draw.rect(SCREEN,self.elev_color,[0,0,player.door_pos,HEIGHT])
@@ -431,6 +386,8 @@ class Menu:
                         s.set_volume(SFX_VOLUME)
                         s.play()
                 self.lift_time -= 1
+                if is_client:
+                    player.door_pos += ELEV_SPEED
             else:
                 if not is_client:
                     pygame.mixer.stop()
@@ -534,7 +491,7 @@ class Button:
                 if hovering:
                     if self.function == "disconnect":
                         if self.GAME.multiplayer:
-                            self.GAME._stop_hosting()
+                            self.GAME._disconnect()
                     pygame.mouse.set_visible(self.mouse_vis)
                     pygame.event.set_grab(self.state_change == "game")
                     self.GAME.state = self.state_change

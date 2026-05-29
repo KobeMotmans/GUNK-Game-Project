@@ -2,17 +2,27 @@
 config.py - Centrale configuratie en constanten voor het spel
 """
 
+import os
 import pygame
 from math import pi
 
-# Pygame init voor display info
-pygame.init()
-infoObject = pygame.display.Info()
+# ── Display initialisatie (headless-vriendelijk) ─────────────
+# Zet GUNK_HEADLESS=1 in de omgeving om pygame display over te slaan.
+# Gebruikt door run_server.py om geen venster te openen.
+_HEADLESS = os.environ.get("GUNK_HEADLESS") == "1"
 
-# Scherm instellingen
-WIDTH = infoObject.current_w
-HEIGHT = infoObject.current_h - 50
-SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
+if not _HEADLESS:
+    pygame.init()
+    infoObject = pygame.display.Info()
+    WIDTH = infoObject.current_w
+    HEIGHT = infoObject.current_h - 50
+    SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
+else:
+    os.environ["SDL_VIDEODRIVER"] = "dummy"
+    pygame.init()
+    WIDTH = 1920
+    HEIGHT = 1080
+    SCREEN = None
 
 # Map instellingen
 TILE_SIZE = 100
@@ -31,6 +41,8 @@ DELTA_ANGLE = 0
 
 def set_resolution(quality: str):
     global NUM_RAYS, DELTA_ANGLE
+    if _HEADLESS:
+        return
     divisor = 4 if quality == "high" else 8
     NUM_RAYS = WIDTH // divisor
     DELTA_ANGLE = FOV / NUM_RAYS
@@ -69,25 +81,36 @@ SILLY_FONT = 'assets/font/Hyro.ttf'
 
 MENU_BG = (70,70,70)
 
-SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
-SCREEN_DEAD = pygame.transform.scale(pygame.image.load("assets/dead.png").convert_alpha(), (WIDTH, HEIGHT))
-SCREEN_DEAD_SILLY = pygame.transform.scale(pygame.image.load("assets/silly/rainbow.png").convert_alpha(), (WIDTH, HEIGHT))
-BILAL = pygame.transform.scale(pygame.image.load("assets/bilal.png").convert_alpha(), (200, 200))
+if not _HEADLESS:
+    SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
+    SCREEN_DEAD = pygame.transform.scale(pygame.image.load("assets/dead.png").convert_alpha(), (WIDTH, HEIGHT))
+    SCREEN_DEAD_SILLY = pygame.transform.scale(pygame.image.load("assets/silly/rainbow.png").convert_alpha(), (WIDTH, HEIGHT))
+    BILAL = pygame.transform.scale(pygame.image.load("assets/bilal.png").convert_alpha(), (200, 200))
 
-VICTORY_SCREEN = pygame.transform.scale(pygame.image.load("assets/victory.png").convert_alpha(), (WIDTH, HEIGHT))
+    VICTORY_SCREEN = pygame.transform.scale(pygame.image.load("assets/victory.png").convert_alpha(), (WIDTH, HEIGHT))
 
 
-DAMAGE_FLASH = SCREEN_FLASH.copy()
-DAMAGE_FLASH.fill((255,0,0), special_flags=pygame.BLEND_MULT)
+    DAMAGE_FLASH = SCREEN_FLASH.copy()
+    DAMAGE_FLASH.fill((255,0,0), special_flags=pygame.BLEND_MULT)
 
-AMMO_FLASH = SCREEN_FLASH.copy()
-AMMO_FLASH.fill((255,215,0), special_flags=pygame.BLEND_MULT)
+    AMMO_FLASH = SCREEN_FLASH.copy()
+    AMMO_FLASH.fill((255,215,0), special_flags=pygame.BLEND_MULT)
 
-KEYCARD_FLASH = SCREEN_FLASH.copy()
-KEYCARD_FLASH.fill((0,0,255), special_flags=pygame.BLEND_MULT)
+    KEYCARD_FLASH = SCREEN_FLASH.copy()
+    KEYCARD_FLASH.fill((0,0,255), special_flags=pygame.BLEND_MULT)
 
-HEALTH_FLASH = SCREEN_FLASH.copy()
-HEALTH_FLASH.fill((0,255,0), special_flags=pygame.BLEND_MULT)
+    HEALTH_FLASH = SCREEN_FLASH.copy()
+    HEALTH_FLASH.fill((0,255,0), special_flags=pygame.BLEND_MULT)
+else:
+    SCREEN_FLASH = None
+    SCREEN_DEAD = None
+    SCREEN_DEAD_SILLY = None
+    BILAL = None
+    VICTORY_SCREEN = None
+    DAMAGE_FLASH = None
+    AMMO_FLASH = None
+    KEYCARD_FLASH = None
+    HEALTH_FLASH = None
 
 #Enemy instellingen
 AGGRO_DIST = 1000
