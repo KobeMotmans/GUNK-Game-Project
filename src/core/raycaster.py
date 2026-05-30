@@ -5,10 +5,10 @@ raycaster.py - DDA raycasting algoritme voor 3D rendering
 import pygame
 from math import sin, cos, tan, pi
 
-import config
-from config import SCREEN, WIDTH, HEIGHT, TILE_SIZE,MAX_DEPTH, PROJ_DIST
-from map_loader import cord_to_map, map_to_cord, hit_wall
-from vector import Vector
+from . import config
+from .config import SCREEN, WIDTH, HEIGHT, TILE_SIZE,MAX_DEPTH, PROJ_DIST
+from .map_loader import cord_to_map, map_to_cord, hit_wall
+from .vector import Vector
 
 sign = lambda x: 1 if x >= 0 else -1
 

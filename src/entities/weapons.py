@@ -3,12 +3,12 @@ weapons.py - Wapen klassen en rendering
 """
 
 import pygame
-from config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X, MAX_DEPTH, SFX_VOLUME
+from ..core.config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X, MAX_DEPTH, SFX_VOLUME
 from math import sin, cos
-from vector import Vector
-from paths import asset_path
+from ..core.vector import Vector
+from ..core.paths import asset_path
 
-from Menu import Menu_inst
+from ..ui.Menu import Menu_inst
 
 # Sound init
 pygame.mixer.init()

@@ -1,12 +1,12 @@
 import pygame
 import tkinter as tk
 from tkinter import filedialog
-from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME
-from paths import asset_path
+from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME
+from ..core.paths import asset_path
 from collections import deque
-from map_loader import M
-from skin_manager import SkinManager
-from network import NetworkClient
+from ..core.map_loader import M
+from ..assets.skin_manager import SkinManager
+from ..network.network import NetworkClient
 class Menu:
     def __init__(self, color):
         self.bg_color = color

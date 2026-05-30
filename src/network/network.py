@@ -61,7 +61,7 @@ class ServerIO(threading.Thread):
         self.inputs = {}
 
         # Server game state
-        from server_game import ServerGame
+        from .server_game import ServerGame
         self.server_game = ServerGame()
 
         # Lobby updates for lobby phase
@@ -446,7 +446,7 @@ class NetworkClient:
                         self.server_addr = (host, port)
                         self.connected = True
                         sock.close()
-                        from skin_manager import SkinManager
+                        from ..assets.skin_manager import SkinManager
                         SkinManager.set_server_addr(self.server_addr)
                         manifest = resp.get("skin_manifest", [])
                         SkinManager.set_manifest(manifest)

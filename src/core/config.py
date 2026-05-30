@@ -5,7 +5,7 @@ config.py - Centrale configuratie en constanten voor het spel
 import os
 import pygame
 from math import pi
-from paths import asset_path
+from .paths import asset_path
 
 # ── Display initialisatie (headless-vriendelijk) ─────────────
 # Zet GUNK_HEADLESS=1 in de omgeving om pygame display over te slaan.

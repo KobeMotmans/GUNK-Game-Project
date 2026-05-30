@@ -6,21 +6,21 @@ import pygame
 import random
 import time
 
-from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
+from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
                     set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME, SILLY_FONT, MAX_DEPTH,
                     ELEVATOR_WAIT_DIST, ELEVATOR_WAIT_FRAMES)
-from paths import asset_path
-from raycaster import dda
-from weapons import Pistol, Minigun, Rifle
-from enemies import Andrei, Ahmed, Ruben, Jan
-from player import Player
-from Menu import Menu_inst, Bilal
-from map_loader import M, png_to_list_fast
-from objects import PickupObject, PlayerSprite
-from skin_manager import SkinManager
-from vector import Vector
-from network import NetworkClient
+from src.core.paths import asset_path
+from src.core.raycaster import dda
+from src.entities.weapons import Pistol, Minigun, Rifle
+from src.entities.enemies import Andrei, Ahmed, Ruben, Jan
+from src.entities.player import Player
+from src.ui.Menu import Menu_inst, Bilal
+from src.core.map_loader import M, png_to_list_fast
+from src.entities.objects import PickupObject, PlayerSprite
+from src.assets.skin_manager import SkinManager
+from src.core.vector import Vector
+from src.network.network import NetworkClient
 
 
 class Game:
@@ -123,7 +123,7 @@ class Game:
         self.state = "menu"
 
     def update_sfx_volume(self):
-        import config as cfg
+        import src.core.config as cfg
         cfg.SFX_VOLUME = self.sfx_volume
         for gun in [self.pistol, self.minigun, self.rifle]:
             gun.shoot_sound.set_volume(self.sfx_volume)

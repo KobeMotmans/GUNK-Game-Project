@@ -6,11 +6,11 @@ import pygame
 from math import atan2, hypot, cos, sin
 import heapq
 
-from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, SILLY_FONT, ATTACK_DIST
-from vector import Vector
-from map_loader import map_to_cord, cord_to_map, is_in_wall, M
-from objects import RenderObject
-from Menu import Menu_inst
+from ..core.config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, SILLY_FONT, ATTACK_DIST
+from ..core.vector import Vector
+from ..core.map_loader import map_to_cord, cord_to_map, is_in_wall, M
+from .objects import RenderObject
+from ..ui.Menu import Menu_inst
 
 
 

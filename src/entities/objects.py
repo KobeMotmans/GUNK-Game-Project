@@ -1,12 +1,12 @@
 import pygame
 from math import atan2, hypot, tan, pi
 
-import config
-from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, FONT, SFX_VOLUME
-from vector import Vector
-from Menu import Menu_inst
-from skin_manager import SkinManager
-from paths import asset_path
+from ..core import config
+from ..core.config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, FONT, SFX_VOLUME
+from ..core.vector import Vector
+from ..ui.Menu import Menu_inst
+from ..assets.skin_manager import SkinManager
+from ..core.paths import asset_path
 
 class RenderObject:
     def __init__(self, type, x, y):

@@ -3,7 +3,7 @@ map_loader.py - Laadt en beheert de game map
 """
 
 from PIL import Image
-from config import TILE_SIZE, MAP_PATH, START_ANGLES
+from .config import TILE_SIZE, MAP_PATH, START_ANGLES
 
 color_to_number = {
     (255, 255, 255): 0, #Open space

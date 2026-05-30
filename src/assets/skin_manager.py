@@ -5,7 +5,7 @@ import struct
 import socket
 import pickle
 import pygame
-from paths import asset_path, appdata_path
+from ..core.paths import asset_path, appdata_path
 
 BUILTIN_MAX = 99
 CUSTOM_MIN = 100

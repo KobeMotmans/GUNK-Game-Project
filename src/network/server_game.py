@@ -6,9 +6,9 @@ Runs enemy AI, maintains world state, processes client deltas.
 import random
 import heapq
 from math import atan2, pi, sin, cos, hypot
-from vector import Vector
-from map_loader import cord_to_map, map_to_cord, is_in_wall, M
-from config import (MAX_DEPTH, AGGRO_DIST, ATTACK_DIST, TILE_SIZE,
+from ..core.vector import Vector
+from ..core.map_loader import cord_to_map, map_to_cord, is_in_wall, M
+from ..core.config import (MAX_DEPTH, AGGRO_DIST, ATTACK_DIST, TILE_SIZE,
                     PATHFIND_INTERVAL, START_HEALTH, HEALTH_REGEN,
                     START_AMMO, AMMO_CAP, HEALTH_CHANCE, MAP_PATH,
                     START_ANGLES, ELEVATOR_WAIT_DIST,
@@ -171,7 +171,7 @@ class ServerGame:
         self._last_player_seq = {}
 
     def init_world(self):
-        from map_loader import png_to_list_fast
+        from ..core.map_loader import png_to_list_fast
         M.map_level = 0
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[0])
         M.start_angle = START_ANGLES[0]
@@ -395,7 +395,7 @@ class ServerGame:
                 self.elevator_wait_timer = 0
 
     def _level_up(self):
-        from map_loader import png_to_list_fast
+        from ..core.map_loader import png_to_list_fast
         self.level += 1
         if self.level >= 5:
             self.escaped = True

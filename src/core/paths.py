@@ -24,7 +24,7 @@ def asset_path(rel_path):
     if getattr(sys, 'frozen', False):
         base = os.environ.get('APPDATA') or os.path.expanduser("~")
         return os.path.join(base, "GUNK", rel_path)
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), rel_path)
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), rel_path)
 
 
 def appdata_path(rel_path):

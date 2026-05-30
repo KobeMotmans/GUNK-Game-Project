@@ -4,10 +4,10 @@ player.py - Speler klasse met movement en rotatie
 import pygame
 from math import sin, cos, pi
 
-from config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH, START_HEALTH, START_ANGLES, SFX_VOLUME
-from map_loader import will_collide
-from vector import Vector
-from Menu import Menu_inst
+from ..core.config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH, START_HEALTH, START_ANGLES, SFX_VOLUME
+from ..core.map_loader import will_collide
+from ..core.vector import Vector
+from ..ui.Menu import Menu_inst
 
 
 class Player:
