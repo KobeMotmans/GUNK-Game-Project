@@ -103,6 +103,7 @@ class Game:
         # Global pause (multiplayer)
         self.global_paused = False
         self.paused_by = ""
+        self._pending_unpause = False
         self._settings_return = "menu"
 
         # Pos update rate limiting
@@ -171,6 +172,9 @@ class Game:
                         if self.multiplayer:
                             self.global_paused = not self.global_paused
                             self.paused_by = self.player_name if self.global_paused else ""
+                            if not self.global_paused:
+                                self._pending_unpause = True
+                            self._send_pause_state()
                             if self.global_paused:
                                 pygame.mouse.set_visible(True)
                                 pygame.event.set_grab(False)
@@ -476,6 +480,7 @@ class Game:
         self.exit_pos = None
         self.global_paused = False
         self.paused_by = ""
+        self._pending_unpause = False
         self._pos_seq = 0
         self.jan_spotted = False
         self.escaped = False
@@ -542,6 +547,7 @@ class Game:
         self.exit_pos = None
         self.global_paused = False
         self.paused_by = ""
+        self._pending_unpause = False
         self._pos_seq = 0
         self._health_delta = 0
         self._ammo_delta = 0
@@ -594,6 +600,14 @@ class Game:
         }
         cls = mapping.get(type_str, Andrei)
         return cls(pos[0], pos[1])
+
+    def _send_pause_state(self):
+        """Immediately send pause state to server (no rate limiting)."""
+        if self.network_client:
+            self.network_client.send_input({
+                "paused": self.global_paused,
+                "paused_by": self.paused_by,
+            })
 
     def _send_client_state(self):
         """Send deltas to the server. Rate-limited to every 2 frames."""
@@ -717,8 +731,11 @@ class Game:
         self.elevator_ready = state.get("elevator_ready", self.elevator_ready)
         self.elevator_transition = state.get("elevator_transition", False)
         self.elevator_wait_timer = state.get("elevator_wait_timer", self.elevator_wait_timer)
-        self.global_paused = state.get("global_paused", self.global_paused)
-        self.paused_by = state.get("paused_by", self.paused_by)
+        if not self._pending_unpause:
+            self.global_paused = state.get("global_paused", self.global_paused)
+            self.paused_by = state.get("paused_by", self.paused_by)
+        else:
+            self._pending_unpause = False
 
         # 6. Player proximity to exit (for UI message)
         exit_data = state.get("exit_pos")

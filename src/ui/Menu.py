@@ -638,6 +638,8 @@ class Menu:
             def _resume_mp():
                 self.game.global_paused = False
                 self.game.paused_by = ""
+                self.game._pending_unpause = True
+                self.game._send_pause_state()
                 pygame.mouse.set_visible(False)
                 pygame.event.set_grab(True)
             self._draw_main_button(events, "RESUME", HEIGHT//2 - int(HEIGHT * 0.1), int(WIDTH * 0.11), _resume_mp, font_size=34)
