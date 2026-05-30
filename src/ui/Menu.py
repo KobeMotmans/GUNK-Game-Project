@@ -439,6 +439,22 @@ class Menu:
 
     # ── Settings ──────────────────────────────────────────────
 
+    def _draw_section_header(self, text, y, color=(160, 160, 160)):
+        font = pygame.font.Font(FONT, 24)
+        surf = font.render(text, True, color)
+        cx = WIDTH // 2
+        left_margin = int(WIDTH * 0.08)
+        right_margin = WIDTH - left_margin
+        mid_y = y + surf.get_height() // 2
+        gap = 14
+        lx = cx - surf.get_width() // 2 - gap
+        rx = cx + surf.get_width() // 2 + gap
+        if lx > left_margin:
+            pygame.draw.line(SCREEN, color, (left_margin, mid_y), (lx, mid_y), 2)
+        if rx < right_margin:
+            pygame.draw.line(SCREEN, color, (rx, mid_y), (right_margin, mid_y), 2)
+        SCREEN.blit(surf, (cx - surf.get_width() // 2, y))
+
     def draw_settings(self, events, GAME):
         self.game = GAME
         SCREEN.fill(self.bg_color)
@@ -451,54 +467,49 @@ class Menu:
         SCREEN.blit(title_surf, (c - title_surf.get_width() // 2, int(HEIGHT * 0.04)))
 
         LABEL_FONT_SIZE = 20
-        SECTION_FONT_SIZE = 24
-
-        # ── VIDEO ────────────────────────────────────────────
-        sec_font = pygame.font.Font(FONT, SECTION_FONT_SIZE)
-        sec_surf = sec_font.render("── VIDEO ──", True, (160, 160, 160))
-        SCREEN.blit(sec_surf, (c - sec_surf.get_width() // 2, int(HEIGHT * 0.14)))
-
-        high_label = "[HIGH RES]" if self.game.resolution == "high" else "HIGH RES"
-        low_label  = "[LOW RES]"  if self.game.resolution == "low"  else "LOW RES"
         btn_w = int(WIDTH * 0.09)
         btn_h = int(HEIGHT * 0.05)
         gap = int(WIDTH * 0.02)
+
+        # ── VIDEO ────────────────────────────────────────────
+        self._draw_section_header("VIDEO", int(HEIGHT * 0.14))
+
+        hi_active = self.game.resolution == "high"
+        lo_active = self.game.resolution == "low"
         res_y = int(HEIGHT * 0.21)
-        Res_high = Button(c - btn_w - gap // 2, res_y, btn_w, btn_h, high_label, 22,
-            text_color="black", button_color="white",
-            hover_text_color="white", hover_button_color="black",
+        Res_high = Button(c - btn_w - gap // 2, res_y, btn_w, btn_h, "HIGH RES", 22,
+            text_color="white", button_color=(40, 100, 160) if hi_active else (60, 60, 70),
+            hover_text_color="white", hover_button_color=(60, 130, 190) if hi_active else (80, 80, 95),
             game=self.game, target_state="settings", function="res_high")
-        Res_low = Button(c + gap // 2, res_y, btn_w, btn_h, low_label, 22,
-            text_color="black", button_color="white",
-            hover_text_color="white", hover_button_color="black",
+        Res_low = Button(c + gap // 2, res_y, btn_w, btn_h, "LOW RES", 22,
+            text_color="white", button_color=(40, 100, 160) if lo_active else (60, 60, 70),
+            hover_text_color="white", hover_button_color=(60, 130, 190) if lo_active else (80, 80, 95),
             game=self.game, target_state="settings", function="res_low")
         Res_high.draw_button(events)
         Res_low.draw_button(events)
 
         # ── AUDIO ────────────────────────────────────────────
-        sec_surf = sec_font.render("── AUDIO ──", True, (160, 160, 160))
-        SCREEN.blit(sec_surf, (c - sec_surf.get_width() // 2, int(HEIGHT * 0.30)))
+        self._draw_section_header("AUDIO", int(HEIGHT * 0.30))
 
         self.get_volume_slider(GAME).draw(events)
         self.get_sfx_volume_slider(GAME).draw(events)
 
         # ── GAMEPLAY ─────────────────────────────────────────
-        sec_surf = sec_font.render("── GAMEPLAY ──", True, (160, 160, 160))
-        SCREEN.blit(sec_surf, (c - sec_surf.get_width() // 2, int(HEIGHT * 0.50)))
+        self._draw_section_header("GAMEPLAY", int(HEIGHT * 0.52))
 
         # Tutorial toggle
-        tuto_label = "[TUTORIAL]" if self.game.bilal.flags["general"] else "TUTORIAL"
-        tuto_btn = Button(c - int(WIDTH * 0.045), int(HEIGHT * 0.57),
-            int(WIDTH * 0.09), int(HEIGHT * 0.05), tuto_label, 22,
-            text_color="black", button_color="white",
-            hover_text_color="white", hover_button_color="black",
+        tuto_active = self.game.bilal.flags["general"]
+        tuto_btn = Button(c - int(WIDTH * 0.045), int(HEIGHT * 0.59),
+            int(WIDTH * 0.09), int(HEIGHT * 0.05), "TUTORIAL", 22,
+            text_color="white", button_color=(40, 100, 160) if tuto_active else (60, 60, 70),
+            hover_text_color="white", hover_button_color=(60, 130, 190) if tuto_active else (80, 80, 95),
             game=self.game, target_state="settings", function="tutorial")
         tuto_btn.draw_button(events)
 
         # Texture pack label
         label_font = pygame.font.Font(FONT, LABEL_FONT_SIZE)
         pck_label = label_font.render("TEXTURE PACK", True, (200, 200, 200))
-        SCREEN.blit(pck_label, (c - pck_label.get_width() // 2, int(HEIGHT * 0.64)))
+        SCREEN.blit(pck_label, (c - pck_label.get_width() // 2, int(HEIGHT * 0.66)))
 
         # Texture pack dropdown
         drop_w = int(WIDTH * 0.18)
@@ -506,7 +517,7 @@ class Menu:
         packs = list_packs()
         if not hasattr(self, '_pack_dropdown') or self._pack_dropdown is None:
             self._pack_dropdown = Dropdown(
-                c - drop_w // 2, int(HEIGHT * 0.70), drop_w, drop_h, packs,
+                c - drop_w // 2, int(HEIGHT * 0.72), drop_w, drop_h, packs,
                 self.game, on_select=lambda val: set_pack(val)
             )
             self._pack_dropdown.sync_from_pack()
@@ -753,7 +764,7 @@ class Menu:
     def get_volume_slider(self, GAME):
         if self.volume_slider is None:
             self.volume_slider = Slider(
-                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * 0.35),
+                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * 0.37),
                 int(WIDTH * 0.21), int(HEIGHT * 0.01),
                 min_val=0.0, max_val=1.0, initial_val=0.5,
                 label="MUSIC VOLUME", game=GAME,
@@ -767,7 +778,7 @@ class Menu:
                 GAME.sfx_volume = val
                 GAME.update_sfx_volume()
             self.sfx_volume_slider = Slider(
-                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * 0.42),
+                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * 0.44),
                 int(WIDTH * 0.21), int(HEIGHT * 0.01),
                 min_val=0.0, max_val=1.0, initial_val=getattr(GAME, 'sfx_volume', 0.3),
                 label="SFX VOLUME", game=GAME,
@@ -882,10 +893,13 @@ class Dropdown:
         text_surf = font.render(label, True, 'white')
         SCREEN.blit(text_surf, (self.x + 10, self.y + (self.h - text_surf.get_height()) // 2))
 
-        # Arrow
-        arrow = "▲" if self.expanded else "▼"
-        arrow_surf = font.render(arrow, True, 'white')
-        SCREEN.blit(arrow_surf, (self.x + self.w - arrow_surf.get_width() - 10, self.y + (self.h - arrow_surf.get_height()) // 2))
+        # Arrow (drawn triangle to avoid unicode font issues)
+        ax = self.x + self.w - 18
+        ay = self.y + self.h // 2
+        if self.expanded:
+            pygame.draw.polygon(SCREEN, 'white', [(ax, ay + 5), (ax - 6, ay - 4), (ax + 6, ay - 4)])
+        else:
+            pygame.draw.polygon(SCREEN, 'white', [(ax, ay - 5), (ax - 6, ay + 4), (ax + 6, ay + 4)])
 
         # Expanded options
         if self.expanded:
