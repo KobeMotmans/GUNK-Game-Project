@@ -84,9 +84,6 @@ class Game:
 
         self.Menu.draw_loading_screen()
 
-        # Preload alle game textures (daarna instant join/reset)
-        self._preload_textures("menu")
-
         # Multiplayer
         self.multiplayer = False
         self.player_id = 0
@@ -452,6 +449,12 @@ class Game:
             self.network_client.disconnect()
             self.network_client = None
         M.map_level = 0
+        
+        # Preload textures with loading screen
+        self.Menu.loading_progress = 0
+        self.Menu.draw_loading_screen(0)
+        preload_textures(self._get_all_texture_paths(), lambda p: self.Menu.draw_loading_screen(p))
+        
         # Init objects
         self.state = "game"
         self.current_gun = self.pistol
@@ -517,7 +520,7 @@ class Game:
             self.network_client.send({"type": "start_game"})
 
     def _start_multiplayer_client(self):
-        self.state = "game"
+        self._preload_textures("game")
         M.map_level = 0
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         M.start_angle = START_ANGLES[M.map_level]
