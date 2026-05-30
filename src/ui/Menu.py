@@ -33,7 +33,6 @@ class Menu:
         self.mp_status = ""
         self._skin_thumbnails = {}
         self._skin_page = 0
-        self._skin_downloading = False
         self.mp_skin_search = ""
         self.mp_skin_upload_name = ""
         self._upload_status = None
@@ -324,16 +323,8 @@ class Menu:
                 rect = pygame.Rect(x, y_right, t_size_c, t_size_c)
                 self._skin_custom_rects.append((sid, rect))
                 self._skin_custom_info.append(info)
-                has_local = SkinManager.has_skin_locally(sid)
                 if sid not in self._skin_thumbnails or self._skin_thumbnails[sid].get_width() != t_size_c:
-                    if has_local:
-                        self._skin_thumbnails[sid] = SkinManager.create_thumbnail(sid, (t_size_c, t_size_c))
-                    else:
-                        ph = pygame.Surface((t_size_c, t_size_c), pygame.SRCALPHA)
-                        ph.fill((40, 40, 50, 220))
-                        dl = pygame.font.Font(FONT, 11).render("DL", True, (120, 120, 140))
-                        ph.blit(dl, (t_size_c//2 - dl.get_width()//2, t_size_c//2 - dl.get_height()//2))
-                        self._skin_thumbnails[sid] = ph
+                    self._skin_thumbnails[sid] = SkinManager.create_thumbnail(sid, (t_size_c, t_size_c))
                 SCREEN.blit(self._skin_thumbnails[sid], (x, y_right))
                 border_color = (0, 200, 255) if sid == GAME.skin_id else (40, 40, 50)
                 pygame.draw.rect(SCREEN, border_color, rect, 2, border_radius=4)
@@ -371,10 +362,6 @@ class Menu:
                 self._skin_next_rect = next_rect
                 self._skin_next_page = page < total_pages - 1
 
-            if getattr(self, '_skin_downloading', False):
-                dl_surf = pygame.font.Font(FONT, 16).render("Downloaden...", True, (200, 200, 80))
-                SCREEN.blit(dl_surf, (right_cx - dl_surf.get_width()//2, y_right + 8))
-
         # ── Click handling ─────────────────────────────────────────
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -407,12 +394,8 @@ class Menu:
                                     self._select_skin(GAME, sid)
 
                 if custom:
-                    for idx, (sid, rect) in enumerate(self._skin_custom_rects):
+                    for sid, rect in self._skin_custom_rects:
                         if rect.collidepoint(mouse):
-                            if not SkinManager.has_skin_locally(sid):
-                                self._skin_downloading = True
-                                SkinManager.download_skin(sid)
-                                self._skin_downloading = False
                             self._select_skin(GAME, sid)
 
                     if self._skin_prev_rect and self._skin_prev_rect.collidepoint(mouse) and self._skin_prev_page:

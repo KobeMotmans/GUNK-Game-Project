@@ -1,5 +1,4 @@
 import os
-import sys
 import glob
 import struct
 import socket
@@ -12,9 +11,6 @@ CUSTOM_MIN = 100
 
 def _get_builtin_dir():
     return asset_path(os.path.join("assets", "players"))
-
-def _get_fallback():
-    return asset_path(os.path.join("assets", "player.png"))
 
 def _get_cache_dir():
     path = appdata_path(os.path.join("cache", "skins"))
@@ -137,6 +133,13 @@ class SkinManager:
             return True
         except (socket.timeout, ConnectionRefusedError, OSError, pickle.UnpicklingError):
             return False
+
+    @classmethod
+    def download_all_skins(cls):
+        for s in cls._manifest:
+            sid = s["id"]
+            if not cls.has_skin_locally(sid):
+                cls.download_skin(sid)
 
     @classmethod
     def clear_cache(cls):

@@ -450,6 +450,7 @@ class NetworkClient:
                         SkinManager.set_server_addr(self.server_addr)
                         manifest = resp.get("skin_manifest", [])
                         SkinManager.set_manifest(manifest)
+                        SkinManager.download_all_skins()
                         reg = {"type": "register", "player_id": self.player_id}
                         self.udp_socket.sendto(pickle.dumps(reg), self.server_addr)
                         self._save_config(name, host, port, skin_id)
