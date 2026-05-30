@@ -1,25 +1,7 @@
 import sys
 import os
 import json
-import shutil
 from ..assets.texture_cache import clear as clear_texture_cache
-
-
-def _ensure_assets():
-    if not getattr(sys, 'frozen', False):
-        return
-    appdata_root = os.path.join(os.environ.get('APPDATA', os.path.expanduser("~")), 'GUNK')
-    marker = os.path.join(appdata_root, '.assets_copied')
-    if os.path.exists(marker):
-        return
-    src = os.path.join(sys._MEIPASS, 'assets')
-    if os.path.exists(src):
-        dst = os.path.join(appdata_root, 'assets')
-        shutil.copytree(src, dst, dirs_exist_ok=True)
-    open(marker, 'w').close()
-
-
-_ensure_assets()
 
 
 def _project_root():
@@ -28,12 +10,13 @@ def _project_root():
 
 def asset_path(rel_path):
     if getattr(sys, 'frozen', False):
-        base = os.environ.get('APPDATA') or os.path.expanduser("~")
-        return os.path.join(base, "GUNK", rel_path)
+        return os.path.join(os.path.dirname(sys.executable), rel_path)
     return os.path.join(_project_root(), rel_path)
 
 
 def appdata_path(rel_path):
+    if getattr(sys, 'frozen', False):
+        return os.path.join(os.path.dirname(sys.executable), rel_path)
     base = os.environ.get('APPDATA') or os.path.expanduser("~")
     return os.path.join(base, "GUNK", rel_path)
 

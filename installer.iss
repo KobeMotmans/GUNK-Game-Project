@@ -44,7 +44,8 @@ Source: "dist\GUNK\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\GUNK\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName}"
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{userappdata}\GUNK\cache"
+Type: filesandordirs; Name: "{app}"
+Type: filesandordirs; Name: "{userappdata}\GUNK"
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
