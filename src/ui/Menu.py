@@ -8,8 +8,8 @@ from ..core.map_loader import M
 from ..assets.skin_manager import SkinManager
 from ..network.network import NetworkClient
 class Menu:
-    def __init__(self, color):
-        self.bg_color = color
+    def __init__(self):
+        self.bg_color = MENU_BG
         self.credits_height = HEIGHT
         self.volume_slider = None
         self.sfx_volume_slider = None
@@ -778,7 +778,7 @@ class Menu:
                 )
         return self.sfx_volume_slider
 
-Menu_inst = Menu((70,70,70))
+Menu_inst = Menu()
 
 class Button:
     def __init__(self, x, y, width, height, text, text_size=25,
