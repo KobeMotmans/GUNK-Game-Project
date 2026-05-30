@@ -210,10 +210,13 @@ class ServerIO(threading.Thread):
 
                         elif packet.get("type") == "skin_request":
                             req_skin_id = packet.get("skin_id", -1)
+                            print(f"[SERVER] skin_request: id={req_skin_id} from {addr}")
                             raw = self._get_skin_data(req_skin_id)
                             if raw is not None:
+                                print(f"[SERVER] skin_request: id={req_skin_id} found, {len(raw)} bytes")
                                 resp = {"type": "skin_data", "skin_id": req_skin_id, "data": raw}
                             else:
+                                print(f"[SERVER] skin_request: id={req_skin_id} NOT FOUND on disk")
                                 resp = {"type": "skin_data", "skin_id": req_skin_id, "data": None}
                             resp_data = pickle.dumps(resp)
                             sock.sendall(struct.pack('!I', len(resp_data)) + resp_data)
@@ -309,10 +312,6 @@ class ServerIO(threading.Thread):
                     should_reset = len(self.clients) == 0
                 self.last_seen.pop(pid, None)
                 self.inputs.pop(pid, None)
-                if getattr(self.server_game, '_paused_player_id', None) == pid:
-                    self.server_game.global_paused = False
-                    self.server_game.paused_by = ""
-                    self.server_game._paused_player_id = None
                 self.server_game.remove_player(pid)
                 self.lobby_updates.put(("player_left", pid, ""))
                 if should_reset:
@@ -377,10 +376,6 @@ class ServerIO(threading.Thread):
                 self.clients = [(a, p, n) for a, p, n in self.clients if p != pid]
                 self.last_seen.pop(pid, None)
                 self.inputs.pop(pid, None)
-                if getattr(self.server_game, '_paused_player_id', None) == pid:
-                    self.server_game.global_paused = False
-                    self.server_game.paused_by = ""
-                    self.server_game._paused_player_id = None
                 self.server_game.remove_player(pid)
                 self.lobby_updates.put(("player_left", pid, name))
             should_reset = len(self.clients) == 0 and stale

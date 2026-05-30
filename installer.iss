@@ -2,8 +2,8 @@
 ; Compile: ISCC installer.iss
 
 #define MyAppName "GUNK"
-#define MyAppVersion "1.0"
-#define MyAppPublisher "Kobe Motmans"
+#define MyAppVersion "1.0.0"
+#define MyAppPublisher "ShelfHead"
 #define MyAppURL "https://github.com/KobeMotmans/GUNK-Game-Project"
 #define MyAppExeName "GUNK.exe"
 
@@ -11,25 +11,32 @@
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}
+VersionInfoVersion={#MyAppVersion}
+VersionInfoDescription={#MyAppName}
+DefaultDirName={localappdata}\{#MyAppName}
 DisableProgramGroupPage=yes
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
 OutputDir=Output
-OutputBaseFilename=GUNK_Setup
-Compression=lzma
+OutputBaseFilename=GUNK_Setup_{#MyAppVersion}
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 DisableWelcomePage=no
 SetupIconFile=assets\textures\ui\icon.ico
 UninstallDisplayIcon={app}\GUNK.exe
+UninstallDisplayName={#MyAppName} {#MyAppVersion}
 
 [Languages]
 Name: "dutch"; MessagesFile: "compiler:Languages\Dutch.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Maak een snelkoppeling op het &bureaublad"; GroupDescription: "Extra snelkoppelingen:"; Flags: checkedonce
+
+[Dirs]
+Name: "{app}\_internal"
 
 [Files]
 Source: "assets\textures\ui\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
@@ -45,5 +52,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{#MyAppName} starten"; Flags: nowait postinstall skipifsilent
+Filename: "{sys}\attrib.exe"; Parameters: "+h ""{app}\_internal"""; Flags: runhidden
 
 [UninstallRun]
+Filename: "{sys}\attrib.exe"; Parameters: "-h ""{app}\_internal"""; Flags: runhidden

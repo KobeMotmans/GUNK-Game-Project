@@ -79,13 +79,17 @@ class SkinManager:
         else:
             path = _get_custom_path(skin_id)
 
+        print(f"[SKIN] load_skin_sprite({skin_id}): checking {path}")
         if os.path.exists(path):
             try:
                 sprite = pygame.image.load(path).convert_alpha()
                 cls._cache[skin_id] = sprite
+                print(f"[SKIN] load_skin_sprite({skin_id}): loaded OK from {path}")
                 return sprite
-            except (FileNotFoundError, pygame.error):
+            except (FileNotFoundError, pygame.error) as e:
+                print(f"[SKIN] load_skin_sprite({skin_id}): load error {e}")
                 pass
+        print(f"[SKIN] load_skin_sprite({skin_id}): not found, returning fallback")
         return _fallback_sprite()
 
     @classmethod
@@ -99,6 +103,7 @@ class SkinManager:
     @classmethod
     def download_skin(cls, skin_id):
         if cls._server_addr is None:
+            print(f"[SKIN] download_skin({skin_id}): _server_addr is None")
             return False
         host, port = cls._server_addr
         try:
@@ -112,34 +117,50 @@ class SkinManager:
             size_data = _recv_all(sock, 4)
             if not size_data:
                 sock.close()
+                print(f"[SKIN] download_skin({skin_id}): no size_data")
                 return False
             size = struct.unpack('!I', size_data)[0]
             if not (0 < size < 5 * 1024 * 1024):
                 sock.close()
+                print(f"[SKIN] download_skin({skin_id}): invalid size {size}")
                 return False
             resp_data = _recv_all(sock, size)
             sock.close()
             if not resp_data:
+                print(f"[SKIN] download_skin({skin_id}): no resp_data")
                 return False
             resp = pickle.loads(resp_data)
             if resp.get("type") != "skin_data":
+                print(f"[SKIN] download_skin({skin_id}): wrong type {resp.get('type')}")
                 return False
             raw = resp["data"]
+            if raw is None:
+                print(f"[SKIN] download_skin({skin_id}): server returned None data")
+                return False
             out = _get_custom_path(skin_id)
             os.makedirs(os.path.dirname(out), exist_ok=True)
             with open(out, "wb") as f:
                 f.write(raw)
             cls._cache.pop(skin_id, None)
+            print(f"[SKIN] download_skin({skin_id}): OK -> {out}")
             return True
-        except (socket.timeout, ConnectionRefusedError, OSError, pickle.UnpicklingError):
+        except (socket.timeout, ConnectionRefusedError, OSError, pickle.UnpicklingError) as e:
+            print(f"[SKIN] download_skin({skin_id}): exception {e}")
             return False
 
     @classmethod
     def download_all_skins(cls):
+        print(f"[SKIN] download_all_skins: manifest has {len(cls._manifest)} entries")
         for s in cls._manifest:
             sid = s["id"]
+            cls._cache.pop(sid, None)
             if not cls.has_skin_locally(sid):
-                cls.download_skin(sid)
+                print(f"[SKIN] download_all_skins: skin {sid} not local, downloading...")
+                ok = cls.download_skin(sid)
+                print(f"[SKIN] download_all_skins: skin {sid} download {'OK' if ok else 'FAILED'}")
+            else:
+                print(f"[SKIN] download_all_skins: skin {sid} already local at {_get_custom_path(sid)}")
+        print(f"[SKIN] download_all_skins: done")
 
     @classmethod
     def clear_cache(cls):

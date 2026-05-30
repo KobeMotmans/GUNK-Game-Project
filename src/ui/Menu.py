@@ -1,7 +1,7 @@
 import pygame
 import tkinter as tk
 from tkinter import filedialog
-from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME
+from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME, MENU_BG
 from ..core.paths import asset_path, resolve_asset, pack_config, list_packs, set_pack, TEXTURE_PACK
 from collections import deque
 from ..core.map_loader import M
@@ -78,7 +78,7 @@ class Menu:
         SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y_pos + h//2 - surf.get_height()//2))
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
-                if rect.collidepoint(mouse) and action:
+                if rect.collidepoint(ev.pos) and action:
                     action()
                     return True
         return False
@@ -216,8 +216,9 @@ class Menu:
             name = pd["name"] if isinstance(pd, dict) else pd[0]
             skin_id = pd.get("skin_id", 0) if isinstance(pd, dict) else (pd[2] if len(pd) > 2 else 0)
             color = (0, 200, 255) if pid == GAME.player_id else (255, 255, 255)
-            thumb = SkinManager.create_thumbnail(skin_id, (thumb_size, thumb_size))
-            SCREEN.blit(thumb, (left_x, y_left - 4))
+            if skin_id not in self._skin_thumbnails or self._skin_thumbnails[skin_id].get_width() != thumb_size:
+                self._skin_thumbnails[skin_id] = SkinManager.create_thumbnail(skin_id, (thumb_size, thumb_size))
+            SCREEN.blit(self._skin_thumbnails[skin_id], (left_x, y_left - 4))
             p_text = pygame.font.Font(FONT, 26).render(f"[P{pid}] {name}", True, color)
             SCREEN.blit(p_text, (left_x + thumb_size + 10, y_left))
             y_left += int(HEIGHT * 0.045)
@@ -607,35 +608,6 @@ class Menu:
                 color = (200, 200, 80)
             warn_surf = warn_font.render(msg, True, color)
             SCREEN.blit(warn_surf, (WIDTH//2 - warn_surf.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.19)))
-        if getattr(self.game, 'global_paused', False):
-            s = pygame.Surface((WIDTH, HEIGHT))
-            s.set_alpha(120)
-            s.fill((200, 200, 200))
-            SCREEN.blit(s, (0, 0))
-            paused_by = getattr(self.game, 'paused_by', "")
-            pause_font = pygame.font.Font(FONT, 44)
-            pause_text = f"{paused_by} paused. Waiting..." if paused_by else "Paused. Waiting..."
-            pause_surf = pause_font.render(pause_text, True, 'white')
-            SCREEN.blit(pause_surf, (WIDTH//2 - pause_surf.get_width()//2, HEIGHT//2 - pause_surf.get_height()//2))
-
-            def _resume_mp():
-                self.game.global_paused = False
-                self.game.paused_by = ""
-                self.game._pending_unpause = True
-                self.game._send_pause_state()
-                pygame.mouse.set_visible(False)
-                pygame.event.set_grab(True)
-            self._draw_main_button(events, "RESUME", HEIGHT//2 - int(HEIGHT * 0.1), int(WIDTH * 0.11), _resume_mp, font_size=34)
-
-            def _settings_mp():
-                self.game._settings_return = "game"
-                self.game.state = "settings"
-            self._draw_main_button(events, "SETTINGS", HEIGHT//2 - int(HEIGHT * 0.02), int(WIDTH * 0.11), _settings_mp, font_size=34)
-
-            def _menu_mp():
-                pygame.mixer.stop()
-                self.game._disconnect()
-            self._draw_main_button(events, "MENU", HEIGHT//2 + int(HEIGHT * 0.06), int(WIDTH * 0.11), _menu_mp, font_size=34)
     def draw_paused_screen(self, events, GAME):
         self.game = GAME
         c = WIDTH//2
@@ -644,9 +616,6 @@ class Menu:
             pygame.event.set_grab(True)
             GAME.state = "game"
             pygame.mixer.unpause()
-            if GAME.multiplayer:
-                GAME.global_paused = False
-                GAME.paused_by = ""
         self._draw_main_button(events, "RESUME", HEIGHT//2 - int(HEIGHT * 0.1), int(WIDTH * 0.11), resume, font_size=34)
 
         def open_settings():
@@ -755,12 +724,15 @@ class Menu:
 
     def get_volume_slider(self, GAME):
         if self.volume_slider is None:
+            def on_music_change(val):
+                GAME.music_volume = val
+                GAME.main_music.set_volume(val)
             self.volume_slider = Slider(
                 self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * 0.37),
                 int(WIDTH * 0.21), int(HEIGHT * 0.01),
-                min_val=0.0, max_val=1.0, initial_val=0.5,
+                min_val=0.0, max_val=1.0, initial_val=GAME.music_volume,
                 label="MUSIC VOLUME", game=GAME,
-                on_change=lambda val: GAME.main_music.set_volume(val)
+                on_change=on_music_change
                 )
         return self.volume_slider
 

@@ -163,9 +163,6 @@ class ServerGame:
         self.elevator_transition_timer = 0
         self.escaped = False
         self.jan_spotted = False
-        self.global_paused = False
-        self.paused_by = ""
-        self._paused_player_id = None
         self.exit_pos = None
         self.initialized = False
         self._last_player_seq = {}
@@ -211,9 +208,6 @@ class ServerGame:
         self.elevator_transition_timer = 0
         self.escaped = False
         self.jan_spotted = False
-        self.global_paused = False
-        self.paused_by = ""
-        self._paused_player_id = None
         self.initialized = True
 
     def register_player(self, pid, name, skin_id=0):
@@ -253,9 +247,6 @@ class ServerGame:
         self.elevator_transition_timer = 0
         self.escaped = False
         self.jan_spotted = False
-        self.global_paused = False
-        self.paused_by = ""
-        self._paused_player_id = None
         self.exit_pos = None
         self.initialized = False
 
@@ -315,15 +306,6 @@ class ServerGame:
                 self.global_health = 0
         if "elevator_waiting" in data:
             self.elevator_waiting = data["elevator_waiting"]
-        if "paused" in data:
-            if data["paused"] and not self.global_paused:
-                self.global_paused = True
-                self.paused_by = data.get("paused_by", "")
-                self._paused_player_id = pid
-            elif not data["paused"] and self.global_paused and pid == self._paused_player_id:
-                self.global_paused = False
-                self.paused_by = ""
-                self._paused_player_id = None
         if "escaped" in data:
             self.escaped = data["escaped"]
 
@@ -440,8 +422,7 @@ class ServerGame:
                     "elevator_waiting": self.elevator_waiting, "elevator_ready": self.elevator_ready,
                     "elevator_transition": self.elevator_transition,
                     "elevator_wait_timer": self.elevator_wait_timer,
-                    "jan_spotted": self.jan_spotted, "global_paused": self.global_paused,
-                    "paused_by": self.paused_by, "exit_pos": None}
+                    "jan_spotted": self.jan_spotted, "exit_pos": None}
         return {
             "type": "state",
             "players": [{"id": pid, "pos": (p["pos"].x, p["pos"].y),
@@ -464,7 +445,5 @@ class ServerGame:
             "elevator_transition": self.elevator_transition,
             "elevator_wait_timer": self.elevator_wait_timer,
             "jan_spotted": self.jan_spotted,
-            "global_paused": self.global_paused,
-            "paused_by": self.paused_by,
             "exit_pos": (self.exit_pos.x, self.exit_pos.y) if self.exit_pos else None,
         }
