@@ -1,5 +1,5 @@
 param(
-    [string]$Python = "C:\Users\32492\AppData\Local\Programs\Python\Python310\python.exe"
+    [string]$Python = "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe"
 )
 
 $ErrorActionPreference = "Stop"
