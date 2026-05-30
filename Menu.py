@@ -1,14 +1,14 @@
 import pygame
 import tkinter as tk
 from tkinter import filedialog
-from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME
+from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME, MENU_BG
 from collections import deque
 from map_loader import M
 from skin_manager import SkinManager
 from network import NetworkClient
 class Menu:
-    def __init__(self, color):
-        self.bg_color = color
+    def __init__(self):
+        self.bg_color = MENU_BG
         self.credits_height = HEIGHT
         self.volume_slider = None
         self.sfx_volume_slider = None
@@ -710,7 +710,7 @@ class Menu:
                 )
         return self.sfx_volume_slider
 
-Menu_inst = Menu((70,70,70))
+Menu_inst = Menu()
 
 class Button:
     def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0, function = None):
