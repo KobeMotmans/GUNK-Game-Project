@@ -2,7 +2,7 @@ import pygame
 import tkinter as tk
 from tkinter import filedialog
 from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME
-from ..core.paths import asset_path, resolve_asset, pack_config
+from ..core.paths import asset_path, resolve_asset, pack_config, list_packs, set_pack, TEXTURE_PACK
 from collections import deque
 from ..core.map_loader import M
 from ..assets.skin_manager import SkinManager
@@ -437,29 +437,84 @@ class Menu:
                 GAME.network_client.server_addr[0],
                 GAME.network_client.server_addr[1], skin_id)
 
-    #  Settings 
+    # ── Settings ──────────────────────────────────────────────
 
     def draw_settings(self, events, GAME):
         self.game = GAME
         SCREEN.fill(self.bg_color)
-        
+        c = WIDTH // 2
+
+        # ── Title ─────────────────────────────────────────────
+        title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.07))
+        title_font.set_bold(True)
+        title_surf = title_font.render("SETTINGS", True, 'white')
+        SCREEN.blit(title_surf, (c - title_surf.get_width() // 2, int(HEIGHT * 0.04)))
+
+        LABEL_FONT_SIZE = 20
+        SECTION_FONT_SIZE = 24
+
+        # ── VIDEO ────────────────────────────────────────────
+        sec_font = pygame.font.Font(FONT, SECTION_FONT_SIZE)
+        sec_surf = sec_font.render("── VIDEO ──", True, (160, 160, 160))
+        SCREEN.blit(sec_surf, (c - sec_surf.get_width() // 2, int(HEIGHT * 0.14)))
+
         high_label = "[HIGH RES]" if self.game.resolution == "high" else "HIGH RES"
         low_label  = "[LOW RES]"  if self.game.resolution == "low"  else "LOW RES"
-        
-        Res_high = Button(int(-HEIGHT * 0.09), int(WIDTH * 0.1), int(HEIGHT * 0.06), high_label, 25, "black", "white", "white", "black", self.game, "settings", True, int(-WIDTH * 0.11), "res_high")
-        Res_low = Button(int(-HEIGHT * 0.09), int(WIDTH * 0.1), int(HEIGHT * 0.06), low_label, 25, "black", "white", "white", "black", self.game, "settings", True, int(WIDTH * 0.11), "res_low")
-        
-        tuto_label = "[TUTORIAL]" if self.game.bilal.flags["general"] == True else "TUTORIAL"
-        
-        Tutorial_button = Button(int(HEIGHT * 0.18), int(WIDTH * 0.13), int(HEIGHT * 0.06), tuto_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "tutorial")
-        pack_active = pack_config("name")
-        silly_label = "[SILLY MODE]" if pack_active else "SILLY MODE"
-        Silly_button = Button(int(HEIGHT * 0.25), int(WIDTH * 0.13), int(HEIGHT * 0.06), silly_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "silly")
-        volume_slider = self.get_volume_slider(self.game)
-        volume_slider.draw(events)
-        sfx_slider = self.get_sfx_volume_slider(self.game)
-        sfx_slider.draw(events)
+        btn_w = int(WIDTH * 0.09)
+        btn_h = int(HEIGHT * 0.05)
+        gap = int(WIDTH * 0.02)
+        res_y = int(HEIGHT * 0.21)
+        Res_high = Button(c - btn_w - gap // 2, res_y, btn_w, btn_h, high_label, 22,
+            text_color="black", button_color="white",
+            hover_text_color="white", hover_button_color="black",
+            game=self.game, target_state="settings", function="res_high")
+        Res_low = Button(c + gap // 2, res_y, btn_w, btn_h, low_label, 22,
+            text_color="black", button_color="white",
+            hover_text_color="white", hover_button_color="black",
+            game=self.game, target_state="settings", function="res_low")
+        Res_high.draw_button(events)
+        Res_low.draw_button(events)
 
+        # ── AUDIO ────────────────────────────────────────────
+        sec_surf = sec_font.render("── AUDIO ──", True, (160, 160, 160))
+        SCREEN.blit(sec_surf, (c - sec_surf.get_width() // 2, int(HEIGHT * 0.30)))
+
+        self.get_volume_slider(GAME).draw(events)
+        self.get_sfx_volume_slider(GAME).draw(events)
+
+        # ── GAMEPLAY ─────────────────────────────────────────
+        sec_surf = sec_font.render("── GAMEPLAY ──", True, (160, 160, 160))
+        SCREEN.blit(sec_surf, (c - sec_surf.get_width() // 2, int(HEIGHT * 0.50)))
+
+        # Tutorial toggle
+        tuto_label = "[TUTORIAL]" if self.game.bilal.flags["general"] else "TUTORIAL"
+        tuto_btn = Button(c - int(WIDTH * 0.045), int(HEIGHT * 0.57),
+            int(WIDTH * 0.09), int(HEIGHT * 0.05), tuto_label, 22,
+            text_color="black", button_color="white",
+            hover_text_color="white", hover_button_color="black",
+            game=self.game, target_state="settings", function="tutorial")
+        tuto_btn.draw_button(events)
+
+        # Texture pack label
+        label_font = pygame.font.Font(FONT, LABEL_FONT_SIZE)
+        pck_label = label_font.render("TEXTURE PACK", True, (200, 200, 200))
+        SCREEN.blit(pck_label, (c - pck_label.get_width() // 2, int(HEIGHT * 0.64)))
+
+        # Texture pack dropdown
+        drop_w = int(WIDTH * 0.18)
+        drop_h = int(HEIGHT * 0.05)
+        packs = list_packs()
+        if not hasattr(self, '_pack_dropdown') or self._pack_dropdown is None:
+            self._pack_dropdown = Dropdown(
+                c - drop_w // 2, int(HEIGHT * 0.70), drop_w, drop_h, packs,
+                self.game, on_select=lambda val: set_pack(val)
+            )
+            self._pack_dropdown.sync_from_pack()
+        else:
+            self._pack_dropdown.options = packs
+        self._pack_dropdown.draw(events)
+
+        # ── Back ──────────────────────────────────────────────
         back_target = getattr(GAME, '_settings_return', 'menu')
         def go_back():
             GAME.state = back_target
@@ -474,12 +529,7 @@ class Menu:
                 pygame.mouse.set_visible(True)
                 pygame.event.set_grab(False)
             GAME._settings_return = "menu"
-        self._draw_main_button(events, "BACK", HEIGHT - int(HEIGHT * 0.09), int(WIDTH * 0.11), go_back, font_size=34)
-        
-        Tutorial_button.draw_button(events)
-        Res_high.draw_button(events)
-        Res_low.draw_button(events)
-        Silly_button.draw_button(events)
+        self._draw_main_button(events, "BACK", HEIGHT - int(HEIGHT * 0.08), int(WIDTH * 0.11), go_back, font_size=34)
 
     def draw_credits(self, events, GAME):
         self.game = GAME
@@ -520,19 +570,15 @@ class Menu:
         if self.credits_height < -int(HEIGHT * 0.87):
             self.credits_height = HEIGHT
 
+        btn_w = int(WIDTH * 0.07)
+        btn_h = int(HEIGHT * 0.06)
         Menu_button = Button(
-            self.credits_height + int(HEIGHT * 0.52),
-            int(WIDTH * 0.07),
-            int(HEIGHT * 0.06),
-            "MENU",
-            35,
-            "black",
-            'white',
-            'white',
-            'black',
-            self.game,
-            "menu",
-            True
+            WIDTH // 2 - btn_w // 2,
+            self.credits_height + HEIGHT // 2 - int(HEIGHT * 0.03) + int(HEIGHT * 0.52),
+            btn_w, btn_h, "MENU", 35,
+            text_color="black", button_color="white",
+            hover_text_color="white", hover_button_color="black",
+            game=self.game, target_state="menu"
         )
         Menu_button.draw_button(events)
         
@@ -666,7 +712,13 @@ class Menu:
         SCREEN.blit(SCREEN_DEAD, (0,0))
         self.score_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.08))
         self.score_font.set_bold(True)
-        Menu_button = Button(int(HEIGHT * 0.1), int(WIDTH * 0.07), int(HEIGHT * 0.06), "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True, function="disconnect")
+        btn_w = int(WIDTH * 0.07)
+        btn_h = int(HEIGHT * 0.06)
+        Menu_button = Button(WIDTH // 2 - btn_w // 2, HEIGHT // 2 - btn_h // 2 + int(HEIGHT * 0.1),
+            btn_w, btn_h, "MENU", 35,
+            text_color="black", button_color="white",
+            hover_text_color="white", hover_button_color="black",
+            game=self.game, target_state="menu", function="disconnect")
         Menu_button.draw_button(events)
         score_surf = self.score_font.render(f"Score:{self.game.player.score}", True, 'black')
         SCREEN.blit(score_surf, (WIDTH//2 - score_surf.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.04)))
@@ -687,14 +739,24 @@ class Menu:
         SCREEN.blit(s1, (WIDTH//2 - s1.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.45)))
         SCREEN.blit(s2, (WIDTH//2 - s2.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.27)))
         SCREEN.blit(score_surf, (WIDTH//2 - score_surf.get_width()//2, HEIGHT//2 + int(HEIGHT * 0.01)))
-        Menu_button = Button(int(HEIGHT * 0.15), int(WIDTH * 0.07), int(HEIGHT * 0.06), "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True, function="disconnect")
+        btn_w = int(WIDTH * 0.07)
+        btn_h = int(HEIGHT * 0.06)
+        Menu_button = Button(WIDTH // 2 - btn_w // 2, HEIGHT // 2 - btn_h // 2 + int(HEIGHT * 0.15),
+            btn_w, btn_h, "MENU", 35,
+            text_color="black", button_color="white",
+            hover_text_color="white", hover_button_color="black",
+            game=self.game, target_state="menu", function="disconnect")
         Menu_button.draw_button(events)
+    def _slider_center_x(self, width):
+        return WIDTH // 2 - width // 2
+
     def get_volume_slider(self, GAME):
         if self.volume_slider is None:
             self.volume_slider = Slider(
-                y_pos=int(HEIGHT * 0.03), width=int(WIDTH * 0.21), height=int(HEIGHT * 0.01),
+                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * 0.35),
+                int(WIDTH * 0.21), int(HEIGHT * 0.01),
                 min_val=0.0, max_val=1.0, initial_val=0.5,
-                label="MUSIC VOLUME", GAME=GAME,
+                label="MUSIC VOLUME", game=GAME,
                 on_change=lambda val: GAME.main_music.set_volume(val)
                 )
         return self.volume_slider
@@ -705,9 +767,10 @@ class Menu:
                 GAME.sfx_volume = val
                 GAME.update_sfx_volume()
             self.sfx_volume_slider = Slider(
-                y_pos=int(HEIGHT * 0.10), width=int(WIDTH * 0.21), height=int(HEIGHT * 0.01),
+                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * 0.42),
+                int(WIDTH * 0.21), int(HEIGHT * 0.01),
                 min_val=0.0, max_val=1.0, initial_val=getattr(GAME, 'sfx_volume', 0.3),
-                label="SFX VOLUME", GAME=GAME,
+                label="SFX VOLUME", game=GAME,
                 on_change=on_sfx_change
                 )
         return self.sfx_volume_slider
@@ -715,35 +778,41 @@ class Menu:
 Menu_inst = Menu((70,70,70))
 
 class Button:
-    def __init__(self, y_pos, width, height, text, text_size, text_color, text_hov_color, button_color, button_h_color, GAME, state_change, mouse_vis, x_pos=0, function = None):
-        self.y_pos = y_pos
-        self.h = height
-        self.w = width
+    def __init__(self, x, y, width, height, text, text_size=25,
+                 text_color="black", button_color="white",
+                 hover_text_color="white", hover_button_color="black",
+                 game=None, target_state=None, mouse_visible=True,
+                 function=None):
+        self.rect = pygame.Rect(x, y, width, height)
         self.text = text
         self.text_size = text_size
         self.text_color = text_color
-        self.text_hov_color = text_hov_color
         self.button_color = button_color
-        self.button_hov_color = button_h_color
-        self.GAME = GAME
-        self.state_change = state_change
-        self.mouse_vis = mouse_vis
-        self.x_pos = x_pos
+        self.hover_text_color = hover_text_color
+        self.hover_button_color = hover_button_color
+        self.GAME = game
+        self.target_state = target_state
+        self.mouse_visible = mouse_visible
         self.function = function
-        self.font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"),self.text_size) 
+        self.font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), text_size)
         self.font.set_bold(True)
+
     def draw_button(self, events):
         mouse = pygame.mouse.get_pos()
-        hovering = (WIDTH/2-self.w/2+self.x_pos <= mouse[0] <= WIDTH/2+self.w/2+self.x_pos and HEIGHT/2-self.h/2+self.y_pos <= mouse[1] <= HEIGHT/2+self.h/2+self.y_pos)
+        hovering = self.rect.collidepoint(mouse)
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
                 if hovering:
-                    if self.function == "disconnect":
-                        if self.GAME.multiplayer:
-                            self.GAME._disconnect()
-                    pygame.mouse.set_visible(self.mouse_vis)
-                    pygame.event.set_grab(self.state_change == "game")
-                    self.GAME.state = self.state_change
+                    if self.function == "disconnect" and self.GAME and self.GAME.multiplayer:
+                        self.GAME._disconnect()
+                    if self.mouse_visible is not None:
+                        pygame.mouse.set_visible(self.mouse_visible)
+                    if self.target_state == "game":
+                        pygame.event.set_grab(True)
+                    elif self.target_state:
+                        pygame.event.set_grab(False)
+                    if self.target_state:
+                        self.GAME.state = self.target_state
                     if self.function == "res_high":
                         set_resolution("high")
                         self.GAME.resolution = "high"
@@ -752,42 +821,123 @@ class Button:
                         self.GAME.resolution = "low"
                     elif self.function == "tutorial":
                         self.GAME.bilal.flags["general"] = not self.GAME.bilal.flags["general"]
-                    elif self.function == "silly":
-                        from ..core.paths import set_pack, TEXTURE_PACK
-                        set_pack(None) if TEXTURE_PACK else set_pack("silly")
-                    if self.state_change == "reset":
+                    if self.target_state == "reset":
                         self.GAME.reset_game()
-                    elif self.state_change == "Stop":
+                    elif self.target_state == "Stop":
                         pygame.mixer.stop()
                         self.GAME.running = False
-                        self.GAME.state = None
-                    elif self.state_change == "game":
+                    elif self.target_state == "game":
                         pygame.mixer.unpause()
-                        self.GAME.state = "game"
-                    elif self.state_change == "menu":
+                    elif self.target_state == "menu":
                         pygame.mixer.stop()
-                    
-        color = self.button_hov_color if hovering else self.button_color
-        text_color = self.text_hov_color if hovering else self.text_color
-        
-        pygame.draw.rect(SCREEN,color,[WIDTH/2-self.w/2+self.x_pos,HEIGHT/2-self.h/2+self.y_pos,self.w,self.h])
-        SCREEN.blit(self.font.render(self.text, True, text_color),(WIDTH/2-self.w/3+self.x_pos,HEIGHT/2-self.text_size/2+self.y_pos))
+
+        bg = self.hover_button_color if hovering else self.button_color
+        fg = self.hover_text_color if hovering else self.text_color
+        pygame.draw.rect(SCREEN, bg, self.rect, border_radius=6)
+        text_surf = self.font.render(self.text, True, fg)
+        tx = self.rect.x + (self.rect.w - text_surf.get_width()) // 2
+        ty = self.rect.y + (self.rect.h - text_surf.get_height()) // 2
+        SCREEN.blit(text_surf, (tx, ty))
+
+class Dropdown:
+    EXPAND_COLOR = (50, 60, 120)
+    OPTION_HOVER = (70, 70, 90)
+    OPTION_BG = (50, 50, 60)
+    OPTION_SELECTED = (40, 80, 120)
+    BORDER = (150, 150, 150)
+
+    def __init__(self, x, y, width, height, options, game, on_select=None):
+        self.x = x
+        self.y = y
+        self.w = width
+        self.h = height
+        self.options = options
+        self.game = game
+        self.on_select = on_select
+        self.selected_index = 0
+        self.expanded = False
+
+    def select(self, index):
+        if 0 <= index < len(self.options):
+            self.selected_index = index
+            self.expanded = False
+            val = self.options[index]["value"]
+            if self.on_select:
+                self.on_select(val)
+
+    def draw(self, events):
+        mouse = pygame.mouse.get_pos()
+        main_rect = pygame.Rect(self.x, self.y, self.w, self.h)
+        hover = main_rect.collidepoint(mouse)
+        font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(self.h * 0.5))
+        font.set_bold(True)
+
+        # Main box
+        bg = Dropdown.EXPAND_COLOR if self.expanded else (60, 60, 70) if hover else (40, 40, 40)
+        pygame.draw.rect(SCREEN, bg, main_rect, border_radius=6)
+        pygame.draw.rect(SCREEN, Dropdown.BORDER, main_rect, 2, border_radius=6)
+
+        # Selected text
+        label = self.options[self.selected_index]["label"]
+        text_surf = font.render(label, True, 'white')
+        SCREEN.blit(text_surf, (self.x + 10, self.y + (self.h - text_surf.get_height()) // 2))
+
+        # Arrow
+        arrow = "▲" if self.expanded else "▼"
+        arrow_surf = font.render(arrow, True, 'white')
+        SCREEN.blit(arrow_surf, (self.x + self.w - arrow_surf.get_width() - 10, self.y + (self.h - arrow_surf.get_height()) // 2))
+
+        # Expanded options
+        if self.expanded:
+            opt_y = self.y + self.h + 4
+            for i, opt in enumerate(self.options):
+                opt_rect = pygame.Rect(self.x, opt_y, self.w, self.h)
+                opt_hover = opt_rect.collidepoint(mouse)
+                bg2 = Dropdown.OPTION_SELECTED if i == self.selected_index else (Dropdown.OPTION_HOVER if opt_hover else Dropdown.OPTION_BG)
+                pygame.draw.rect(SCREEN, bg2, opt_rect, border_radius=4)
+                pygame.draw.rect(SCREEN, Dropdown.BORDER, opt_rect, 1, border_radius=4)
+                opt_surf = font.render(opt["label"], True, 'white')
+                SCREEN.blit(opt_surf, (self.x + 10, opt_y + (self.h - opt_surf.get_height()) // 2))
+                opt_y += self.h + 2
+
+        # Event handling
+        for ev in events:
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                if main_rect.collidepoint(mouse):
+                    self.expanded = not self.expanded
+                elif self.expanded:
+                    opt_y = self.y + self.h + 4
+                    clicked = False
+                    for i, opt in enumerate(self.options):
+                        opt_rect = pygame.Rect(self.x, opt_y, self.w, self.h)
+                        if opt_rect.collidepoint(mouse):
+                            self.select(i)
+                            clicked = True
+                            break
+                        opt_y += self.h + 2
+                    if not clicked:
+                        self.expanded = False
+
+    def sync_from_pack(self):
+        for i, opt in enumerate(self.options):
+            if opt["value"] == TEXTURE_PACK:
+                self.selected_index = i
+                break
+
 
 class Slider:
-    def __init__(self, y_pos, width, height, min_val, max_val, initial_val, label, GAME, on_change=None):
-        self.y_pos = y_pos
+    def __init__(self, x, y, width, height, min_val, max_val, initial_val, label, game, on_change=None):
+        self.track_x = x
+        self.track_y = y
         self.w = width
         self.h = height
         self.min_val = min_val
         self.max_val = max_val
         self.value = initial_val
         self.label = label
-        self.GAME = GAME
+        self.game = game
         self.dragging = False
         self.on_change = on_change
-
-        self.track_x = WIDTH // 2 - width // 2
-        self.track_y = HEIGHT // 2 + y_pos
         self.handle_r = height
 
 

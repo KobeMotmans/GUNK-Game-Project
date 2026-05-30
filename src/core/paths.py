@@ -58,6 +58,26 @@ def pack_config(key, default=None):
     return _pack_config.get(key, default)
 
 
+def list_packs():
+    """Returns [{"label": str, "value": name|None}, ...] for all packs in assets/packs/"""
+    packs = [{"label": "None", "value": None}]
+    packs_dir = os.path.join(_project_root(), "assets", "packs")
+    if os.path.isdir(packs_dir):
+        for entry in sorted(os.listdir(packs_dir)):
+            p = os.path.join(packs_dir, entry, "pack.json")
+            if os.path.isfile(p):
+                try:
+                    with open(p, encoding="utf-8") as f:
+                        cfg = json.load(f)
+                except:
+                    continue
+                packs.append({
+                    "label": cfg.get("display_name", entry),
+                    "value": entry
+                })
+    return packs
+
+
 def resolve_asset(subpath):
     """resolve_asset('textures/enemies/andrei.png') -> volledig pad
        Checkt: pack override map → pack direct → base assets"""
