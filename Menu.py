@@ -2,6 +2,7 @@ import pygame
 import tkinter as tk
 from tkinter import filedialog
 from config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME
+from paths import asset_path
 from collections import deque
 from map_loader import M
 from skin_manager import SkinManager
@@ -629,7 +630,7 @@ class Menu:
                     if not is_client:
                         game.level_up()
                         game.player.door_pos += ELEV_SPEED
-                        s = pygame.mixer.Sound("assets/silly/toot_toot.ogg" if self.silly_mode else "assets/elev_ding.ogg")
+                        s = pygame.mixer.Sound(asset_path("assets/silly/toot_toot.ogg" if self.silly_mode else "assets/elev_ding.ogg"))
                         s.set_volume(SFX_VOLUME)
                         s.play()
                 self.lift_time -= 1
@@ -640,7 +641,7 @@ class Menu:
                     pygame.mixer.stop()
                     game.player.door_pos += ELEV_SPEED
                     game.escaped = True
-                    s = pygame.mixer.Sound("assets/silly/Banjo.ogg" if self.silly_mode else "assets/Motivator.ogg")
+                    s = pygame.mixer.Sound(asset_path("assets/silly/Banjo.ogg" if self.silly_mode else "assets/Motivator.ogg"))
                     s.set_volume(SFX_VOLUME)
                     s.play()
                     pygame.mouse.set_visible(True)

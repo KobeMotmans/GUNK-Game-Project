@@ -10,6 +10,7 @@ from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, A
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
                     set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME, SILLY_FONT, MAX_DEPTH,
                     ELEVATOR_WAIT_DIST, ELEVATOR_WAIT_FRAMES)
+from paths import asset_path
 from raycaster import dda
 from weapons import Pistol, Minigun, Rifle
 from enemies import Andrei, Ahmed, Ruben, Jan
@@ -73,11 +74,11 @@ class Game:
 
         pygame.mixer.init()
 
-        self.normal_music = pygame.mixer.Sound("assets/esKape Final.ogg")
+        self.normal_music = pygame.mixer.Sound(asset_path("assets/esKape Final.ogg"))
 
         self.Menu.draw_loading_screen()
 
-        self.funny_music = pygame.mixer.Sound("assets/Funny Music.ogg")
+        self.funny_music = pygame.mixer.Sound(asset_path("assets/Funny Music.ogg"))
 
         self.Menu.draw_loading_screen()
 

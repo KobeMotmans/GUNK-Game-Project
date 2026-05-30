@@ -16,8 +16,6 @@ import io
 
 import pygame
 
-from server_game import ServerGame
-
 
 def _save_surface_as_png(img):
     import tempfile
@@ -63,6 +61,7 @@ class ServerIO(threading.Thread):
         self.inputs = {}
 
         # Server game state
+        from server_game import ServerGame
         self.server_game = ServerGame()
 
         # Lobby updates for lobby phase

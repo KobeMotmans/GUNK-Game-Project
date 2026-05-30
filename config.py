@@ -5,6 +5,7 @@ config.py - Centrale configuratie en constanten voor het spel
 import os
 import pygame
 from math import pi
+from paths import asset_path
 
 # ── Display initialisatie (headless-vriendelijk) ─────────────
 # Zet GUNK_HEADLESS=1 in de omgeving om pygame display over te slaan.
@@ -26,7 +27,7 @@ else:
 
 # Map instellingen
 TILE_SIZE = 100
-MAP_PATH = ["assets/floor_5.png", "assets/floor_3.png","assets/floor_2.png","assets/floor_1.png","assets/floor_0.png"]
+MAP_PATH = [asset_path("assets/floor_5.png"), asset_path("assets/floor_3.png"), asset_path("assets/floor_2.png"), asset_path("assets/floor_1.png"), asset_path("assets/floor_0.png")]
 MAX_LEVEL = len(MAP_PATH)-1
 START_ANGLES = [-pi/2, 0, 0, pi/2, -pi/2]
 ELEV_SPEED = 10
@@ -75,19 +76,19 @@ HEALTH_REGEN = 2
 START_AMMO = 100
 AMMO_CAP = 200
 
-FONT = 'assets/font/ocraextended.ttf'
-SILLY_FONT = 'assets/font/Hyro.ttf'
+FONT = asset_path('assets/font/ocraextended.ttf')
+SILLY_FONT = asset_path('assets/font/Hyro.ttf')
     
 
 MENU_BG = (70,70,70)
 
 if not _HEADLESS:
-    SCREEN_FLASH = pygame.transform.scale(pygame.image.load("assets/Damage_Flash.png").convert_alpha(), (WIDTH, HEIGHT))
-    SCREEN_DEAD = pygame.transform.scale(pygame.image.load("assets/dead.png").convert_alpha(), (WIDTH, HEIGHT))
-    SCREEN_DEAD_SILLY = pygame.transform.scale(pygame.image.load("assets/silly/rainbow.png").convert_alpha(), (WIDTH, HEIGHT))
-    BILAL = pygame.transform.scale(pygame.image.load("assets/bilal.png").convert_alpha(), (200, 200))
+    SCREEN_FLASH = pygame.transform.scale(pygame.image.load(asset_path("assets/Damage_Flash.png")).convert_alpha(), (WIDTH, HEIGHT))
+    SCREEN_DEAD = pygame.transform.scale(pygame.image.load(asset_path("assets/dead.png")).convert_alpha(), (WIDTH, HEIGHT))
+    SCREEN_DEAD_SILLY = pygame.transform.scale(pygame.image.load(asset_path("assets/silly/rainbow.png")).convert_alpha(), (WIDTH, HEIGHT))
+    BILAL = pygame.transform.scale(pygame.image.load(asset_path("assets/bilal.png")).convert_alpha(), (200, 200))
 
-    VICTORY_SCREEN = pygame.transform.scale(pygame.image.load("assets/victory.png").convert_alpha(), (WIDTH, HEIGHT))
+    VICTORY_SCREEN = pygame.transform.scale(pygame.image.load(asset_path("assets/victory.png")).convert_alpha(), (WIDTH, HEIGHT))
 
 
     DAMAGE_FLASH = SCREEN_FLASH.copy()

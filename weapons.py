@@ -6,6 +6,7 @@ import pygame
 from config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X, MAX_DEPTH, SFX_VOLUME
 from math import sin, cos
 from vector import Vector
+from paths import asset_path
 
 from Menu import Menu_inst
 
@@ -25,7 +26,7 @@ class Gun:
         self.played_sound = False
 
         # Load textures
-        base_path = f"assets/weapons/{guntype}/"
+        base_path = asset_path(f"assets/weapons/{guntype}/")
         self.gun_rest = self._load_texture(base_path + "GUN.png")
         self.gun_recoil = self._load_texture(base_path + "GUN_recoil.png")
         self.gun_shoot = self._load_texture(base_path + "GUN_muzzle.png")
@@ -93,13 +94,25 @@ class Gun:
 
 
 class Pistol(Gun):
-    def __init__(self, damage=2, recoil_speed=10, shoot_speed=10, ammo_weight=2,shoot_sound="assets/pistol.ogg", silly_sound="assets/Pew.ogg"):
+    def __init__(self, damage=2, recoil_speed=10, shoot_speed=10, ammo_weight=2,shoot_sound=None, silly_sound=None):
+        if shoot_sound is None:
+            shoot_sound = asset_path("assets/pistol.ogg")
+        if silly_sound is None:
+            silly_sound = asset_path("assets/Pew.ogg")
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol", shoot_sound, silly_sound)
 
 class Rifle(Gun):
-    def __init__(self, damage=6, recoil_speed=60, shoot_speed=15, ammo_weight=5,shoot_sound="assets/musket.ogg", silly_sound="assets/Pew.ogg"):
+    def __init__(self, damage=6, recoil_speed=60, shoot_speed=15, ammo_weight=5,shoot_sound=None, silly_sound=None):
+        if shoot_sound is None:
+            shoot_sound = asset_path("assets/musket.ogg")
+        if silly_sound is None:
+            silly_sound = asset_path("assets/Pew.ogg")
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "rifle", shoot_sound, silly_sound)
 
 class Minigun(Gun):
-    def __init__(self, damage=0.75, recoil_speed=0, shoot_speed=5, ammo_weight=1,shoot_sound="assets/minigun.ogg", silly_sound="assets/Pew.ogg", auto=True):
+    def __init__(self, damage=0.75, recoil_speed=0, shoot_speed=5, ammo_weight=1,shoot_sound=None, silly_sound=None, auto=True):
+        if shoot_sound is None:
+            shoot_sound = asset_path("assets/minigun.ogg")
+        if silly_sound is None:
+            silly_sound = asset_path("assets/Pew.ogg")
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", shoot_sound, silly_sound, auto)

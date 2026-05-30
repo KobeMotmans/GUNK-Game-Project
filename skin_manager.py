@@ -5,26 +5,19 @@ import struct
 import socket
 import pickle
 import pygame
+from paths import asset_path, appdata_path
 
 BUILTIN_MAX = 99
 CUSTOM_MIN = 100
-def _get_app_dir():
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
 
 def _get_builtin_dir():
-    if getattr(sys, 'frozen', False):
-        return os.path.join(sys._MEIPASS, "assets", "players")
-    return os.path.join(_get_app_dir(), "assets", "players")
+    return asset_path(os.path.join("assets", "players"))
 
 def _get_fallback():
-    if getattr(sys, 'frozen', False):
-        return os.path.join(sys._MEIPASS, "assets", "player.png")
-    return os.path.join(_get_app_dir(), "assets", "player.png")
+    return asset_path(os.path.join("assets", "player.png"))
 
 def _get_cache_dir():
-    path = os.path.join(_get_app_dir(), "cache", "skins")
+    path = appdata_path(os.path.join("cache", "skins"))
     os.makedirs(path, exist_ok=True)
     return path
 

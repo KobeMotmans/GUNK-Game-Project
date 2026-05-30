@@ -6,12 +6,13 @@ from config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE
 from vector import Vector
 from Menu import Menu_inst
 from skin_manager import SkinManager
+from paths import asset_path
 
 class RenderObject:
     def __init__(self, type, x, y):
         self.pos = Vector(x, y)
         self.type = type
-        sprite_path = f"assets/{type}.png" if not Menu_inst.silly_mode else f"assets/silly/{type}.png"
+        sprite_path = asset_path(f"assets/{type}.png" if not Menu_inst.silly_mode else f"assets/silly/{type}.png")
         self.sprite = pygame.image.load(sprite_path).convert_alpha()
         # Cache voor sprite scaling
         self._cached_scale = None
@@ -99,12 +100,12 @@ class PickupObject(RenderObject):
     def interact(self, player, game):
         if self.type == "objects/ammo":
             game.global_ammo = min(game.global_ammo + 50, 200)
-            s = pygame.mixer.Sound("assets/ammo.ogg")
+            s = pygame.mixer.Sound(asset_path("assets/ammo.ogg"))
             s.set_volume(SFX_VOLUME)
             s.play()
         if self.type == "objects/keycard":
             player.got_keycard = True
-            s = pygame.mixer.Sound("assets/key.ogg")
+            s = pygame.mixer.Sound(asset_path("assets/key.ogg"))
             s.set_volume(SFX_VOLUME)
             s.play()
         if self.type == "objects/exit":
@@ -118,7 +119,7 @@ class PickupObject(RenderObject):
                 return "fail"
         if self.type == "objects/health":
             game.global_health = min(game.global_health + HEALTH_REGEN, START_HEALTH)
-            s = pygame.mixer.Sound("assets/drink.ogg")
+            s = pygame.mixer.Sound(asset_path("assets/drink.ogg"))
             s.set_volume(SFX_VOLUME)
             s.play()
         return "succes"
