@@ -9,8 +9,8 @@ import heapq
 from ..core.config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, SILLY_FONT, ATTACK_DIST
 from ..core.vector import Vector
 from ..core.map_loader import map_to_cord, cord_to_map, is_in_wall, M
+from ..core.paths import asset_path, pack_config
 from .objects import RenderObject
-from ..ui.Menu import Menu_inst
 
 
 
@@ -41,7 +41,8 @@ class Enemy(RenderObject):
             bar_y = 30
 
             # Naam
-            font = pygame.font.Font(SILLY_FONT if Menu_inst.silly_mode else FONT, 28)
+            font_name = pack_config("font", "ocraextended.ttf")
+            font = pygame.font.Font(asset_path(f"assets/font/{font_name}"), 28)
             font.set_bold(True)
             label = font.render("Jan Lemeire", True, (255, 220, 0))
             SCREEN.blit(label, (bar_x + bar_width // 2 - label.get_width() // 2, bar_y - 30))

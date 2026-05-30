@@ -10,7 +10,7 @@ from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
                     set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME, SILLY_FONT, MAX_DEPTH,
                     ELEVATOR_WAIT_DIST, ELEVATOR_WAIT_FRAMES)
-from src.core.paths import asset_path
+from src.core.paths import asset_path, resolve_asset, pack_config
 from src.core.raycaster import dda
 from src.entities.weapons import Pistol, Minigun, Rifle
 from src.entities.enemies import Andrei, Ahmed, Ruben, Jan
@@ -74,19 +74,12 @@ class Game:
 
         pygame.mixer.init()
 
-        self.normal_music = pygame.mixer.Sound(asset_path("assets/esKape Final.ogg"))
+        self.main_music = pygame.mixer.Sound(resolve_asset("sounds/music/esKape Final.ogg"))
 
         self.Menu.draw_loading_screen()
 
-        self.funny_music = pygame.mixer.Sound(asset_path("assets/Funny Music.ogg"))
-
-        self.Menu.draw_loading_screen()
-
-        if self.Menu.silly_mode:
-            self.main_music = self.funny_music
-        else:
-            self.main_music = self.normal_music
-        self.main_music.set_volume(0.5)  # match initial slider value
+        self.main_music = pygame.mixer.Sound(resolve_asset("sounds/music/esKape Final.ogg"))
+        self.main_music.set_volume(0.5)
 
         self.Menu.draw_loading_screen()
 
@@ -127,7 +120,6 @@ class Game:
         cfg.SFX_VOLUME = self.sfx_volume
         for gun in [self.pistol, self.minigun, self.rifle]:
             gun.shoot_sound.set_volume(self.sfx_volume)
-            gun.silly_sound.set_volume(self.sfx_volume)
 
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
@@ -268,7 +260,8 @@ class Game:
         self.player.tick()
 
     def render(self):   #Render alle game elementen
-        SCREEN.fill((0, 255, 255) if self.Menu.silly_mode else 'black')
+        bg = pack_config("bg_color")
+        SCREEN.fill(tuple(bg) if bg else 'black')
 
 
         player_pos = self.player.get_pos()
@@ -464,10 +457,7 @@ class Game:
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
 
-        if self.Menu.silly_mode:
-            self.main_music = self.funny_music
-        else:
-            self.main_music = self.normal_music
+        self.main_music = pygame.mixer.Sound(resolve_asset("sounds/music/esKape Final.ogg"))
         self.main_music.play()
         
     def level_up(self):
@@ -534,10 +524,7 @@ class Game:
         self.objects = {"enemies": [], "ammo": [], "keycard": [], "exit": None, "health": []}
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
-        if self.Menu.silly_mode:
-            self.main_music = self.funny_music
-        else:
-            self.main_music = self.normal_music
+        self.main_music = pygame.mixer.Sound(resolve_asset("sounds/music/esKape Final.ogg"))
         self.main_music.play()
 
     def _do_connect(self, ip, port, name):
@@ -784,7 +771,8 @@ class Game:
                     self.bilal.update()
                     self.bilal.draw()
                 if self.player.got_keycard:
-                    self.keycard_font = pygame.font.Font(SILLY_FONT if self.Menu.silly_mode else FONT, 20)
+                    font_name = pack_config("font", "ocraextended.ttf")
+                    self.keycard_font = pygame.font.Font(asset_path(f"assets/font/{font_name}"), 20)
                     self.keycard_font.set_bold(True)
                     kc_surf = self.keycard_font.render("KEYCARD ACQUIRED", True, 'green')
                     SCREEN.blit(kc_surf, (WIDTH - kc_surf.get_width() - int(WIDTH * 0.04), HEIGHT - int(HEIGHT * 0.06)))

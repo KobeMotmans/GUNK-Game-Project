@@ -22,7 +22,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 DisableWelcomePage=no
-SetupIconFile=assets\icon.ico
+SetupIconFile=assets\textures\ui\icon.ico
 UninstallDisplayIcon={app}\GUNK.exe
 
 [Languages]
@@ -32,7 +32,7 @@ Name: "dutch"; MessagesFile: "compiler:Languages\Dutch.isl"
 Name: "desktopicon"; Description: "Maak een snelkoppeling op het &bureaublad"; GroupDescription: "Extra snelkoppelingen:"; Flags: checkedonce
 
 [Files]
-Source: "assets\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\textures\ui\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\GUNK\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\GUNK\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName}"
 

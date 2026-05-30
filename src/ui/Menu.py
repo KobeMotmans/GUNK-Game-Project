@@ -1,8 +1,8 @@
 import pygame
 import tkinter as tk
 from tkinter import filedialog
-from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD,SCREEN_DEAD_SILLY, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME
-from ..core.paths import asset_path
+from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME
+from ..core.paths import asset_path, resolve_asset, pack_config
 from collections import deque
 from ..core.map_loader import M
 from ..assets.skin_manager import SkinManager
@@ -17,7 +17,6 @@ class Menu:
         self.lift_time = 120
         self.credits_height = HEIGHT
         self.lift_time = ELEV_TIME
-        self.silly_mode = False
         self.loading_progress = 0
 
         # Multiplayer input fields + disk cache
@@ -41,12 +40,12 @@ class Menu:
 
     def draw_loading_screen(self):
         SCREEN.fill(self.bg_color)
-        loading_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.1))
+        loading_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.1))
         loading_font.set_bold(True)
         load_surf = loading_font.render("Loading...", True, 'white')
         SCREEN.blit(load_surf, (WIDTH // 2 - load_surf.get_width() // 2, HEIGHT - int(HEIGHT * 0.29)))
 
-        title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.29))
+        title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.29))
         title_font.set_bold(True)
         title_surf = title_font.render("GUNK", True, 'white')
         SCREEN.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, HEIGHT // 2 - title_surf.get_height() // 2))
@@ -72,7 +71,7 @@ class Menu:
         pygame.draw.rect(SCREEN, (100, 100, 100) if hover else (70, 70, 70), rect, border_radius=8)
         if hover:
             pygame.draw.rect(SCREEN, (180, 180, 180), rect, 2, border_radius=8)
-        font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, font_size)
+        font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), font_size)
         surf = font.render(text, True, 'white')
         SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y_pos + h//2 - surf.get_height()//2))
         for ev in events:
@@ -85,7 +84,7 @@ class Menu:
     def draw_main_menu(self, events, GAME):
         self.game = GAME
         SCREEN.fill(self.bg_color)
-        title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.29))
+        title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.29))
         title_font.set_bold(True)
         title_surf = title_font.render("GUNK", True, 'white')
         SCREEN.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, int(HEIGHT * 0.08)))
@@ -453,7 +452,8 @@ class Menu:
         tuto_label = "[TUTORIAL]" if self.game.bilal.flags["general"] == True else "TUTORIAL"
         
         Tutorial_button = Button(int(HEIGHT * 0.18), int(WIDTH * 0.13), int(HEIGHT * 0.06), tuto_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "tutorial")
-        silly_label = "[SILLY MODE]" if self.silly_mode else "SILLY MODE"
+        pack_active = pack_config("name")
+        silly_label = "[SILLY MODE]" if pack_active else "SILLY MODE"
         Silly_button = Button(int(HEIGHT * 0.25), int(WIDTH * 0.13), int(HEIGHT * 0.06), silly_label, 25, "black", "white", "white", "black", self.game, "settings", True, 0, "silly")
         volume_slider = self.get_volume_slider(self.game)
         volume_slider.draw(events)
@@ -489,12 +489,12 @@ class Menu:
         x = WIDTH // 4
         white = "white"
 
-        self.title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.29))
+        self.title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.29))
         self.title_font.set_bold(True)
         title_surf = self.title_font.render("GUNK", True, white)
         SCREEN.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, y))
 
-        self.text_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.04))
+        self.text_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.04))
         lines = [
             ("Developed by:", int(HEIGHT * 0.27)),
             ("Kobe Motmans", int(HEIGHT * 0.31)),
@@ -617,7 +617,8 @@ class Menu:
         if game is None:
             return
         is_client = game.multiplayer
-        self.elev_color = "pink" if self.silly_mode else (20,20,20)
+        elev_color = pack_config("elevator_color")
+        self.elev_color = tuple(elev_color) if elev_color else (20,20,20)
         if player.door_pos <= WIDTH/2:
             pygame.draw.rect(SCREEN,self.elev_color,[0,0,player.door_pos,HEIGHT])
             pygame.draw.rect(SCREEN,self.elev_color,[WIDTH-player.door_pos,0,player.door_pos,HEIGHT])
@@ -630,7 +631,7 @@ class Menu:
                     if not is_client:
                         game.level_up()
                         game.player.door_pos += ELEV_SPEED
-                        s = pygame.mixer.Sound(asset_path("assets/silly/toot_toot.ogg" if self.silly_mode else "assets/elev_ding.ogg"))
+                        s = pygame.mixer.Sound(resolve_asset("sounds/sfx/elev_ding.ogg"))
                         s.set_volume(SFX_VOLUME)
                         s.play()
                 self.lift_time -= 1
@@ -641,7 +642,7 @@ class Menu:
                     pygame.mixer.stop()
                     game.player.door_pos += ELEV_SPEED
                     game.escaped = True
-                    s = pygame.mixer.Sound(asset_path("assets/silly/Banjo.ogg" if self.silly_mode else "assets/Motivator.ogg"))
+                    s = pygame.mixer.Sound(resolve_asset("sounds/music/Motivator.ogg"))
                     s.set_volume(SFX_VOLUME)
                     s.play()
                     pygame.mouse.set_visible(True)
@@ -660,10 +661,10 @@ class Menu:
             self.lift_time = ELEV_TIME
     def draw_dead_screen(self,events,GAME):
         self.game = GAME
-        self.title_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.19))
+        self.title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.19))
         self.title_font.set_bold(True)
-        SCREEN.blit(SCREEN_DEAD, (0,0)) if not self.silly_mode else SCREEN.blit(SCREEN_DEAD_SILLY, (0,0))
-        self.score_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.08))
+        SCREEN.blit(SCREEN_DEAD, (0,0))
+        self.score_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.08))
         self.score_font.set_bold(True)
         Menu_button = Button(int(HEIGHT * 0.1), int(WIDTH * 0.07), int(HEIGHT * 0.06), "MENU", 35, "black", 'white', 'white', 'black', self.game, "menu", True, function="disconnect")
         Menu_button.draw_button(events)
@@ -674,9 +675,9 @@ class Menu:
         
     def draw_escaped_screen(self,events,GAME):
         self.game = GAME
-        self.endscreen_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.15))
+        self.endscreen_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.15))
         self.endscreen_font.set_bold(True)
-        self.score_font = pygame.font.Font(SILLY_FONT if self.silly_mode else FONT, int(HEIGHT * 0.08))
+        self.score_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.08))
         self.score_font.set_bold(True)
         SCREEN.blit(VICTORY_SCREEN, (0,0))
         pygame.mouse.set_visible(True)
@@ -729,7 +730,7 @@ class Button:
         self.mouse_vis = mouse_vis
         self.x_pos = x_pos
         self.function = function
-        self.font = pygame.font.Font(SILLY_FONT if GAME.Menu.silly_mode else FONT,self.text_size) 
+        self.font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"),self.text_size) 
         self.font.set_bold(True)
     def draw_button(self, events):
         mouse = pygame.mouse.get_pos()
@@ -752,7 +753,8 @@ class Button:
                     elif self.function == "tutorial":
                         self.GAME.bilal.flags["general"] = not self.GAME.bilal.flags["general"]
                     elif self.function == "silly":
-                        self.GAME.Menu.silly_mode = not self.GAME.Menu.silly_mode
+                        from ..core.paths import set_pack, TEXTURE_PACK
+                        set_pack(None) if TEXTURE_PACK else set_pack("silly")
                     if self.state_change == "reset":
                         self.GAME.reset_game()
                     elif self.state_change == "Stop":
@@ -794,7 +796,7 @@ class Slider:
         return self.track_x + ratio * self.w
 
     def draw(self, events):
-        self.font = pygame.font.Font(SILLY_FONT if self.GAME.Menu.silly_mode else FONT, int(HEIGHT * 0.02))
+        self.font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.02))
         mouse = pygame.mouse.get_pos()
         mouse_buttons = pygame.mouse.get_pressed()
 
@@ -834,7 +836,7 @@ class Tekstballon:
         self.x_pos = x_pos
         self.max_width = max_width
         self.padding = padding
-        self.font = pygame.font.Font(SILLY_FONT if GAME.Menu.silly_mode else FONT, 20)
+        self.font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), 20)
     @staticmethod
     def wrap_text(text, font, max_width):
         words = text.split(" ")

@@ -7,7 +7,7 @@ from math import sin, cos, pi
 from ..core.config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH, START_HEALTH, START_ANGLES, SFX_VOLUME
 from ..core.map_loader import will_collide
 from ..core.vector import Vector
-from ..ui.Menu import Menu_inst
+from ..core.paths import resolve_asset
 
 
 class Player:
@@ -74,12 +74,12 @@ class Player:
             self.inv_time = 60
             game.global_health -= damage
             game._health_delta -= damage
-            s = pygame.mixer.Sound("assets/damage.ogg" if not Menu_inst.silly_mode else "assets/silly/ah.ogg")
+            s = pygame.mixer.Sound(resolve_asset("sounds/sfx/damage.ogg"))
             s.set_volume(SFX_VOLUME)
             s.play()
             if game.global_health <= 0:
                 pygame.mixer.stop()
-                s = pygame.mixer.Sound("assets/damage.ogg" if not Menu_inst.silly_mode else "assets/silly/ah.ogg")
+                s = pygame.mixer.Sound(resolve_asset("sounds/sfx/damage.ogg"))
                 s.set_volume(SFX_VOLUME)
                 s.play()
                 self.death = True
