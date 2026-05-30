@@ -7,6 +7,7 @@ from ..core.config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X, M
 from math import sin, cos
 from ..core.vector import Vector
 from ..core.paths import asset_path, resolve_asset, pack_config
+from ..assets.texture_cache import get as get_cached_texture
 
 # Sound init
 pygame.mixer.init()
@@ -39,9 +40,8 @@ class Gun:
         self.weapon_rect = self.gun_rest.get_rect()
 
     def _load_texture(self, path):
-        """Helper om texture te laden en te scalen"""
-        tex = pygame.image.load(path).convert_alpha()
-        return pygame.transform.scale(tex, WEAPON_SIZE)
+        """Helper om texture te laden en te scalen (via texture cache)"""
+        return get_cached_texture(path, WEAPON_SIZE)
 
     def shoot(self, pos, angle, enemies, player, current_gun, apply_damage=True):
         """Start schiet animatie als wapen in rust is. Returnt hit enemy pos of None."""

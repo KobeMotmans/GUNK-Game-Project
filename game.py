@@ -12,6 +12,7 @@ from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE
                     ELEVATOR_WAIT_DIST, ELEVATOR_WAIT_FRAMES)
 from src.core.paths import asset_path, resolve_asset, pack_config
 from src.core.raycaster import dda
+from src.assets.texture_cache import preload as preload_textures, clear as clear_texture_cache
 from src.entities.weapons import Pistol, Minigun, Rifle
 from src.entities.enemies import Andrei, Ahmed, Ruben, Jan
 from src.entities.player import Player
@@ -417,6 +418,26 @@ class Game:
         # 5. Wapen laatst
         self.current_gun.draw()
 
+    def _get_all_texture_paths(self):
+        paths = []
+        for t in ["andrei", "ahmed", "ruben", "jan"]:
+            paths.append(resolve_asset(f"textures/enemies/{t}.png"))
+        for t in ["ammo", "health", "keycard", "exit"]:
+            paths.append(resolve_asset(f"textures/objects/{t}.png"))
+        from src.core.config import WEAPON_SIZE
+        for gun in ["pistol", "rifle", "minigun"]:
+            base = asset_path(f"assets/textures/weapons/{gun}")
+            paths.append((f"{base}/GUN.png", WEAPON_SIZE))
+            paths.append((f"{base}/GUN_recoil.png", WEAPON_SIZE))
+            paths.append((f"{base}/GUN_muzzle.png", WEAPON_SIZE))
+        return paths
+
+    def _preload_textures(self, target_state):
+        self.Menu.loading_progress = 0
+        self.Menu.draw_loading_screen(0)
+        preload_textures(self._get_all_texture_paths(), lambda p: self.Menu.draw_loading_screen(p))
+        self.state = target_state
+
     def reset_game(self):
         self.multiplayer = False
         self.player_id = 0
@@ -428,6 +449,12 @@ class Game:
             self.network_client.disconnect()
             self.network_client = None
         M.map_level = 0
+        
+        # Preload textures with loading screen
+        self.Menu.loading_progress = 0
+        self.Menu.draw_loading_screen(0)
+        preload_textures(self._get_all_texture_paths(), lambda p: self.Menu.draw_loading_screen(p))
+        
         # Init objects
         self.state = "game"
         self.current_gun = self.pistol
@@ -493,7 +520,7 @@ class Game:
             self.network_client.send({"type": "start_game"})
 
     def _start_multiplayer_client(self):
-        self.state = "game"
+        self._preload_textures("game")
         M.map_level = 0
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
         M.start_angle = START_ANGLES[M.map_level]

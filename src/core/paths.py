@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import shutil
+from ..assets.texture_cache import clear as clear_texture_cache
 
 
 def _ensure_assets():
@@ -47,6 +48,7 @@ def set_pack(pack_name):
     global TEXTURE_PACK, _pack_config
     TEXTURE_PACK = pack_name
     _pack_config = {}
+    clear_texture_cache()
     if pack_name:
         p = os.path.join(_project_root(), "assets", "packs", pack_name, "pack.json")
         if os.path.exists(p):

@@ -38,7 +38,7 @@ class Menu:
         self.mp_skin_upload_name = ""
         self._upload_status = None
 
-    def draw_loading_screen(self):
+    def draw_loading_screen(self, progress=None):
         SCREEN.fill(self.bg_color)
         loading_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.1))
         loading_font.set_bold(True)
@@ -57,9 +57,12 @@ class Menu:
 
         pygame.draw.rect(SCREEN, (80, 80, 80), (bar_x, bar_y, bar_width, bar_height))
 
+        if progress is not None:
+            self.loading_progress = progress
         progress_width = bar_width * self.loading_progress
         pygame.draw.rect(SCREEN, (0, 200, 0), (bar_x, bar_y, progress_width, bar_height))
-        self.loading_progress += 0.2
+        if progress is None:
+            self.loading_progress += 0.2
         pygame.display.flip()
 
     def _draw_main_button(self, events, text, y_pos, w, action=None, h=55, font_size=34, x=None):
@@ -516,9 +519,13 @@ class Menu:
         drop_h = int(HEIGHT * 0.05)
         packs = list_packs()
         if not hasattr(self, '_pack_dropdown') or self._pack_dropdown is None:
+            def _on_pack_select(val):
+                from ..assets.texture_cache import preload as preload_tex
+                set_pack(val)
+                self.game._preload_textures("settings")
             self._pack_dropdown = Dropdown(
                 c - drop_w // 2, int(HEIGHT * 0.72), drop_w, drop_h, packs,
-                self.game, on_select=lambda val: set_pack(val)
+                self.game, on_select=_on_pack_select
             )
             self._pack_dropdown.sync_from_pack()
         else:

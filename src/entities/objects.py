@@ -7,13 +7,14 @@ from ..core.vector import Vector
 from ..ui.Menu import Menu_inst
 from ..assets.skin_manager import SkinManager
 from ..core.paths import asset_path, resolve_asset
+from ..assets.texture_cache import get as get_cached_texture
 
 class RenderObject:
     def __init__(self, type, x, y):
         self.pos = Vector(x, y)
         self.type = type
         sprite_path = resolve_asset(f"textures/{type}.png")
-        self.sprite = pygame.image.load(sprite_path).convert_alpha()
+        self.sprite = get_cached_texture(sprite_path)
         # Cache voor sprite scaling
         self._cached_scale = None
         self._cached_dist = -1
