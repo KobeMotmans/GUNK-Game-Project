@@ -1,10 +1,4 @@
 /assets/Map Pallette.ase
-__pycache__/
-*.pyc
+/__pycache__/
 GUNK.zip
 /chat_history/
-/dist/
-/build/
-/Output/
-*.spec
-/tools/upx/upx.exe

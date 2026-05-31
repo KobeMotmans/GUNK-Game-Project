@@ -9,8 +9,8 @@ os.environ["GUNK_HEADLESS"] = "1"
 
 import sys
 import signal
-from src.network.network import ServerIO
-from src.core.config import DEFAULT_PORT
+from network import ServerIO
+from config import DEFAULT_PORT
 
 
 def main():
