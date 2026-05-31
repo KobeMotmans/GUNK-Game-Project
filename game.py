@@ -183,9 +183,10 @@ class Game:
                                 if not self.multiplayer:
                                     self.global_ammo -= self.current_gun.ammo_weight
                                 self._ammo_delta -= self.current_gun.ammo_weight
-                                hit_pos = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]),self.player,self.current_gun, apply_damage=True)
-                                if hit_pos:
-                                    self._enemy_damage.append({"pos": hit_pos, "damage": self.current_gun.damage})
+                                hit = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]),self.player,self.current_gun, apply_damage=True)
+                                if hit:
+                                    idx, pos = hit
+                                    self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
 
             elif self.state == "paused":
                  if event.type == pygame.KEYDOWN: #unpause
@@ -226,9 +227,10 @@ class Game:
                         if not self.multiplayer:
                             self.global_ammo -= self.current_gun.ammo_weight
                         self._ammo_delta -= self.current_gun.ammo_weight
-                        hit_pos = self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), self.player, self.current_gun, apply_damage=True)
-                        if hit_pos:
-                            self._enemy_damage.append({"pos": hit_pos, "damage": self.current_gun.damage})
+                        hit = self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), self.player, self.current_gun, apply_damage=True)
+                        if hit:
+                            idx, pos = hit
+                            self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
 
         # === Client: send position + state to server (rate-limited) ===
         if self.network_client:
@@ -570,6 +572,8 @@ class Game:
 
     def _send_client_state(self):
         """Send deltas to the server. Rate-limited to every 2 frames."""
+        if self.state not in ("game", "paused"):
+            return
         self._pos_seq += 1
         if self._pos_seq % 2 != 0:
             return
@@ -598,7 +602,8 @@ class Game:
         # 1. Overwrite shared resources from server (absolute values)
         self.global_health = state.get("global_health", self.global_health)
         self.global_ammo = state.get("global_ammo", self.global_ammo)
-        self.player.got_keycard = state.get("keycard_acquired", self.player.got_keycard)
+        if state.get("keycard_acquired"):
+            self.player.got_keycard = True
 
         # 2. Players — sync own state flags from server (not pos/angle — client-authoritative movement)
         players_data = state.get("players", [])

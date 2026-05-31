@@ -7,7 +7,7 @@ import random
 import heapq
 from math import atan2, pi, sin, cos, hypot
 from ..core.vector import Vector
-from ..core.map_loader import cord_to_map, map_to_cord, is_in_wall, M
+from ..core.map_loader import cord_to_map, map_to_cord, is_in_wall, will_collide, M
 from ..core.config import (MAX_DEPTH, AGGRO_DIST, ATTACK_DIST, TILE_SIZE,
                     PATHFIND_INTERVAL, START_HEALTH, HEALTH_REGEN,
                     START_AMMO, AMMO_CAP, HEALTH_CHANCE, MAP_PATH,
@@ -50,7 +50,14 @@ class ServerEnemy:
         dx = pos.x - self.pos.x
         dy = pos.y - self.pos.y
         angle = atan2(dy, dx)
-        self.pos += Vector(self.speed * cos(angle), self.speed * sin(angle))
+        step = Vector(self.speed * cos(angle), self.speed * sin(angle))
+        new_pos = self.pos + step
+        if not will_collide(new_pos.x, new_pos.y, radius=5):
+            self.pos = new_pos
+        elif not will_collide(new_pos.x, self.pos.y, radius=5):
+            self.pos.x = new_pos.x
+        elif not will_collide(self.pos.x, new_pos.y, radius=5):
+            self.pos.y = new_pos.y
 
     def has_target(self):
         if self.target is not None:
@@ -208,6 +215,10 @@ class ServerGame:
         self.elevator_transition_timer = 0
         self.escaped = False
         self.jan_spotted = False
+        # Reset per-player seq counters so game-time packets aren't
+        # dropped by out-of-order protection (lobby packets advanced them).
+        for pid in self._last_player_seq:
+            self._last_player_seq[pid] = 0
         self.initialized = True
 
     def register_player(self, pid, name, skin_id=0):
@@ -311,13 +322,16 @@ class ServerGame:
 
         if "enemy_damage" in data:
             for hit in data["enemy_damage"]:
-                hit_pos = Vector(hit["pos"][0], hit["pos"][1])
-                for i, e in enumerate(self.enemies):
+                idx = hit.get("enemy_index", -1)
+                if 0 <= idx < len(self.enemies):
+                    e = self.enemies[idx]
+                    hit_pos = Vector(hit["pos"][0], hit["pos"][1])
                     if (e.pos - hit_pos).norm() < TILE_SIZE:
                         e.health -= hit["damage"]
                         if e.health <= 0:
-                            self._handle_enemy_death(i, pid)
-                        break
+                            self._handle_enemy_death(idx, pid)
+                    continue
+                # Index shifted (enemy died) — drop silently
 
         if "remove_pickup" in data:
             for pickup in data["remove_pickup"]:
@@ -330,6 +344,8 @@ class ServerGame:
                             self.global_ammo = min(self.global_ammo + 50, AMMO_CAP)
                         elif ot == "health":
                             self.global_health = min(self.global_health + HEALTH_REGEN, START_HEALTH)
+                        elif ot == "keycard":
+                            self.keycard_acquired = True
                         break
 
     def process_inputs(self, inputs):

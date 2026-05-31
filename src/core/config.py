@@ -17,7 +17,7 @@ if not _HEADLESS:
     infoObject = pygame.display.Info()
     WIDTH = infoObject.current_w
     HEIGHT = infoObject.current_h - 50
-    SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
+    SCREEN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.DOUBLEBUF)
 else:
     os.environ["SDL_VIDEODRIVER"] = "dummy"
     pygame.init()

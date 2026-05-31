@@ -54,12 +54,12 @@ class Gun:
             dy = sin(angle)
             while (ray_pos - pos).norm() < MAX_DEPTH:
                 ray_pos = Vector(ray_pos.x + dx, ray_pos.y + dy)
-                for enemy in enemies:
+                for i, enemy in enumerate(enemies):
                     if enemy.is_los:
                         if enemy.is_hit(ray_pos):
                             if apply_damage:
                                 enemy.take_dmg(self.damage)
-                            return (enemy.pos.x, enemy.pos.y)
+                            return i, (enemy.pos.x, enemy.pos.y)
                 else:
                     continue
                 break

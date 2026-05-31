@@ -8,7 +8,7 @@ import heapq
 
 from ..core.config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, SILLY_FONT, ATTACK_DIST
 from ..core.vector import Vector
-from ..core.map_loader import map_to_cord, cord_to_map, is_in_wall, M
+from ..core.map_loader import map_to_cord, cord_to_map, is_in_wall, will_collide, M
 from ..core.paths import asset_path, pack_config
 from .objects import RenderObject
 
@@ -99,7 +99,14 @@ class Enemy(RenderObject):
         dx = pos.x - self.pos.x
         dy = pos.y - self.pos.y
         angle = atan2(dy, dx)
-        self.pos += Vector(self.speed * cos(angle), self.speed * sin(angle))
+        step = Vector(self.speed * cos(angle), self.speed * sin(angle))
+        new_pos = self.pos + step
+        if not will_collide(new_pos.x, new_pos.y, radius=5):
+            self.pos = new_pos
+        elif not will_collide(new_pos.x, self.pos.y, radius=5):
+            self.pos.x = new_pos.x
+        elif not will_collide(self.pos.x, new_pos.y, radius=5):
+            self.pos.y = new_pos.y
 
     def has_target(self):
         if self.target is not None:
