@@ -495,9 +495,9 @@ class Game:
         if self.network_client:
             self.network_client.send({"type": "start_game"})
 
-    def _start_multiplayer_client(self):
-        M.map_level = 0
-        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
+    def _start_multiplayer_client(self, level=0):
+        M.map_level = level
+        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[level])
         M.start_angle = START_ANGLES[M.map_level]
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.global_health = START_HEALTH
@@ -718,9 +718,12 @@ class Game:
             if packet.get("type") == "state":
                 self.apply_state(packet)
             elif packet.get("type") == "game_start":
-                self._start_multiplayer_client()
+                self._start_multiplayer_client(packet.get("level", 0))
             elif packet.get("type") in ("server_stopped", "disconnect"):
                 self._disconnect()
+            elif packet.get("type") == "skin_manifest_update":
+                SkinManager.set_manifest(packet.get("skin_manifest", []))
+                SkinManager.download_all_skins()
         if self.global_health <= 0 and self.state in ("game", "paused"):
             self.global_health = 0
             pygame.mouse.set_visible(True)
@@ -750,11 +753,12 @@ class Game:
                         if packet.get("type") == "lobby_info":
                             self.Menu.client_list = packet.get("players", [])
                         elif packet.get("type") == "game_start":
-                            self._start_multiplayer_client()
+                            self._start_multiplayer_client(packet.get("level", 0))
                         elif packet.get("type") == "server_stopped":
                             self._disconnect()
                         elif packet.get("type") == "skin_manifest_update":
                             SkinManager.set_manifest(packet.get("skin_manifest", []))
+                            SkinManager.download_all_skins()
                     now = time.time()
                     if now - getattr(self, '_last_lobby_ping', 0) > 2.0:
                         self.network_client.send({"type": "ping"})

@@ -290,15 +290,26 @@ class ServerIO(threading.Thread):
                 self.inputs[pid] = data
 
             elif ptype == "start_game":
-                self.server_game.init_world()
-                game_start_packet = pickle.dumps({"type": "game_start"})
-                with self.clients_lock:
-                    for c_addr, _, _ in self.clients:
-                        for _ in range(3):
-                            try:
-                                self.udp_socket.sendto(game_start_packet, c_addr)
-                            except OSError:
-                                pass
+                if self.server_game.initialized:
+                    game_start_packet = pickle.dumps({
+                        "type": "game_start",
+                        "level": self.server_game.level
+                    })
+                    for _ in range(3):
+                        try:
+                            self.udp_socket.sendto(game_start_packet, addr)
+                        except OSError:
+                            pass
+                else:
+                    self.server_game.init_world()
+                    game_start_packet = pickle.dumps({"type": "game_start", "level": 0})
+                    with self.clients_lock:
+                        for c_addr, _, _ in self.clients:
+                            for _ in range(3):
+                                try:
+                                    self.udp_socket.sendto(game_start_packet, c_addr)
+                                except OSError:
+                                    pass
 
             elif ptype == "disconnect":
                 should_broadcast = False
