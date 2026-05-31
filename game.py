@@ -6,20 +6,22 @@ import pygame
 import random
 import time
 
-from config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
+from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
-                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME, SILLY_FONT, MAX_DEPTH,
+                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME, MAX_DEPTH,
                     ELEVATOR_WAIT_DIST, ELEVATOR_WAIT_FRAMES)
-from raycaster import dda
-from weapons import Pistol, Minigun, Rifle
-from enemies import Andrei, Ahmed, Ruben, Jan
-from player import Player
-from Menu import Menu_inst, Bilal
-from map_loader import M, png_to_list_fast
-from objects import PickupObject, PlayerSprite
-from skin_manager import SkinManager
-from vector import Vector
-from network import NetworkClient
+from src.core.paths import asset_path, resolve_asset, pack_config
+from src.core.raycaster import dda
+from src.assets.texture_cache import preload as preload_textures, clear as clear_texture_cache
+from src.entities.weapons import Pistol, Minigun, Rifle
+from src.entities.enemies import Andrei, Ahmed, Ruben, Jan
+from src.entities.player import Player
+from src.ui.Menu import Menu_inst, Bilal
+from src.core.map_loader import M, png_to_list_fast
+from src.entities.objects import PickupObject, PlayerSprite
+from src.assets.skin_manager import SkinManager
+from src.core.vector import Vector
+from src.network.network import NetworkClient
 
 
 class Game:
@@ -46,7 +48,6 @@ class Game:
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
-        self._prev_global_health = START_HEALTH
 
         self.Menu.draw_loading_screen()
 
@@ -58,6 +59,7 @@ class Game:
         self.unlocked_guns = [self.pistol]
 
         self.sfx_volume = 0.3
+        self.music_volume = 0.5
         self.curr_flash = ""
         self.flash_time = 0
         self.possible_enemies = [Andrei, Ahmed, Ruben]
@@ -73,21 +75,17 @@ class Game:
 
         pygame.mixer.init()
 
-        self.normal_music = pygame.mixer.Sound("assets/esKape Final.ogg")
+        self.Menu.draw_loading_screen()
+
+        self.main_music = pygame.mixer.Sound(resolve_asset("sounds/music/esKape Final.ogg"))
+        self.main_music.set_volume(self.music_volume)
 
         self.Menu.draw_loading_screen()
 
-        self.funny_music = pygame.mixer.Sound("assets/Funny Music.ogg")
-
-        self.Menu.draw_loading_screen()
-
-        if self.Menu.silly_mode:
-            self.main_music = self.funny_music
-        else:
-            self.main_music = self.normal_music
-        self.main_music.set_volume(0.5)  # match initial slider value
-
-        self.Menu.draw_loading_screen()
+        # Preload all textures at startup (loading screen shown)
+        self.Menu.loading_progress = 0
+        self.Menu.draw_loading_screen(0)
+        preload_textures(self._get_all_texture_paths(), lambda p: self.Menu.draw_loading_screen(p))
 
         # Multiplayer
         self.multiplayer = False
@@ -105,10 +103,9 @@ class Game:
         self.player_near_exit = False
         self.exit_pos = None
 
-        # Global pause (multiplayer)
-        self.global_paused = False
-        self.paused_by = ""
         self._settings_return = "menu"
+        self._paused_frame = None
+        self._pending_removes = set()
 
         # Pos update rate limiting
         self._pos_seq = 0
@@ -122,11 +119,10 @@ class Game:
         self.state = "menu"
 
     def update_sfx_volume(self):
-        import config as cfg
+        import src.core.config as cfg
         cfg.SFX_VOLUME = self.sfx_volume
         for gun in [self.pistol, self.minigun, self.rifle]:
             gun.shoot_sound.set_volume(self.sfx_volume)
-            gun.silly_sound.set_volume(self.sfx_volume)
 
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
@@ -174,22 +170,10 @@ class Game:
                         else:
                             self.current_gun = self.unlocked_guns[self.unlocked_guns.index(self.current_gun) + 1]
                     if event.key == pygame.K_ESCAPE:
-                        if self.multiplayer:
-                            self.global_paused = not self.global_paused
-                            self.paused_by = self.player_name if self.global_paused else ""
-                            if self.global_paused:
-                                pygame.mouse.set_visible(True)
-                                pygame.event.set_grab(False)
-                                pygame.mixer.pause()
-                            else:
-                                pygame.mouse.set_visible(False)
-                                pygame.event.set_grab(True)
-                                pygame.mixer.unpause()
-                        else:
-                            pygame.mouse.set_visible(True)
-                            pygame.event.set_grab(False)
-                            self.state = "paused"
-                            pygame.mixer.pause()
+                        pygame.mouse.set_visible(True)
+                        pygame.event.set_grab(False)
+                        self.state = "paused"
+                        pygame.mixer.pause()
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
@@ -198,30 +182,19 @@ class Game:
                                 if not self.multiplayer:
                                     self.global_ammo -= self.current_gun.ammo_weight
                                 self._ammo_delta -= self.current_gun.ammo_weight
-                                hit_pos = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]),self.player,self.current_gun, apply_damage=not self.multiplayer)
-                                if hit_pos:
-                                    self._enemy_damage.append({"pos": hit_pos, "damage": self.current_gun.damage})
+                                hit = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]),self.player,self.current_gun, apply_damage=True)
+                                if hit:
+                                    idx, pos = hit
+                                    self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
 
             elif self.state == "paused":
                  if event.type == pygame.KEYDOWN: #unpause
-                      if event.key == pygame.K_ESCAPE:
-                          pygame.mouse.set_visible(False)
-                          pygame.event.set_grab(True)
-                          self.state = "game"
-                          if not self.multiplayer:
-                              pygame.mixer.unpause()
+                       if event.key == pygame.K_ESCAPE:
+                           pygame.mouse.set_visible(False)
+                           pygame.event.set_grab(True)
+                           self.state = "game"
+                           pygame.mixer.unpause()
 
-        if self.state == "game":
-            mouse_buttons = pygame.mouse.get_pressed()
-            if self.current_gun.auto: #Pressed to shoot
-                if mouse_buttons[0] and self.current_gun.weapon_state == 0:
-                    if self.global_ammo >= self.current_gun.ammo_weight:
-                        if not self.multiplayer:
-                            self.global_ammo -= self.current_gun.ammo_weight
-                        self._ammo_delta -= self.current_gun.ammo_weight
-                        hit_pos = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects["enemies"],self.player,self.current_gun, apply_damage=not self.multiplayer)
-                        if hit_pos:
-                            self._enemy_damage.append({"pos": hit_pos, "damage": self.current_gun.damage})
         return events
     
     def handle_input(self):
@@ -235,39 +208,40 @@ class Game:
 
         if self.state == "game" and not self.escaped:
             # === UNIFIED: all players move and auto-fire locally ===
-            if not self.global_paused:
-                self.player.rotate(pygame.mouse.get_rel()[0])
-                pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
-                pygame.mouse.get_rel()
-                if keys[pygame.K_UP] or keys[pygame.K_z]:
-                    self.player.move("up")
-                if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-                    self.player.move("down")
-                if keys[pygame.K_LEFT] or keys[pygame.K_q]:
-                    self.player.move("left")
-                if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-                    self.player.move("right")
+            self.player.rotate(pygame.mouse.get_rel()[0])
+            pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
+            pygame.mouse.get_rel()
+            if keys[pygame.K_UP] or keys[pygame.K_z]:
+                self.player.move("up")
+            if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+                self.player.move("down")
+            if keys[pygame.K_LEFT] or keys[pygame.K_q]:
+                self.player.move("left")
+            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                self.player.move("right")
 
-                mouse_buttons = pygame.mouse.get_pressed()
-                if self.current_gun.auto and mouse_buttons[0] and self.current_gun.weapon_state == 0:
+            mouse_buttons = pygame.mouse.get_pressed()
+            if self.current_gun.auto and mouse_buttons[0] and self.current_gun.weapon_state == 0:
                     if self.global_ammo >= self.current_gun.ammo_weight:
                         if not self.multiplayer:
                             self.global_ammo -= self.current_gun.ammo_weight
                         self._ammo_delta -= self.current_gun.ammo_weight
-                        hit_pos = self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), self.player, self.current_gun, apply_damage=not self.multiplayer)
-                        if hit_pos:
-                            self._enemy_damage.append({"pos": hit_pos, "damage": self.current_gun.damage})
+                        hit = self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), self.player, self.current_gun, apply_damage=True)
+                        if hit:
+                            idx, pos = hit
+                            self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
 
-            # === Client: send position + state to server (rate-limited) ===
-            if self.network_client:
-                self._send_client_state()
+        # === Client: send position + state to server (rate-limited) ===
+        if self.network_client:
+            self._send_client_state()
 
     def update(self):
         self.current_gun.update()
         self.player.tick()
 
     def render(self):   #Render alle game elementen
-        SCREEN.fill((0, 255, 255) if self.Menu.silly_mode else 'black')
+        bg = pack_config("bg_color")
+        SCREEN.fill(tuple(bg) if bg else 'black')
 
 
         player_pos = self.player.get_pos()
@@ -294,7 +268,7 @@ class Game:
                                     self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
                                     self.bilal.trigger("monster")
                         continue
-                    if self.state == "game" and not self.global_paused:
+                    if self.state == "game":
                         if self.multiplayer:
                             enemy.find_path(self.player, self, True, False)
                         else:
@@ -325,6 +299,7 @@ class Game:
                         if self.multiplayer:
                             self.global_ammo = old
                             self._remove_pickup.append({"type": "ammo", "pos": (item.pos.x, item.pos.y)})
+                            self._pending_removes.add(("ammo", round(item.pos.x, 1), round(item.pos.y, 1)))
                         else:
                             self._ammo_delta += self.global_ammo - old
                         self.objects["ammo"].remove(item)
@@ -343,6 +318,7 @@ class Game:
                         if self.multiplayer:
                             self.global_health = old
                             self._remove_pickup.append({"type": "health", "pos": (item.pos.x, item.pos.y)})
+                            self._pending_removes.add(("health", round(item.pos.x, 1), round(item.pos.y, 1)))
                         else:
                             self._health_delta += self.global_health - old
                         self.objects["health"].remove(item)
@@ -359,6 +335,7 @@ class Game:
                         item.interact(self.player, self)
                         if self.multiplayer:
                             self._remove_pickup.append({"type": "keycard", "pos": (item.pos.x, item.pos.y)})
+                            self._pending_removes.add(("keycard", round(item.pos.x, 1), round(item.pos.y, 1)))
                         self.objects["keycard"].remove(item)
             else:
                 item = self.objects[obj]
@@ -431,6 +408,26 @@ class Game:
         # 5. Wapen laatst
         self.current_gun.draw()
 
+    def _get_all_texture_paths(self):
+        paths = []
+        for t in ["andrei", "ahmed", "ruben", "jan"]:
+            paths.append(resolve_asset(f"textures/enemies/{t}.png"))
+        for t in ["ammo", "health", "keycard", "exit"]:
+            paths.append(resolve_asset(f"textures/objects/{t}.png"))
+        from src.core.config import WEAPON_SIZE
+        for gun in ["pistol", "rifle", "minigun"]:
+            base = asset_path(f"assets/textures/weapons/{gun}")
+            paths.append((f"{base}/GUN.png", WEAPON_SIZE))
+            paths.append((f"{base}/GUN_recoil.png", WEAPON_SIZE))
+            paths.append((f"{base}/GUN_muzzle.png", WEAPON_SIZE))
+        return paths
+
+    def _preload_textures(self, target_state):
+        self.Menu.loading_progress = 0
+        self.Menu.draw_loading_screen(0)
+        preload_textures(self._get_all_texture_paths(), lambda p: self.Menu.draw_loading_screen(p))
+        self.state = target_state
+
     def reset_game(self):
         self.multiplayer = False
         self.player_id = 0
@@ -442,6 +439,7 @@ class Game:
             self.network_client.disconnect()
             self.network_client = None
         M.map_level = 0
+        
         # Init objects
         self.state = "game"
         self.current_gun = self.pistol
@@ -451,9 +449,7 @@ class Game:
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
-        self._prev_global_health = START_HEALTH
         M.start_angle = START_ANGLES[M.map_level]
-        self.player.ammo = START_AMMO
         self.objects = self.create_objects()
         self.projectiles = []
         self.elevator_waiting = False
@@ -462,9 +458,8 @@ class Game:
         self.elevator_wait_timer = 0
         self.player_near_exit = False
         self.exit_pos = None
-        self.global_paused = False
-        self.paused_by = ""
         self._pos_seq = 0
+        self._pending_removes.clear()
         self.jan_spotted = False
         self.escaped = False
         self.player.door_pos = 0
@@ -472,10 +467,8 @@ class Game:
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
 
-        if self.Menu.silly_mode:
-            self.main_music = self.funny_music
-        else:
-            self.main_music = self.normal_music
+        self.main_music.stop()
+        self.main_music.set_volume(self.music_volume)
         self.main_music.play()
         
     def level_up(self):
@@ -499,8 +492,6 @@ class Game:
         self.elevator_wait_timer = 0
         self.player_near_exit = False
         self.exit_pos = None
-        self.global_paused = False
-        self.paused_by = ""
 
     #  Multiplayer methods 
 
@@ -510,10 +501,9 @@ class Game:
         if self.network_client:
             self.network_client.send({"type": "start_game"})
 
-    def _start_multiplayer_client(self):
-        self.state = "game"
-        M.map_level = 0
-        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
+    def _start_multiplayer_client(self, level=0):
+        M.map_level = level
+        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[level])
         M.start_angle = START_ANGLES[M.map_level]
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.global_health = START_HEALTH
@@ -531,23 +521,21 @@ class Game:
         self.elevator_transition = False
         self.elevator_wait_timer = 0
         self.exit_pos = None
-        self.global_paused = False
-        self.paused_by = ""
         self._pos_seq = 0
         self._health_delta = 0
         self._ammo_delta = 0
         self._enemy_damage = []
         self._remove_pickup = []
+        self._pending_removes.clear()
         # All objects come from server sync — start empty
         self.objects = {"enemies": [], "ammo": [], "keycard": [], "exit": None, "health": []}
         self.projectiles = []
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
-        if self.Menu.silly_mode:
-            self.main_music = self.funny_music
-        else:
-            self.main_music = self.normal_music
+        self.main_music.stop()
+        self.main_music.set_volume(self.music_volume)
         self.main_music.play()
+        self.state = "game"
 
     def _do_connect(self, ip, port, name):
         self.skin_id = self.Menu.mp_skin_id
@@ -574,8 +562,7 @@ class Game:
         self.multiplayer = False
         self.player_id = 0
         self.remote_players = []
-        self.global_paused = False
-        self.paused_by = ""
+        self._pending_removes.clear()
         self.state = "menu"
         pygame.mouse.set_visible(True)
         pygame.event.set_grab(False)
@@ -592,6 +579,8 @@ class Game:
 
     def _send_client_state(self):
         """Send deltas to the server. Rate-limited to every 2 frames."""
+        if self.state not in ("game", "paused"):
+            return
         self._pos_seq += 1
         if self._pos_seq % 2 != 0:
             return
@@ -606,8 +595,6 @@ class Game:
             "door_closed": self.player.door_pos > WIDTH // 2,
             "elevator_waiting": self.elevator_waiting,
             "state": self.state,
-            "paused": self.global_paused,
-            "paused_by": self.paused_by,
         }
         self._health_delta = 0
         self._ammo_delta = 0
@@ -622,7 +609,8 @@ class Game:
         # 1. Overwrite shared resources from server (absolute values)
         self.global_health = state.get("global_health", self.global_health)
         self.global_ammo = state.get("global_ammo", self.global_ammo)
-        self.player.got_keycard = state.get("keycard_acquired", self.player.got_keycard)
+        if state.get("keycard_acquired"):
+            self.player.got_keycard = True
 
         # 2. Players — sync own state flags from server (not pos/angle — client-authoritative movement)
         players_data = state.get("players", [])
@@ -663,13 +651,19 @@ class Game:
         # 4. Objects — full sync from server (ALL clients)
         obj_data = state.get("objects", {})
         for ot in ["ammo", "keycard", "health"]:
-            server_list = obj_data.get(ot, [])
+            server_raw = obj_data.get(ot, [])
+            server_list = [o for o in server_raw
+                           if (ot, round(o["pos"][0], 1), round(o["pos"][1], 1)) not in self._pending_removes]
             while len(self.objects[ot]) < len(server_list):
                 self.objects[ot].append(PickupObject(f"objects/{ot}", 0, 0))
             while len(self.objects[ot]) > len(server_list):
                 self.objects[ot].pop()
             for i, odata in enumerate(server_list):
                 self.objects[ot][i].pos = Vector(odata["pos"][0], odata["pos"][1])
+            # Clean up pending removes that server has confirmed
+            raw_positions = {(round(o["pos"][0], 1), round(o["pos"][1], 1)) for o in server_raw}
+            self._pending_removes = {r for r in self._pending_removes
+                                     if r[0] != ot or r[1:] in raw_positions}
         exit_data = obj_data.get("exit")
         if exit_data and not self.objects["exit"]:
             self.objects["exit"] = PickupObject("objects/exit", exit_data["pos"][0], exit_data["pos"][1])
@@ -712,8 +706,6 @@ class Game:
         self.elevator_ready = state.get("elevator_ready", self.elevator_ready)
         self.elevator_transition = state.get("elevator_transition", False)
         self.elevator_wait_timer = state.get("elevator_wait_timer", self.elevator_wait_timer)
-        self.global_paused = state.get("global_paused", self.global_paused)
-        self.paused_by = state.get("paused_by", self.paused_by)
 
         # 6. Player proximity to exit (for UI message)
         exit_data = state.get("exit_pos")
@@ -733,10 +725,13 @@ class Game:
             if packet.get("type") == "state":
                 self.apply_state(packet)
             elif packet.get("type") == "game_start":
-                self._start_multiplayer_client()
+                self._start_multiplayer_client(packet.get("level", 0))
             elif packet.get("type") in ("server_stopped", "disconnect"):
                 self._disconnect()
-        if self.global_health <= 0 and self.state == "game":
+            elif packet.get("type") == "skin_manifest_update":
+                SkinManager.set_manifest(packet.get("skin_manifest", []))
+                SkinManager.download_all_skins()
+        if self.global_health <= 0 and self.state in ("game", "paused"):
             self.global_health = 0
             pygame.mouse.set_visible(True)
             self.state = "dead"
@@ -746,7 +741,6 @@ class Game:
     def run(self):
         set_resolution("high")
         self.running = True
-        set_resolution("high")
         self.state = "menu"
         self.credits_height = HEIGHT
         while self.running:
@@ -765,11 +759,12 @@ class Game:
                         if packet.get("type") == "lobby_info":
                             self.Menu.client_list = packet.get("players", [])
                         elif packet.get("type") == "game_start":
-                            self._start_multiplayer_client()
+                            self._start_multiplayer_client(packet.get("level", 0))
                         elif packet.get("type") == "server_stopped":
                             self._disconnect()
                         elif packet.get("type") == "skin_manifest_update":
                             SkinManager.set_manifest(packet.get("skin_manifest", []))
+                            SkinManager.download_all_skins()
                     now = time.time()
                     if now - getattr(self, '_last_lobby_ping', 0) > 2.0:
                         self.network_client.send({"type": "ping"})
@@ -780,20 +775,20 @@ class Game:
                 self.clock.tick(60)
                 if self.multiplayer:
                     self.handle_network()
-                if not self.global_paused and (self.player.door_pos == 0 or self.player.door_pos > WIDTH/2 + ELEV_SPEED) and not self.escaped:
+
+                if (self.player.door_pos == 0 or self.player.door_pos > WIDTH/2 + ELEV_SPEED) and not self.escaped:
                     self.update()
                     self.render()
                     if self.jan is not None and self.jan_spotted:
                         self.jan.draw_health_bar(None, None, None)
-                elif self.global_paused:
-                    self.render()
+                    if self.bilal.flags["general"]:
+                        self.bilal.update()
+                        self.bilal.draw()
                 self.Menu.draw_UI(events)
                 
-                if self.bilal.flags["general"]:
-                    self.bilal.update()
-                    self.bilal.draw()
                 if self.player.got_keycard:
-                    self.keycard_font = pygame.font.Font(SILLY_FONT if self.Menu.silly_mode else FONT, 20)
+                    font_name = pack_config("font", "ocraextended.ttf")
+                    self.keycard_font = pygame.font.Font(asset_path(f"assets/font/{font_name}"), 20)
                     self.keycard_font.set_bold(True)
                     kc_surf = self.keycard_font.render("KEYCARD ACQUIRED", True, 'green')
                     SCREEN.blit(kc_surf, (WIDTH - kc_surf.get_width() - int(WIDTH * 0.04), HEIGHT - int(HEIGHT * 0.06)))
@@ -806,9 +801,9 @@ class Game:
                     self.Menu.draw_elevator(events, self.player)
 
             elif self.state == "paused":
-                if self.multiplayer:
-                    self.handle_network()
-                self.render()
+                self.handle_network()
+                if self._paused_frame:
+                    SCREEN.blit(self._paused_frame, (0, 0))
                 self.Menu.draw_paused_screen(events, self)
             elif self.state == 'dead':
                 self.Menu.draw_dead_screen(events, self)
@@ -820,6 +815,8 @@ class Game:
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"
+            if self.state == "game":
+                self._paused_frame = SCREEN.copy()
             pygame.display.flip()
 
         pygame.quit()
