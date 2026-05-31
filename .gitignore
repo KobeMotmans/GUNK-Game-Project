@@ -7,3 +7,4 @@ GUNK.zip
 /build/
 /Output/
 *.spec
+/tools/upx/upx.exe
