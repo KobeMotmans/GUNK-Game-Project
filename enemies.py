@@ -6,14 +6,67 @@ import pygame
 from math import atan2, hypot, cos, sin
 import heapq
 
-from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, SILLY_FONT, ATTACK_DIST
+from config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, SILLY_FONT, ATTACK_DIST, SFX_VOLUME
 from vector import Vector
 from map_loader import map_to_cord, cord_to_map, is_in_wall, M
 from objects import RenderObject
 from Menu import Menu_inst
 
 
+# ── Projectile ────────────────────────────────────────────────────────────────
 
+class RubenProjectile(RenderObject):
+    """
+    Een recht-vooruit vliegend projectiel dat Ruben afvuurt.
+    Sprite placeholder : assets/enemies/projectile.png
+    Geluid bij vuren   : assets/proj_fire.mp3      (wordt afgespeeld door Ruben)
+    Geluid bij inslag  : assets/proj_hit.mp3
+    """
+
+    SPEED       = 8          # pixels per frame
+    DAMAGE      = 3
+    _hit_sound  = None       # class-level cache zodat het geluid 1x geladen wordt
+
+    @classmethod
+    def _load_hit_sound(cls):
+        if cls._hit_sound is None:
+            try:
+                cls._hit_sound = pygame.mixer.Sound("assets/proj_hit.mp3")
+                cls._hit_sound.set_volume(SFX_VOLUME)
+            except pygame.error:
+                pass  # placeholder nog niet aanwezig
+
+    def __init__(self, x, y, angle):
+        super().__init__("enemies/projectile", x, y)
+        self.angle   = angle          # richting in radialen, vast vanaf het moment van vuren
+        self.alive   = True
+        self._load_hit_sound()
+
+    def update(self, player, game):
+        """Beweeg het projectiel en controleer botsingen. Roep elke frame aan."""
+        if not self.alive:
+            return
+
+        self.pos.x += self.SPEED * cos(self.angle)
+        self.pos.y += self.SPEED * sin(self.angle)
+
+        # Muur-check
+        if is_in_wall(cord_to_map(self.pos)):
+            self._on_hit()
+            return
+
+        # Speler-check
+        if (self.pos - player.pos).norm() < MIN_DIST:
+            player.take_damage(self.DAMAGE, game)
+            self._on_hit()
+
+    def _on_hit(self):
+        self.alive = False
+        if self._hit_sound:
+            self._hit_sound.play()
+
+
+# ── Basis vijand ──────────────────────────────────────────────────────────────
 
 class Enemy(RenderObject):
     def __init__(self, health, damage, speed, enemy_type, x, y):
@@ -27,34 +80,29 @@ class Enemy(RenderObject):
         self.is_los = False
         self.last_player_tile = (1, 1)
         self.target = None
-        self._full_path = []    # lijst van waypoint-vectoren
-        self._path_timer = 0    # frame-teller voor pathfinding throttle
+        self._full_path = []
+        self._path_timer = 0
 
     def draw_health_bar(self, sprite_h, draw_x, draw_y):
         health_ratio = max(0, self.health / self.max_health)
 
         if self.type == "enemies/jan":
-            # Boss bar bovenaan het scherm
             bar_width = WIDTH // 2
             bar_height = 20
             bar_x = WIDTH // 4
             bar_y = 30
 
-            # Naam
             font = pygame.font.Font(SILLY_FONT if Menu_inst.silly_mode else FONT, 28)
             font.set_bold(True)
             label = font.render("Jan Lemeire", True, (255, 220, 0))
             SCREEN.blit(label, (bar_x + bar_width // 2 - label.get_width() // 2, bar_y - 30))
 
-            # Achtergrond
             pygame.draw.rect(SCREEN, (80, 0, 0), (bar_x, bar_y, bar_width, bar_height))
 
-            # Voorgrond
             color = (200, 0, 0) if health_ratio <= 0.25 else (200, 200, 0) if health_ratio <= 0.5 else (0, 200, 0)
             pygame.draw.rect(SCREEN, color, (bar_x, bar_y, int(bar_width * health_ratio), bar_height))
             return
 
-        # Normale health bar boven de sprite
         bar_width = sprite_h
         bar_height = sprite_h * 0.1
         bar_x = draw_x
@@ -103,7 +151,6 @@ class Enemy(RenderObject):
     def has_target(self):
         if self.target is not None:
             if abs((self.target - self.pos).norm()) < 10:
-                # Huidig waypoint bereikt, pak volgende uit het pad
                 if self._full_path:
                     self.target = self._full_path.pop(0)
                 else:
@@ -118,7 +165,6 @@ class Enemy(RenderObject):
     def find_path(self, player, game, deal_damage=True, do_movement=True):
         player_pos = player.pos
 
-        # LOS slechts 1 keer berekenen per frame
         self.is_los, dist = self.is_in_los(player_pos)
 
         if dist > AGGRO_DIST:
@@ -126,7 +172,6 @@ class Enemy(RenderObject):
 
         if self.is_los:
             self.spotted_player = True
-            # Wis oud pad zodra enemy weer LOS heeft
             self._full_path = []
             self.target = None
 
@@ -134,7 +179,6 @@ class Enemy(RenderObject):
             if self.is_los and dist > ATTACK_DIST:
                 self.move_towards(player_pos)
 
-            # A* throttlen: herbereken periodiek of als enemy geen target meer heeft
             if self.spotted_player and dist < AGGRO_DIST and not self.is_los:
                 self._path_timer -= 1
                 if not self.has_target() or self._path_timer <= 0:
@@ -154,17 +198,19 @@ class Enemy(RenderObject):
             if deal_damage:
                 player.take_damage(self.damage, game)
 
+        return None   # basisklasse vuurt nooit een projectiel af
+
     def is_hit(self, pos):
         return (self.pos - pos).norm() < self.size
 
     def take_dmg(self, dmg):
         self.health -= dmg
-    # Deze code is eerst zelf geschreven geweest door Ruben (zie zijn commit over A*) en is hierna herwerkt met AI aangezien we 1 fps hadden
+
+    # Code eerst geschreven door Ruben (zie zijn commit over A*), daarna herwerkt met AI (1 fps probleem)
     def A_star(self, player):
         """
         A* pathfinding. Nodes zijn (col, row) = (x, y) in maptiles.
         MAP[row][col] = MAP[y][x] — let op de volgorde bij maplookups!
-        Gebruikt heapq + set voor O(1) visited checks.
         """
         col_start = int(cord_to_map(self.pos.x))
         row_start = int(cord_to_map(self.pos.y))
@@ -197,7 +243,6 @@ class Enemy(RenderObject):
             for dc, dr in directions:
                 nc, nr = col + dc, row + dr
 
-                # bounds: MAP[row][col] → MAP[nr][nc]
                 if not (0 <= nc < MAP_W and 0 <= nr < MAP_H):
                     continue
                 if M.MAP[nr][nc] == 1:
@@ -218,10 +263,6 @@ class Enemy(RenderObject):
 
     @staticmethod
     def _reconstruct_path(came_from, end, start):
-        """
-        Reconstrueer volledig pad als lijst van wereld-coördinaten.
-        Node = (col, row) = (x, y) in tiles → center van tile in pixels.
-        """
         path = []
         node = end
         while node != start:
@@ -231,6 +272,8 @@ class Enemy(RenderObject):
         return [map_to_cord(Vector(col + 0.5, row + 0.5)) for col, row in path]
 
 
+# ── Vijand subklassen ─────────────────────────────────────────────────────────
+
 class Andrei(Enemy):
     def __init__(self, x, y, health=13, damage=3, speed=3):
         super().__init__(health, damage, speed, "andrei", x, y)
@@ -239,10 +282,104 @@ class Ahmed(Enemy):
     def __init__(self, x, y, health=6, damage=2, speed=5):
         super().__init__(health, damage, speed, "ahmed", x, y)
 
-class Ruben(Enemy):
-    def __init__(self, x, y, health=19, damage=2, speed=2):
-        super().__init__(health, damage, speed, "ruben", x, y)
-
 class Jan(Enemy):
     def __init__(self, x, y, health=200, damage=6, speed=3):
         super().__init__(health, damage, speed, "jan", x, y)
+
+
+class Ruben(Enemy):
+    """
+    Ruben houdt afstand en vuurt projectielen af in plaats van melee aanvallen.
+
+    Aanvalsgedrag:
+      - Nadert tot RUBEN_ATTACK_DIST (verder dan de melee ATTACK_DIST).
+      - Als de speler in LOS is én de cooldown voorbij is, wordt een
+        RubenProjectile aangemaakt en teruggegeven vanuit find_path().
+      - Projectielen bewegen rechtdoor en kunnen hun pad niet aanpassen.
+      - Inslag op muur of speler speelt proj_hit.mp3 af en verwijdert het projectiel.
+
+    Placeholder bestanden (vervang door echte assets):
+      - assets/enemies/projectile.png   ← sprite van het projectiel
+      - assets/proj_fire.mp3                 ← geluid bij het afvuren
+      - assets/proj_hit.mp3                  ← geluid bij inslag
+    """
+
+    RUBEN_ATTACK_DIST = 400   # pixels — Ruben stopt op grotere afstand dan melee vijanden
+    FIRE_COOLDOWN     = 100    # frames tussen schoten (~1.5 s bij 60 fps)
+    _fire_sound       = None  # class-level cache
+
+    @classmethod
+    def _load_fire_sound(cls):
+        if cls._fire_sound is None:
+            try:
+                cls._fire_sound = pygame.mixer.Sound("assets/proj_fire.mp3")
+                cls._fire_sound.set_volume(SFX_VOLUME)
+            except pygame.error:
+                pass  # placeholder nog niet aanwezig
+
+    def __init__(self, x, y, health=19, damage=2, speed=2):
+        super().__init__(health, damage, speed, "ruben", x, y)
+        self._fire_timer = 0   # telt omlaag; vuren toegestaan als <= 0
+        self._load_fire_sound()
+
+    def find_path(self, player, game, deal_damage=True, do_movement=True):
+        """
+        Overschrijft Enemy.find_path.
+        Geeft een RubenProjectile terug als er dit frame gevuurd wordt,
+        anders None. De game-loop moet dit opvangen en aan de projectiellijst
+        toevoegen, zodat het projectiel elke frame geüpdated en gerenderd wordt.
+
+        Voorbeeld in de game-loop:
+            for enemy in enemies:
+                result = enemy.find_path(player, game)
+                if result is not None:          # Ruben vuurt
+                    projectiles.append(result)
+        """
+        player_pos = player.pos
+
+        self.is_los, dist = self.is_in_los(player_pos)
+
+        if dist > AGGRO_DIST:
+            self.spotted_player = False
+
+        if self.is_los:
+            self.spotted_player = True
+            self._full_path = []
+            self.target = None
+
+        # Cooldown aftellen
+        if self._fire_timer > 0:
+            self._fire_timer -= 1
+
+        if do_movement:
+            # Beweeg naar de speler totdat Ruben op aanvalsafstand is
+            if self.is_los and dist > self.RUBEN_ATTACK_DIST:
+                self.move_towards(player_pos)
+
+            # A* als speler buiten LOS maar eerder gespot
+            if self.spotted_player and dist < AGGRO_DIST and not self.is_los:
+                self._path_timer -= 1
+                if not self.has_target() or self._path_timer <= 0:
+                    path = self.A_star(player)
+                    if path:
+                        self._full_path = path[1:]
+                        self.target = path[0]
+                    else:
+                        self._full_path = []
+                        self.target = None
+                    self._path_timer = PATHFIND_INTERVAL
+
+            if self.has_target() and not self.is_los:
+                self.move_towards(self.target)
+
+        # Vuren: alleen als LOS, op aanvalsafstand, en cooldown voorbij
+        if self.is_los and dist <= self.RUBEN_ATTACK_DIST and self._fire_timer <= 0:
+            if deal_damage:
+                angle = atan2(player_pos.y - self.pos.y, player_pos.x - self.pos.x)
+                projectile = RubenProjectile(self.pos.x, self.pos.y, angle)
+                self._fire_timer = self.FIRE_COOLDOWN
+                if self._fire_sound:
+                    self._fire_sound.play()
+                return projectile
+
+        return None

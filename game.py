@@ -298,7 +298,9 @@ class Game:
                         if self.multiplayer:
                             enemy.find_path(self.player, self, True, False)
                         else:
-                            enemy.find_path(self.player, self, True, True)
+                            result = enemy.find_path(self.player, self, True, True)
+                            if result is not None:
+                                self.projectiles.append(result)
                     dist, SCREEN_x, angle, _ = enemy.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
@@ -409,7 +411,13 @@ class Game:
         # 4. Render sprites
         for dist, SCREEN_x, enemy in sprites:
             enemy.render_fast(dist, SCREEN_x)
-
+        # Update and render Ruben's projectiles
+        self.projectiles = [p for p in self.projectiles if p.alive]
+        for p in self.projectiles:
+            p.update(self.player, self)
+            dist, screen_x, _, _ = p.get_render_data_fast(player_pos, player_angle, wall_distances)
+            if dist is not None:
+                p.render_fast(dist, screen_x)
         if self.player.inv_time > 10:
             SCREEN.blit(DAMAGE_FLASH, (0,0))
         if self.flash_time > 0:
@@ -447,6 +455,7 @@ class Game:
         M.start_angle = START_ANGLES[M.map_level]
         self.player.ammo = START_AMMO
         self.objects = self.create_objects()
+        self.projectiles = []
         self.elevator_waiting = False
         self.elevator_ready = False
         self.elevator_transition = False
@@ -531,6 +540,7 @@ class Game:
         self._remove_pickup = []
         # All objects come from server sync — start empty
         self.objects = {"enemies": [], "ammo": [], "keycard": [], "exit": None, "health": []}
+        self.projectiles = []
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
         if self.Menu.silly_mode:

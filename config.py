@@ -22,7 +22,7 @@ else:
     pygame.init()
     WIDTH = 1920
     HEIGHT = 1080
-    SCREEN = None
+    SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
 # Map instellingen
 TILE_SIZE = 100
