@@ -15,7 +15,7 @@ from Menu import Menu_inst
 
 # ── Projectile ────────────────────────────────────────────────────────────────
 
-class RubenProjectile(RenderObject):
+class Fireball(RenderObject):
     """
     Een recht-vooruit vliegend projectiel dat Ruben afvuurt.
     Sprite placeholder : assets/enemies/projectile.png
@@ -294,7 +294,7 @@ class Ruben(Enemy):
     Aanvalsgedrag:
       - Nadert tot RUBEN_ATTACK_DIST (verder dan de melee ATTACK_DIST).
       - Als de speler in LOS is én de cooldown voorbij is, wordt een
-        RubenProjectile aangemaakt en teruggegeven vanuit find_path().
+        Fireball aangemaakt en teruggegeven vanuit find_path().
       - Projectielen bewegen rechtdoor en kunnen hun pad niet aanpassen.
       - Inslag op muur of speler speelt proj_hit.mp3 af en verwijdert het projectiel.
 
@@ -325,7 +325,7 @@ class Ruben(Enemy):
     def find_path(self, player, game, deal_damage=True, do_movement=True):
         """
         Overschrijft Enemy.find_path.
-        Geeft een RubenProjectile terug als er dit frame gevuurd wordt,
+        Geeft een Fireball terug als er dit frame gevuurd wordt,
         anders None. De game-loop moet dit opvangen en aan de projectiellijst
         toevoegen, zodat het projectiel elke frame geüpdated en gerenderd wordt.
 
@@ -376,7 +376,7 @@ class Ruben(Enemy):
         if self.is_los and dist <= self.RUBEN_ATTACK_DIST and self._fire_timer <= 0:
             if deal_damage:
                 angle = atan2(player_pos.y - self.pos.y, player_pos.x - self.pos.x)
-                projectile = RubenProjectile(self.pos.x, self.pos.y, angle)
+                projectile = Fireball(self.pos.x, self.pos.y, angle)
                 self._fire_timer = self.FIRE_COOLDOWN
                 if self._fire_sound:
                     self._fire_sound.play()
