@@ -8,7 +8,7 @@ import time
 
 from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
-                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME, SILLY_FONT, MAX_DEPTH,
+                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME, MAX_DEPTH,
                     ELEVATOR_WAIT_DIST, ELEVATOR_WAIT_FRAMES)
 from src.core.paths import asset_path, resolve_asset, pack_config
 from src.core.raycaster import dda
@@ -48,7 +48,6 @@ class Game:
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
-        self._prev_global_health = START_HEALTH
 
         self.Menu.draw_loading_screen()
 
@@ -442,9 +441,7 @@ class Game:
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
-        self._prev_global_health = START_HEALTH
         M.start_angle = START_ANGLES[M.map_level]
-        self.player.ammo = START_AMMO
         self.objects = self.create_objects()
         self.elevator_waiting = False
         self.elevator_ready = False
@@ -734,7 +731,6 @@ class Game:
     def run(self):
         set_resolution("high")
         self.running = True
-        set_resolution("high")
         self.state = "menu"
         self.credits_height = HEIGHT
         while self.running:

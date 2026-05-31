@@ -3,19 +3,15 @@ enemies.py - Vijand klassen en rendering
 """
 
 import pygame
-from math import atan2, hypot, cos, sin
-import heapq
 
-from ..core.config import SCREEN, WIDTH, MAX_DEPTH, MIN_DIST, AGGRO_DIST, TILE_SIZE, PATHFIND_INTERVAL, FONT, SILLY_FONT, ATTACK_DIST
+from ..core.config import SCREEN, WIDTH, AGGRO_DIST, PATHFIND_INTERVAL, FONT, ATTACK_DIST
 from ..core.vector import Vector
-from ..core.map_loader import map_to_cord, cord_to_map, is_in_wall, will_collide, M
 from ..core.paths import asset_path, pack_config
 from .objects import RenderObject
+from .enemy_ai import EnemyAI
 
 
-
-
-class Enemy(RenderObject):
+class Enemy(EnemyAI, RenderObject):
     def __init__(self, health, damage, speed, enemy_type, x, y):
         self.path = f"enemies/{enemy_type}"
         super().__init__(self.path, x, y)
@@ -25,37 +21,31 @@ class Enemy(RenderObject):
         self.damage = damage
         self.spotted_player = False
         self.is_los = False
-        self.last_player_tile = (1, 1)
         self.target = None
-        self._full_path = []    # lijst van waypoint-vectoren
-        self._path_timer = 0    # frame-teller voor pathfinding throttle
+        self._full_path = []
+        self._path_timer = 0
 
     def draw_health_bar(self, sprite_h, draw_x, draw_y):
         health_ratio = max(0, self.health / self.max_health)
 
         if self.type == "enemies/jan":
-            # Boss bar bovenaan het scherm
             bar_width = WIDTH // 2
             bar_height = 20
             bar_x = WIDTH // 4
             bar_y = 30
 
-            # Naam
             font_name = pack_config("font", "ocraextended.ttf")
             font = pygame.font.Font(asset_path(f"assets/font/{font_name}"), 28)
             font.set_bold(True)
             label = font.render("Jan Lemeire", True, (255, 220, 0))
             SCREEN.blit(label, (bar_x + bar_width // 2 - label.get_width() // 2, bar_y - 30))
 
-            # Achtergrond
             pygame.draw.rect(SCREEN, (80, 0, 0), (bar_x, bar_y, bar_width, bar_height))
 
-            # Voorgrond
             color = (200, 0, 0) if health_ratio <= 0.25 else (200, 200, 0) if health_ratio <= 0.5 else (0, 200, 0)
             pygame.draw.rect(SCREEN, color, (bar_x, bar_y, int(bar_width * health_ratio), bar_height))
             return
 
-        # Normale health bar boven de sprite
         bar_width = sprite_h
         bar_height = sprite_h * 0.1
         bar_x = draw_x
@@ -75,58 +65,9 @@ class Enemy(RenderObject):
         pygame.draw.rect(SCREEN, color, fg_rect)
         pygame.draw.rect(SCREEN, (0, 0, 0), bg_rect, 1)
 
-    def is_in_los(self, pos):
-        dx = pos.x - self.pos.x
-        dy = pos.y - self.pos.y
-
-        world_angle = atan2(dy, dx)
-        dist = hypot(dx, dy)
-
-        if dist > MAX_DEPTH:
-            return False, dist
-
-        step = max(4, TILE_SIZE // 4)
-        i = step
-        while i < dist:
-            ray_pos = Vector(self.pos.x + i * cos(world_angle), self.pos.y + i * sin(world_angle))
-            if is_in_wall(cord_to_map(ray_pos)):
-                return False, dist
-            i += step
-
-        return True, dist
-
-    def move_towards(self, pos):
-        dx = pos.x - self.pos.x
-        dy = pos.y - self.pos.y
-        angle = atan2(dy, dx)
-        step = Vector(self.speed * cos(angle), self.speed * sin(angle))
-        new_pos = self.pos + step
-        if not will_collide(new_pos.x, new_pos.y, radius=5):
-            self.pos = new_pos
-        elif not will_collide(new_pos.x, self.pos.y, radius=5):
-            self.pos.x = new_pos.x
-        elif not will_collide(self.pos.x, new_pos.y, radius=5):
-            self.pos.y = new_pos.y
-
-    def has_target(self):
-        if self.target is not None:
-            if abs((self.target - self.pos).norm()) < 10:
-                # Huidig waypoint bereikt, pak volgende uit het pad
-                if self._full_path:
-                    self.target = self._full_path.pop(0)
-                else:
-                    self.target = None
-                    return False
-            return True
-        elif self._full_path:
-            self.target = self._full_path.pop(0)
-            return True
-        return False
-
     def find_path(self, player, game, deal_damage=True, do_movement=True):
         player_pos = player.pos
 
-        # LOS slechts 1 keer berekenen per frame
         self.is_los, dist = self.is_in_los(player_pos)
 
         if dist > AGGRO_DIST:
@@ -134,7 +75,6 @@ class Enemy(RenderObject):
 
         if self.is_los:
             self.spotted_player = True
-            # Wis oud pad zodra enemy weer LOS heeft
             self._full_path = []
             self.target = None
 
@@ -142,11 +82,10 @@ class Enemy(RenderObject):
             if self.is_los and dist > ATTACK_DIST:
                 self.move_towards(player_pos)
 
-            # A* throttlen: herbereken periodiek of als enemy geen target meer heeft
             if self.spotted_player and dist < AGGRO_DIST and not self.is_los:
                 self._path_timer -= 1
                 if not self.has_target() or self._path_timer <= 0:
-                    path = self.A_star(player)
+                    path = self.A_star(player.pos)
                     if path:
                         self._full_path = path[1:]
                         self.target = path[0]
@@ -167,76 +106,6 @@ class Enemy(RenderObject):
 
     def take_dmg(self, dmg):
         self.health -= dmg
-    # Deze code is eerst zelf geschreven geweest door Ruben (zie zijn commit over A*) en is hierna herwerkt met AI aangezien we 1 fps hadden
-    def A_star(self, player):
-        """
-        A* pathfinding. Nodes zijn (col, row) = (x, y) in maptiles.
-        MAP[row][col] = MAP[y][x] — let op de volgorde bij maplookups!
-        Gebruikt heapq + set voor O(1) visited checks.
-        """
-        col_start = int(cord_to_map(self.pos.x))
-        row_start = int(cord_to_map(self.pos.y))
-        col_end   = int(cord_to_map(player.pos.x))
-        row_end   = int(cord_to_map(player.pos.y))
-
-        start = (col_start, row_start)
-        end   = (col_end,   row_end)
-
-        if start == end:
-            return None
-
-        MAP_W = M.width
-        MAP_H = M.height
-
-        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-
-        teller = 0
-        heap = [(abs(col_start - col_end) + abs(row_start - row_end), teller, start)]
-
-        came_from = {start: None}
-        g_score   = {start: 0}
-
-        while heap:
-            _, _, node = heapq.heappop(heap)
-            if node == end:
-                return self._reconstruct_path(came_from, node, start)
-
-            col, row = node
-            for dc, dr in directions:
-                nc, nr = col + dc, row + dr
-
-                # bounds: MAP[row][col] → MAP[nr][nc]
-                if not (0 <= nc < MAP_W and 0 <= nr < MAP_H):
-                    continue
-                if M.MAP[nr][nc] == 1:
-                    continue
-
-                new_g = g_score[node] + 1
-                nb = (nc, nr)
-                if nb in g_score and g_score[nb] <= new_g:
-                    continue
-
-                g_score[nb]   = new_g
-                came_from[nb] = node
-                priority = new_g + abs(nc - col_end) + abs(nr - row_end)
-                teller += 1
-                heapq.heappush(heap, (priority, teller, nb))
-
-        return None
-
-    @staticmethod
-    def _reconstruct_path(came_from, end, start):
-        """
-        Reconstrueer volledig pad als lijst van wereld-coördinaten.
-        Node = (col, row) = (x, y) in tiles → center van tile in pixels.
-        """
-        path = []
-        node = end
-        while node != start:
-            path.append(node)
-            node = came_from[node]
-        path.reverse()
-        return [map_to_cord(Vector(col + 0.5, row + 0.5)) for col, row in path]
 
 
 class Andrei(Enemy):

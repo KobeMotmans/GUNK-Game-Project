@@ -1,7 +1,7 @@
 import pygame
 import tkinter as tk
 from tkinter import filedialog
-from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, SILLY_FONT, DEFAULT_PORT, SFX_VOLUME, MENU_BG
+from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, SFX_VOLUME, MENU_BG
 from ..core.paths import asset_path, resolve_asset, pack_config, list_packs, set_pack, TEXTURE_PACK
 from collections import deque
 from ..core.map_loader import M
@@ -14,8 +14,6 @@ class Menu:
         self.volume_slider = None
         self.sfx_volume_slider = None
         
-        self.lift_time = 120
-        self.credits_height = HEIGHT
         self.lift_time = ELEV_TIME
         self.loading_progress = 0
 

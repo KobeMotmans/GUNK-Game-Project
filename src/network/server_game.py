@@ -4,18 +4,19 @@ Runs enemy AI, maintains world state, processes client deltas.
 """
 
 import random
-import heapq
-from math import atan2, pi, sin, cos, hypot
+from math import pi
+
 from ..core.vector import Vector
-from ..core.map_loader import cord_to_map, map_to_cord, is_in_wall, will_collide, M
-from ..core.config import (MAX_DEPTH, AGGRO_DIST, ATTACK_DIST, TILE_SIZE,
-                    PATHFIND_INTERVAL, START_HEALTH, HEALTH_REGEN,
+from ..core.map_loader import M
+from ..core.config import (AGGRO_DIST, ATTACK_DIST, TILE_SIZE, PATHFIND_INTERVAL,
+                    START_HEALTH, HEALTH_REGEN,
                     START_AMMO, AMMO_CAP, HEALTH_CHANCE, MAP_PATH,
                     START_ANGLES, ELEVATOR_WAIT_DIST,
-                    ELEVATOR_WAIT_FRAMES, ELEV_TIME)
+                    ELEVATOR_WAIT_FRAMES)
+from ..entities.enemy_ai import EnemyAI
 
 
-class ServerEnemy:
+class ServerEnemy(EnemyAI):
     def __init__(self, type_str, x, y, health, damage, speed):
         self.type = f"enemies/{type_str}"
         self.pos = Vector(x, y)
@@ -25,101 +26,9 @@ class ServerEnemy:
         self.speed = speed
         self.spotted_player = False
         self.is_los = False
-        self.last_player_tile = (1, 1)
         self.target = None
         self._full_path = []
         self._path_timer = 0
-
-    def is_in_los(self, pos):
-        dx = pos.x - self.pos.x
-        dy = pos.y - self.pos.y
-        world_angle = atan2(dy, dx)
-        dist = hypot(dx, dy)
-        if dist > MAX_DEPTH:
-            return False, dist
-        step = max(4, TILE_SIZE // 4)
-        i = step
-        while i < dist:
-            ray_pos = Vector(self.pos.x + i * cos(world_angle), self.pos.y + i * sin(world_angle))
-            if is_in_wall(cord_to_map(ray_pos)):
-                return False, dist
-            i += step
-        return True, dist
-
-    def move_towards(self, pos):
-        dx = pos.x - self.pos.x
-        dy = pos.y - self.pos.y
-        angle = atan2(dy, dx)
-        step = Vector(self.speed * cos(angle), self.speed * sin(angle))
-        new_pos = self.pos + step
-        if not will_collide(new_pos.x, new_pos.y, radius=5):
-            self.pos = new_pos
-        elif not will_collide(new_pos.x, self.pos.y, radius=5):
-            self.pos.x = new_pos.x
-        elif not will_collide(self.pos.x, new_pos.y, radius=5):
-            self.pos.y = new_pos.y
-
-    def has_target(self):
-        if self.target is not None:
-            if abs((self.target - self.pos).norm()) < 10:
-                if self._full_path:
-                    self.target = self._full_path.pop(0)
-                else:
-                    self.target = None
-                    return False
-            return True
-        elif self._full_path:
-            self.target = self._full_path.pop(0)
-            return True
-        return False
-
-    def A_star(self, target_pos):
-        col_start = int(cord_to_map(self.pos.x))
-        row_start = int(cord_to_map(self.pos.y))
-        col_end = int(cord_to_map(target_pos.x))
-        row_end = int(cord_to_map(target_pos.y))
-        start = (col_start, row_start)
-        end = (col_end, row_end)
-        if start == end:
-            return None
-        MAP_W = M.width
-        MAP_H = M.height
-        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-        teller = 0
-        heap = [(abs(col_start - col_end) + abs(row_start - row_end), teller, start)]
-        came_from = {start: None}
-        g_score = {start: 0}
-        while heap:
-            _, _, node = heapq.heappop(heap)
-            if node == end:
-                return self._reconstruct_path(came_from, node, start)
-            col, row = node
-            for dc, dr in directions:
-                nc, nr = col + dc, row + dr
-                if not (0 <= nc < MAP_W and 0 <= nr < MAP_H):
-                    continue
-                if M.MAP[nr][nc] == 1:
-                    continue
-                new_g = g_score[node] + 1
-                nb = (nc, nr)
-                if nb in g_score and g_score[nb] <= new_g:
-                    continue
-                g_score[nb] = new_g
-                came_from[nb] = node
-                priority = new_g + abs(nc - col_end) + abs(nr - row_end)
-                teller += 1
-                heapq.heappush(heap, (priority, teller, nb))
-        return None
-
-    @staticmethod
-    def _reconstruct_path(came_from, end, start):
-        path = []
-        node = end
-        while node != start:
-            path.append(node)
-            node = came_from[node]
-        path.reverse()
-        return [map_to_cord(Vector(col + 0.5, row + 0.5)) for col, row in path]
 
     def update_ai(self, target_pos):
         self.is_los, dist = self.is_in_los(target_pos)
@@ -167,18 +76,17 @@ class ServerGame:
         self.elevator_ready = False
         self.elevator_wait_timer = 0
         self.elevator_transition = False
-        self.elevator_transition_timer = 0
         self.escaped = False
         self.jan_spotted = False
         self.exit_pos = None
         self.initialized = False
         self._last_player_seq = {}
 
-    def init_world(self):
+    def _setup_level(self):
         from ..core.map_loader import png_to_list_fast
-        M.map_level = 0
-        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[0])
-        M.start_angle = START_ANGLES[0]
+        M.map_level = self.level
+        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[self.level])
+        M.start_angle = START_ANGLES[self.level]
 
         self.enemies = []
         for epos in M.SPAWNS["enemies"]:
@@ -204,19 +112,18 @@ class ServerGame:
             pdata["pos"] = Vector(spawn[0], spawn[1])
             pdata["angle"] = M.start_angle
 
+    def init_world(self):
+        self.level = 0
+        self._setup_level()
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
         self.keycard_acquired = False
-        self.level = 0
         self.elevator_waiting = False
         self.elevator_ready = False
         self.elevator_wait_timer = 0
         self.elevator_transition = False
-        self.elevator_transition_timer = 0
         self.escaped = False
         self.jan_spotted = False
-        # Reset per-player seq counters so game-time packets aren't
-        # dropped by out-of-order protection (lobby packets advanced them).
         for pid in self._last_player_seq:
             self._last_player_seq[pid] = 0
         self.initialized = True
@@ -255,7 +162,6 @@ class ServerGame:
         self.elevator_ready = False
         self.elevator_wait_timer = 0
         self.elevator_transition = False
-        self.elevator_transition_timer = 0
         self.escaped = False
         self.jan_spotted = False
         self.exit_pos = None
@@ -393,34 +299,12 @@ class ServerGame:
                 self.elevator_wait_timer = 0
 
     def _level_up(self):
-        from ..core.map_loader import png_to_list_fast
         self.level += 1
         if self.level >= 5:
             self.escaped = True
             return
-        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[self.level])
-        M.start_angle = START_ANGLES[self.level]
-        self.enemies = []
-        for epos in M.SPAWNS["enemies"]:
-            tn = random.choice(["andrei", "ahmed", "ruben"])
-            t = ENEMY_TYPES[tn]
-            self.enemies.append(ServerEnemy(tn, epos[0], epos[1], t["health"], t["damage"], t["speed"]))
-        if "jan" in M.SPAWNS:
-            jpos = M.SPAWNS["jan"]
-            t = ENEMY_TYPES["jan"]
-            self.enemies.append(ServerEnemy("jan", jpos[0], jpos[1], t["health"], t["damage"], t["speed"]))
-        self.objects = {"ammo": [], "keycard": [], "health": [], "exit": None}
-        for apos in M.SPAWNS["ammo"]:
-            self.objects["ammo"].append({"pos": (apos[0], apos[1])})
-        if M.SPAWNS["keycard"]:
-            kpos = random.choice(M.SPAWNS["keycard"])
-            self.objects["keycard"].append({"pos": (kpos[0], kpos[1])})
-        self.objects["exit"] = {"pos": (M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1])}
-        self.exit_pos = Vector(M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1])
-        spawn = M.SPAWNS["player"]
+        self._setup_level()
         for pdata in self.players.values():
-            pdata["pos"] = Vector(spawn[0], spawn[1])
-            pdata["angle"] = M.start_angle
             pdata["door_closed"] = False
             pdata["got_keycard"] = False
         self.keycard_acquired = False
@@ -428,7 +312,6 @@ class ServerGame:
         self.elevator_ready = False
         self.elevator_wait_timer = 0
         self.elevator_transition = False
-        self.elevator_transition_timer = 0
 
     def get_state(self):
         if not self.initialized:
