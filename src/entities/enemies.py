@@ -3,10 +3,11 @@ enemies.py - Vijand klassen en rendering
 """
 
 import pygame
+from math import atan2, hypot, cos, sin
 
-from ..core.config import SCREEN, WIDTH, AGGRO_DIST, PATHFIND_INTERVAL, ATTACK_DIST
+from ..core.config import SCREEN, WIDTH, AGGRO_DIST, PATHFIND_INTERVAL, ATTACK_DIST, SFX_VOLUME, SPRITE_SIZE
 from ..core.vector import Vector
-from ..core.paths import load_font
+from ..core.paths import load_font, resolve_asset
 from ..core.theme import theme
 from .objects import RenderObject
 from .enemy_ai import EnemyAI
@@ -118,6 +119,57 @@ class Ahmed(Enemy):
 class Ruben(Enemy):
     def __init__(self, x, y, health=19, damage=2, speed=2):
         super().__init__(health, damage, speed, "ruben", x, y)
+        self.last_fire_time = 0
+
+    def find_path(self, player, game, deal_damage=True, do_movement=True):
+        result = super().find_path(player, game, deal_damage=False, do_movement=do_movement)
+        player_pos = player.pos
+        self.is_los, dist = self.is_in_los(player_pos)
+        if self.is_los and dist <= RUBEN_ATTACK_DIST:
+            now = pygame.time.get_ticks()
+            if now - self.last_fire_time > FIRE_COOLDOWN:
+                self.last_fire_time = now
+                angle = atan2(player.pos.y - self.pos.y, player.pos.x - self.pos.x)
+                if Fireball._fire_sound is None:
+                    Fireball._fire_sound = pygame.mixer.Sound(resolve_asset(
+                        theme.get("sounds.sfx.ruben", "proj_fire.mp3")
+                    ))
+                Fireball._fire_sound.set_volume(SFX_VOLUME)
+                Fireball._fire_sound.play()
+                return Fireball(self.pos.x, self.pos.y, angle)
+        return result
+
+RUBEN_ATTACK_DIST = 400
+FIRE_COOLDOWN = 100
+
+
+class Fireball(RenderObject):
+    _fire_sound = None
+
+    def __init__(self, x, y, angle, speed=8):
+        super().__init__("enemies/projectile", x, y)
+        self.angle = angle
+        self.speed = speed
+        self.alive = True
+
+    def update(self, player, game):
+        self.pos.x += cos(self.angle) * self.speed
+        self.pos.y += sin(self.angle) * self.speed
+        px = int(self.pos.x)
+        py = int(self.pos.y)
+        if 0 <= py < len(game.map) and 0 <= px < len(game.map[0]):
+            if game.map[py][px] == 1:
+                self.alive = False
+        if (self.pos - player.pos).norm() < self.size + SPRITE_SIZE:
+            player.take_damage(2, game)
+            if Fireball._fire_sound is None:
+                Fireball._fire_sound = pygame.mixer.Sound(resolve_asset(
+                    theme.get("sounds.sfx.proj_hit", "proj_hit.mp3")
+                ))
+            Fireball._fire_sound.set_volume(SFX_VOLUME)
+            Fireball._fire_sound.play()
+            self.alive = False
+
 
 class Jan(Enemy):
     def __init__(self, x, y, health=200, damage=6, speed=3):

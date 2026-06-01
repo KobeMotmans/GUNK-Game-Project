@@ -15,7 +15,7 @@ from src.core.theme import theme
 from src.core.raycaster import dda
 from src.assets.texture_cache import preload as preload_textures, clear as clear_texture_cache
 from src.entities.weapons import Pistol, Minigun, Rifle
-from src.entities.enemies import Andrei, Ahmed, Ruben, Jan
+from src.entities.enemies import Andrei, Ahmed, Ruben, Jan, Fireball
 from src.entities.player import Player
 from src.ui.Menu import Menu_inst, Bilal
 from src.core.map_loader import M, png_to_list_fast
@@ -306,7 +306,9 @@ class Game:
                         if self.multiplayer:
                             enemy.find_path(self.player, self, True, False)
                         else:
-                            enemy.find_path(self.player, self, True, True)
+                            result = enemy.find_path(self.player, self, True, True)
+                            if result is not None:
+                                self.projectiles.append(result)
                     dist, SCREEN_x, angle, _ = enemy.get_render_data_fast(
                         player_pos, player_angle, wall_distances
                     )
@@ -421,6 +423,14 @@ class Game:
         for dist, SCREEN_x, enemy in sprites:
             enemy.render_fast(dist, SCREEN_x)
 
+        # Update and render projectiles
+        self.projectiles = [p for p in self.projectiles if p.alive]
+        for p in self.projectiles:
+            p.update(self.player, self)
+            dist, screen_x, _, _ = p.get_render_data_fast(player_pos, player_angle, wall_distances)
+            if dist is not None:
+                p.render_fast(dist, screen_x)
+
         if self.player.inv_time > 10:
             SCREEN.blit(DAMAGE_FLASH, (0,0))
         if self.flash_time > 0:
@@ -436,7 +446,7 @@ class Game:
 
     def _get_all_texture_paths(self):
         paths = []
-        for t in ["andrei", "ahmed", "ruben", "jan"]:
+        for t in ["andrei", "ahmed", "ruben", "jan", "projectile"]:
             paths.append(resolve_asset(theme.get(f"textures.enemies.{t}", f"textures/enemies/{t}.png")))
         for t in ["ammo", "health", "keycard", "exit"]:
             paths.append(resolve_asset(theme.get(f"textures.objects.{t}", f"textures/objects/{t}.png")))
@@ -471,11 +481,13 @@ class Game:
         self.unlocked_guns = [self.pistol]
         self.player.score = 0
         M.MAP, M.SPAWNS, M.width, M.height  = png_to_list_fast(MAP_PATH[M.map_level])
+        self.map = M.MAP
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
         M.start_angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
+        self.projectiles = []
         self.elevator_waiting = False
         self.elevator_ready = False
         self.elevator_transition = False
@@ -506,10 +518,12 @@ class Game:
         elif M.map_level == 4:
             self.bilal.trigger("floor_0")
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
+        self.map = M.MAP
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
+        self.projectiles = []
         self.elevator_waiting = False
         self.elevator_ready = False
         self.elevator_transition = False
@@ -553,6 +567,7 @@ class Game:
         self._pending_removes.clear()
         # All objects come from server sync — start empty
         self.objects = {"enemies": [], "ammo": [], "keycard": [], "exit": None, "health": []}
+        self.projectiles = []
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
         self.main_music.stop()
