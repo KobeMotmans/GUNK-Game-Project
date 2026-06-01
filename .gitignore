@@ -8,3 +8,4 @@ GUNK.zip
 /Output/
 *.spec
 /tools/upx/upx.exe
+/.opencode

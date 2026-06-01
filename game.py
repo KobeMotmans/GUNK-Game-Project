@@ -76,26 +76,14 @@ class Game:
 
         self.Menu.draw_loading_screen()
 
-        self.main_music = pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.main", "sounds/music/esKape Final.ogg")))
-        self.main_music.set_volume(self.music_volume)
-
-        self.sounds = {
-            "damage": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.damage", "sounds/sfx/damage.ogg"))),
-            "ammo":   pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.ammo", "sounds/sfx/ammo.ogg"))),
-            "key":    pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.key", "sounds/sfx/key.ogg"))),
-            "drink":  pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.drink", "sounds/sfx/drink.ogg"))),
-            "elev_ding": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.elevator_ding", "sounds/sfx/elev_ding.ogg"))),
-            "victory": pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.victory", "sounds/music/Motivator.ogg"))),
-        }
-
-        self.update_sfx_volume()
+        self.main_music = None
+        self.sounds = {}
+        self._load_sounds()
 
         self.Menu.draw_loading_screen()
 
         # Preload all textures at startup (loading screen shown)
-        self.Menu.loading_progress = 0
-        self.Menu.draw_loading_screen(0)
-        preload_textures(self._get_all_texture_paths(), lambda p: self.Menu.draw_loading_screen(p))
+        self._preload_all()
 
         # Multiplayer
         self.multiplayer = False
@@ -127,6 +115,32 @@ class Game:
         self._remove_pickup = []
 
         self.state = "menu"
+
+    def _load_sounds(self):
+        self.main_music = pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.main", "sounds/music/esKape Final.ogg")))
+        self.main_music.set_volume(self.music_volume)
+        self.sounds = {
+            "damage": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.damage", "sounds/sfx/damage.ogg"))),
+            "ammo":   pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.ammo", "sounds/sfx/ammo.ogg"))),
+            "key":    pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.key", "sounds/sfx/key.ogg"))),
+            "drink":  pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.drink", "sounds/sfx/drink.ogg"))),
+            "elev_ding": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.elevator_ding", "sounds/sfx/elev_ding.ogg"))),
+            "victory": pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.victory", "sounds/music/Motivator.ogg"))),
+        }
+        self.update_sfx_volume()
+
+    def _preload_all(self):
+        self.Menu.loading_progress = 0
+        self.Menu.draw_loading_screen(0)
+        preload_textures(self._get_all_texture_paths(), lambda p: self.Menu.draw_loading_screen(p))
+
+    def reload_all_assets(self):
+        self._load_sounds()
+        for gun in [self.pistol, self.rifle, self.minigun]:
+            gun.reload()
+        clear_texture_cache()
+        self._preload_all()
+        self.Menu._load_bg_texture()
 
     def update_sfx_volume(self):
         import src.core.config as cfg

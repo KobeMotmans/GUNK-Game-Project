@@ -22,6 +22,8 @@ class Gun:
         self.flash_time = shoot_speed
         self.recoil_time = recoil_speed
         self.auto = auto
+        self.guntype = guntype
+        self.default_sound = default_sound
 
         self.played_sound = False
 
@@ -33,6 +35,15 @@ class Gun:
         self.shoot_sound = pygame.mixer.Sound(sound_path)
         self.shoot_sound.set_volume(SFX_VOLUME)
 
+        self.weapon_rect = self.gun_rest.get_rect()
+
+    def reload(self):
+        self.gun_rest = self._load_texture(resolve_asset(theme.get(f"textures.weapons.{self.guntype}.rest", f"textures/weapons/{self.guntype}/GUN.png")))
+        self.gun_recoil = self._load_texture(resolve_asset(theme.get(f"textures.weapons.{self.guntype}.recoil", f"textures/weapons/{self.guntype}/GUN_recoil.png")))
+        self.gun_shoot = self._load_texture(resolve_asset(theme.get(f"textures.weapons.{self.guntype}.muzzle", f"textures/weapons/{self.guntype}/GUN_muzzle.png")))
+        sound_path = resolve_asset(theme.get(f"sounds.sfx.{self.guntype}", f"sounds/sfx/{self.default_sound}"))
+        self.shoot_sound = pygame.mixer.Sound(sound_path)
+        self.shoot_sound.set_volume(SFX_VOLUME)
         self.weapon_rect = self.gun_rest.get_rect()
 
     def _load_texture(self, path):

@@ -536,9 +536,8 @@ class Menu:
         packs = list_packs()
         if not hasattr(self, '_pack_dropdown') or self._pack_dropdown is None:
             def _on_pack_select(val):
-                from ..assets.texture_cache import preload as preload_tex
                 set_packs([val] if val else [])
-                self.game._preload_textures("settings")
+                self.game.reload_all_assets()
             self._pack_dropdown = Dropdown(
                 c - drop_w // 2, int(HEIGHT * theme.pos("settings.dropdown_y", 0.72)), drop_w, drop_h, packs,
                 self.game, on_select=_on_pack_select
