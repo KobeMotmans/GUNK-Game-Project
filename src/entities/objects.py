@@ -2,18 +2,19 @@ import pygame
 from math import atan2, hypot, tan, pi
 
 from ..core import config
-from ..core.config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, FONT, SFX_VOLUME
+from ..core.config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, SFX_VOLUME
 from ..core.vector import Vector
-from ..ui.Menu import Menu_inst
 from ..assets.skin_manager import SkinManager
-from ..core.paths import asset_path, resolve_asset
+from ..core.paths import resolve_asset, load_font, load_numeric_font
+from ..core.theme import theme
 from ..assets.texture_cache import get as get_cached_texture
 
 class RenderObject:
     def __init__(self, type, x, y):
         self.pos = Vector(x, y)
         self.type = type
-        sprite_path = resolve_asset(f"textures/{type}.png")
+        theme_key = f"textures.{type.replace('/', '.')}"
+        sprite_path = resolve_asset(theme.get(theme_key, f"textures/{type}.png"))
         self.sprite = get_cached_texture(sprite_path)
         # Cache voor sprite scaling
         self._cached_scale = None
@@ -101,28 +102,24 @@ class PickupObject(RenderObject):
     def interact(self, player, game):
         if self.type == "objects/ammo":
             game.global_ammo = min(game.global_ammo + 50, 200)
-            s = pygame.mixer.Sound(resolve_asset("sounds/sfx/ammo.ogg"))
-            s.set_volume(SFX_VOLUME)
-            s.play()
+            game.sounds["ammo"].set_volume(SFX_VOLUME)
+            game.sounds["ammo"].play()
         if self.type == "objects/keycard":
             player.got_keycard = True
-            s = pygame.mixer.Sound(resolve_asset("sounds/sfx/key.ogg"))
-            s.set_volume(SFX_VOLUME)
-            s.play()
+            game.sounds["key"].set_volume(SFX_VOLUME)
+            game.sounds["key"].play()
         if self.type == "objects/exit":
             if player.got_keycard:
                 player.door_pos  = 1
             else:
-                self.font = pygame.font.Font(FONT, 80)
-                self.font.set_bold(True)
-                no_kc = self.font.render("NO KEYCARD", True,'green')
+                self.font = load_font(80, bold=True)
+                no_kc = self.font.render(theme.string("hud.no_keycard", "NO KEYCARD"), True,'green')
                 SCREEN.blit(no_kc, (WIDTH//2 - no_kc.get_width()//2, HEIGHT//2))
                 return "fail"
         if self.type == "objects/health":
             game.global_health = min(game.global_health + HEALTH_REGEN, START_HEALTH)
-            s = pygame.mixer.Sound(resolve_asset("sounds/sfx/drink.ogg"))
-            s.set_volume(SFX_VOLUME)
-            s.play()
+            game.sounds["drink"].set_volume(SFX_VOLUME)
+            game.sounds["drink"].play()
         return "succes"
 
 
@@ -164,7 +161,7 @@ class PlayerSprite(RenderObject):
             sprite_h = SPRITE_SIZE * PROJ_DIST / dist
             name_size = max(10, int(sprite_h / 4))
             try:
-                font = pygame.font.Font(FONT, name_size)
+                font = load_numeric_font(name_size)
             except:
                 font = pygame.font.Font(None, name_size)
             name_surf = font.render(self.name, True, (255, 255, 255))

@@ -8,9 +8,10 @@ import time
 
 from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
-                    set_resolution, FONT, VICTORY_SCREEN, MENU_BG, ELEV_TIME, MAX_DEPTH,
+                    set_resolution, VICTORY_SCREEN, MENU_BG, ELEV_TIME, MAX_DEPTH,
                     ELEVATOR_WAIT_DIST, ELEVATOR_WAIT_FRAMES)
-from src.core.paths import asset_path, resolve_asset, pack_config
+from src.core.paths import resolve_asset, load_font
+from src.core.theme import theme
 from src.core.raycaster import dda
 from src.assets.texture_cache import preload as preload_textures, clear as clear_texture_cache
 from src.entities.weapons import Pistol, Minigun, Rifle
@@ -66,8 +67,6 @@ class Game:
         self.jan = None
         self.jan_spotted = False
 
-        self.update_sfx_volume()
-
         self.Menu.draw_loading_screen()
 
         # Init objects
@@ -77,8 +76,19 @@ class Game:
 
         self.Menu.draw_loading_screen()
 
-        self.main_music = pygame.mixer.Sound(resolve_asset("sounds/music/esKape Final.ogg"))
+        self.main_music = pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.main", "sounds/music/esKape Final.ogg")))
         self.main_music.set_volume(self.music_volume)
+
+        self.sounds = {
+            "damage": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.damage", "sounds/sfx/damage.ogg"))),
+            "ammo":   pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.ammo", "sounds/sfx/ammo.ogg"))),
+            "key":    pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.key", "sounds/sfx/key.ogg"))),
+            "drink":  pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.drink", "sounds/sfx/drink.ogg"))),
+            "elev_ding": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.elevator_ding", "sounds/sfx/elev_ding.ogg"))),
+            "victory": pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.victory", "sounds/music/Motivator.ogg"))),
+        }
+
+        self.update_sfx_volume()
 
         self.Menu.draw_loading_screen()
 
@@ -123,6 +133,8 @@ class Game:
         cfg.SFX_VOLUME = self.sfx_volume
         for gun in [self.pistol, self.minigun, self.rifle]:
             gun.shoot_sound.set_volume(self.sfx_volume)
+        for s in self.sounds.values():
+            s.set_volume(self.sfx_volume)
 
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
@@ -240,8 +252,16 @@ class Game:
         self.player.tick()
 
     def render(self):   #Render alle game elementen
-        bg = pack_config("bg_color")
-        SCREEN.fill(tuple(bg) if bg else 'black')
+        bg_texture = theme.get("textures.bg")
+        if bg_texture:
+            if not hasattr(self, '_bg_img') or self._bg_img_path != bg_texture:
+                img = pygame.image.load(resolve_asset(bg_texture)).convert()
+                self._bg_img = pygame.transform.scale(img, (WIDTH, HEIGHT))
+                self._bg_img_path = bg_texture
+            SCREEN.blit(self._bg_img, (0, 0))
+        else:
+            bg = theme.color("bg", (0, 0, 0))
+            SCREEN.fill(tuple(bg) if bg else 'black')
 
 
         player_pos = self.player.get_pos()
@@ -403,15 +423,14 @@ class Game:
     def _get_all_texture_paths(self):
         paths = []
         for t in ["andrei", "ahmed", "ruben", "jan"]:
-            paths.append(resolve_asset(f"textures/enemies/{t}.png"))
+            paths.append(resolve_asset(theme.get(f"textures.enemies.{t}", f"textures/enemies/{t}.png")))
         for t in ["ammo", "health", "keycard", "exit"]:
-            paths.append(resolve_asset(f"textures/objects/{t}.png"))
-        from src.core.config import WEAPON_SIZE
+            paths.append(resolve_asset(theme.get(f"textures.objects.{t}", f"textures/objects/{t}.png")))
+        weapon_size = theme.get("sizes.weapon.texture", (300, 300))
         for gun in ["pistol", "rifle", "minigun"]:
-            base = asset_path(f"assets/textures/weapons/{gun}")
-            paths.append((f"{base}/GUN.png", WEAPON_SIZE))
-            paths.append((f"{base}/GUN_recoil.png", WEAPON_SIZE))
-            paths.append((f"{base}/GUN_muzzle.png", WEAPON_SIZE))
+            for part in ["GUN", "GUN_recoil", "GUN_muzzle"]:
+                path = resolve_asset(theme.get(f"textures.weapons.{gun}.{part}", f"textures/weapons/{gun}/{part}.png"))
+                paths.append((path, weapon_size))
         return paths
 
     def _preload_textures(self, target_state):
@@ -599,8 +618,7 @@ class Game:
         # 1. Overwrite shared resources from server (absolute values)
         self.global_health = state.get("global_health", self.global_health)
         self.global_ammo = state.get("global_ammo", self.global_ammo)
-        if state.get("keycard_acquired"):
-            self.player.got_keycard = True
+        self.player.got_keycard = state.get("keycard_acquired", self.player.got_keycard)
 
         # 2. Players — sync own state flags from server (not pos/angle — client-authoritative movement)
         players_data = state.get("players", [])
@@ -777,9 +795,7 @@ class Game:
                 self.Menu.draw_UI(events)
                 
                 if self.player.got_keycard:
-                    font_name = pack_config("font", "ocraextended.ttf")
-                    self.keycard_font = pygame.font.Font(asset_path(f"assets/font/{font_name}"), 20)
-                    self.keycard_font.set_bold(True)
+                    self.keycard_font = load_font(20, bold=True)
                     kc_surf = self.keycard_font.render("KEYCARD ACQUIRED", True, 'green')
                     SCREEN.blit(kc_surf, (WIDTH - kc_surf.get_width() - int(WIDTH * 0.04), HEIGHT - int(HEIGHT * 0.06)))
                     

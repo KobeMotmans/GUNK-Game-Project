@@ -6,6 +6,7 @@ import os
 import pygame
 from math import pi
 from .paths import asset_path, resolve_asset
+from .theme import theme
 
 # ── Display initialisatie (headless-vriendelijk) ─────────────
 # Zet GUNK_HEADLESS=1 in de omgeving om pygame display over te slaan.
@@ -76,18 +77,16 @@ HEALTH_REGEN = 2
 START_AMMO = 100
 AMMO_CAP = 200
 
-FONT = asset_path('assets/font/ocraextended.ttf')
-SILLY_FONT = asset_path('assets/font/Hyro.ttf')   # kept for direct font access; packs use pack_config("font")
-    
+
 
 MENU_BG = (70,70,70)
 
 if not _HEADLESS:
-    SCREEN_FLASH = pygame.transform.scale(pygame.image.load(asset_path("assets/textures/ui/Damage_Flash.png")).convert_alpha(), (WIDTH, HEIGHT))
-    SCREEN_DEAD = pygame.transform.scale(pygame.image.load(resolve_asset("textures/ui/dead.png")).convert_alpha(), (WIDTH, HEIGHT))
-    BILAL = pygame.transform.scale(pygame.image.load(asset_path("assets/textures/ui/bilal.png")).convert_alpha(), (200, 200))
+    SCREEN_FLASH = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.damage_flash", "textures/ui/Damage_Flash.png"))).convert_alpha(), (WIDTH, HEIGHT))
+    SCREEN_DEAD = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.dead", "textures/ui/dead.png"))).convert_alpha(), (WIDTH, HEIGHT))
+    BILAL = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.bilal", "textures/ui/bilal.png"))).convert_alpha(), (200, 200))
 
-    VICTORY_SCREEN = pygame.transform.scale(pygame.image.load(asset_path("assets/textures/ui/victory.png")).convert_alpha(), (WIDTH, HEIGHT))
+    VICTORY_SCREEN = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.victory", "textures/ui/victory.png"))).convert_alpha(), (WIDTH, HEIGHT))
 
 
     DAMAGE_FLASH = SCREEN_FLASH.copy()

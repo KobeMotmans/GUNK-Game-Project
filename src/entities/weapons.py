@@ -3,10 +3,11 @@ weapons.py - Wapen klassen en rendering
 """
 
 import pygame
-from ..core.config import SCREEN, WIDTH, HEIGHT, WEAPON_SIZE, WEAPON_OFFSET_X, MAX_DEPTH, SFX_VOLUME
+from ..core.config import SCREEN, WIDTH, HEIGHT, WEAPON_OFFSET_X, MAX_DEPTH, SFX_VOLUME
 from math import sin, cos
 from ..core.vector import Vector
-from ..core.paths import asset_path, resolve_asset, pack_config
+from ..core.paths import resolve_asset
+from ..core.theme import theme
 from ..assets.texture_cache import get as get_cached_texture
 
 # Sound init
@@ -24,16 +25,11 @@ class Gun:
 
         self.played_sound = False
 
-        base_path = asset_path(f"assets/textures/weapons/{guntype}/")
-        self.gun_rest = self._load_texture(base_path + "GUN.png")
-        self.gun_recoil = self._load_texture(base_path + "GUN_recoil.png")
-        self.gun_shoot = self._load_texture(base_path + "GUN_muzzle.png")
+        self.gun_rest = self._load_texture(resolve_asset(theme.get(f"textures.weapons.{guntype}.rest", f"textures/weapons/{guntype}/GUN.png")))
+        self.gun_recoil = self._load_texture(resolve_asset(theme.get(f"textures.weapons.{guntype}.recoil", f"textures/weapons/{guntype}/GUN_recoil.png")))
+        self.gun_shoot = self._load_texture(resolve_asset(theme.get(f"textures.weapons.{guntype}.muzzle", f"textures/weapons/{guntype}/GUN_muzzle.png")))
 
-        weapon_sound_override = pack_config("weapon_sound")
-        if weapon_sound_override:
-            sound_path = resolve_asset(f"sounds/sfx/{weapon_sound_override}")
-        else:
-            sound_path = resolve_asset(f"sounds/sfx/{default_sound}")
+        sound_path = resolve_asset(theme.get(f"sounds.sfx.{guntype}", f"sounds/sfx/{default_sound}"))
         self.shoot_sound = pygame.mixer.Sound(sound_path)
         self.shoot_sound.set_volume(SFX_VOLUME)
 
@@ -41,7 +37,8 @@ class Gun:
 
     def _load_texture(self, path):
         """Helper om texture te laden en te scalen (via texture cache)"""
-        return get_cached_texture(path, WEAPON_SIZE)
+        weapon_size = theme.get("sizes.weapon.texture", (300, 300))
+        return get_cached_texture(path, weapon_size)
 
     def shoot(self, pos, angle, enemies, player, current_gun, apply_damage=True):
         """Start schiet animatie als wapen in rust is. Returnt hit enemy pos of None."""

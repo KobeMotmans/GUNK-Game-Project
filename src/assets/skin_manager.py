@@ -1,8 +1,8 @@
 import os
 import glob
-import struct
 import socket
 import pickle
+import time
 import pygame
 from ..core.paths import asset_path, appdata_path
 
@@ -107,44 +107,50 @@ class SkinManager:
             return False
         host, port = cls._server_addr
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.settimeout(5.0)
-            sock.connect((host, port))
             req = {"type": "skin_request", "skin_id": skin_id}
-            data = pickle.dumps(req)
-            sock.sendall(struct.pack('!I', len(data)) + data)
+            sock.sendto(pickle.dumps(req), (host, port))
 
-            size_data = _recv_all(sock, 4)
-            if not size_data:
-                sock.close()
-                print(f"[SKIN] download_skin({skin_id}): no size_data")
-                return False
-            size = struct.unpack('!I', size_data)[0]
-            if not (0 < size < 5 * 1024 * 1024):
-                sock.close()
-                print(f"[SKIN] download_skin({skin_id}): invalid size {size}")
-                return False
-            resp_data = _recv_all(sock, size)
+            chunks = {}
+            total_chunks = None
+            deadline = time.time() + 5.0
+            while time.time() < deadline:
+                try:
+                    data, addr = sock.recvfrom(65536)
+                    resp = pickle.loads(data)
+                    if resp.get("type") == "skin_data" and resp.get("skin_id") == skin_id:
+                        raw = resp["data"]
+                        if raw is None:
+                            sock.close()
+                            return False
+                        out = _get_custom_path(skin_id)
+                        os.makedirs(os.path.dirname(out), exist_ok=True)
+                        with open(out, "wb") as f:
+                            f.write(raw)
+                        cls._cache.pop(skin_id, None)
+                        print(f"[SKIN] download_skin({skin_id}): OK -> {out}")
+                        sock.close()
+                        return True
+                    elif resp.get("type") == "skin_chunk" and resp.get("skin_id") == skin_id:
+                        chunks[resp["chunk"]] = resp["data"]
+                        total_chunks = resp["total"]
+                        if len(chunks) == total_chunks:
+                            raw = b''.join(chunks[i] for i in range(total_chunks))
+                            out = _get_custom_path(skin_id)
+                            os.makedirs(os.path.dirname(out), exist_ok=True)
+                            with open(out, "wb") as f:
+                                f.write(raw)
+                            cls._cache.pop(skin_id, None)
+                            print(f"[SKIN] download_skin({skin_id}): OK (chunked) -> {out}")
+                            sock.close()
+                            return True
+                except socket.timeout:
+                    sock.sendto(pickle.dumps(req), (host, port))
             sock.close()
-            if not resp_data:
-                print(f"[SKIN] download_skin({skin_id}): no resp_data")
-                return False
-            resp = pickle.loads(resp_data)
-            if resp.get("type") != "skin_data":
-                print(f"[SKIN] download_skin({skin_id}): wrong type {resp.get('type')}")
-                return False
-            raw = resp["data"]
-            if raw is None:
-                print(f"[SKIN] download_skin({skin_id}): server returned None data")
-                return False
-            out = _get_custom_path(skin_id)
-            os.makedirs(os.path.dirname(out), exist_ok=True)
-            with open(out, "wb") as f:
-                f.write(raw)
-            cls._cache.pop(skin_id, None)
-            print(f"[SKIN] download_skin({skin_id}): OK -> {out}")
-            return True
-        except (socket.timeout, ConnectionRefusedError, OSError, pickle.UnpicklingError) as e:
+            print(f"[SKIN] download_skin({skin_id}): timeout, got {len(chunks)}/{total_chunks} chunks")
+            return False
+        except (socket.timeout, OSError, pickle.UnpicklingError) as e:
             print(f"[SKIN] download_skin({skin_id}): exception {e}")
             return False
 
@@ -165,16 +171,3 @@ class SkinManager:
     @classmethod
     def clear_cache(cls):
         cls._cache.clear()
-
-
-def _recv_all(sock, n):
-    data = b''
-    while len(data) < n:
-        try:
-            chunk = sock.recv(n - len(data))
-            if not chunk:
-                return None
-            data += chunk
-        except socket.timeout:
-            return None
-    return data

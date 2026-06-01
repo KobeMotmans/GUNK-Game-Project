@@ -4,9 +4,10 @@ enemies.py - Vijand klassen en rendering
 
 import pygame
 
-from ..core.config import SCREEN, WIDTH, AGGRO_DIST, PATHFIND_INTERVAL, FONT, ATTACK_DIST
+from ..core.config import SCREEN, WIDTH, AGGRO_DIST, PATHFIND_INTERVAL, ATTACK_DIST
 from ..core.vector import Vector
-from ..core.paths import asset_path, pack_config
+from ..core.paths import load_font
+from ..core.theme import theme
 from .objects import RenderObject
 from .enemy_ai import EnemyAI
 
@@ -29,16 +30,14 @@ class Enemy(EnemyAI, RenderObject):
         health_ratio = max(0, self.health / self.max_health)
 
         if self.type == "enemies/jan":
-            bar_width = WIDTH // 2
-            bar_height = 20
-            bar_x = WIDTH // 4
-            bar_y = 30
+            bar_width = theme.size("boss_hp.bar_w", WIDTH // 2)
+            bar_height = theme.size("boss_hp.bar_h", 20)
+            bar_x = theme.size("boss_hp.bar_x", WIDTH // 4)
+            bar_y = theme.size("boss_hp.bar_y", 30)
 
-            font_name = pack_config("font", "ocraextended.ttf")
-            font = pygame.font.Font(asset_path(f"assets/font/{font_name}"), 28)
-            font.set_bold(True)
+            font = load_font(theme.size("boss_hp.name_font", 28), bold=True)
             label = font.render("Jan Lemeire", True, (255, 220, 0))
-            SCREEN.blit(label, (bar_x + bar_width // 2 - label.get_width() // 2, bar_y - 30))
+            SCREEN.blit(label, (bar_x + bar_width // 2 - label.get_width() // 2, bar_y - theme.pos("boss_hp.label_offset", 30)))
 
             pygame.draw.rect(SCREEN, (80, 0, 0), (bar_x, bar_y, bar_width, bar_height))
 
@@ -49,7 +48,7 @@ class Enemy(EnemyAI, RenderObject):
         bar_width = sprite_h
         bar_height = sprite_h * 0.1
         bar_x = draw_x
-        bar_y = draw_y - bar_height - 4
+        bar_y = draw_y - bar_height - theme.size("enemy_hp.bar_offset", 4)
 
         bg_rect = pygame.Rect(bar_x, bar_y, bar_width, bar_height)
         pygame.draw.rect(SCREEN, (120, 0, 0), bg_rect)

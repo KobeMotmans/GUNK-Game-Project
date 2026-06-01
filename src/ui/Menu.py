@@ -1,15 +1,18 @@
 import pygame
 import tkinter as tk
 from tkinter import filedialog
-from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, FONT, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, SFX_VOLUME, MENU_BG
-from ..core.paths import asset_path, resolve_asset, pack_config, list_packs, set_pack, TEXTURE_PACK
+from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, SFX_VOLUME
+from ..core.paths import list_packs, set_packs, TEXTURE_PACKS, load_font, load_numeric_font, resolve_asset
+from ..core.theme import theme
 from collections import deque
 from ..core.map_loader import M
 from ..assets.skin_manager import SkinManager
 from ..network.network import NetworkClient
 class Menu:
     def __init__(self):
-        self.bg_color = MENU_BG
+        self.bg_color = theme.color("menu.bg", (70, 70, 70))
+        self._bg_img = None
+        self._load_bg_texture()
         self.credits_height = HEIGHT
         self.volume_slider = None
         self.sfx_volume_slider = None
@@ -27,7 +30,7 @@ class Menu:
         self.input_focus = None
         self.lobby_status = ""
         self.client_list = []
-        self.waiting_text = "Verbinden..."
+        self.waiting_text = theme.string("multiplayer.connecting", "Verbinden...")
         self.mp_status = ""
         self._skin_thumbnails = {}
         self._skin_page = 0
@@ -35,44 +38,62 @@ class Menu:
         self.mp_skin_upload_name = ""
         self._upload_status = None
 
-    def draw_loading_screen(self, progress=None):
-        SCREEN.fill(self.bg_color)
-        loading_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.1))
-        loading_font.set_bold(True)
-        load_surf = loading_font.render("Loading...", True, 'white')
-        SCREEN.blit(load_surf, (WIDTH // 2 - load_surf.get_width() // 2, HEIGHT - int(HEIGHT * 0.29)))
+    def _load_bg_texture(self):
+        path = theme.get("textures.menu_bg")
+        if path:
+            try:
+                img = pygame.image.load(resolve_asset(path)).convert()
+                self._bg_img = pygame.transform.scale(img, (WIDTH, HEIGHT))
+            except Exception:
+                self._bg_img = None
+        else:
+            self._bg_img = None
+        self.bg_color = theme.color("menu.bg", (70, 70, 70))
 
-        title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.29))
-        title_font.set_bold(True)
-        title_surf = title_font.render("GUNK", True, 'white')
+    def _fill_bg(self):
+        if self._bg_img:
+            SCREEN.blit(self._bg_img, (0, 0))
+        else:
+            SCREEN.fill(self.bg_color)
+
+    def draw_loading_screen(self, progress=None):
+        self._fill_bg()
+        loading_font = load_font(theme.size("loading.text_font", int(HEIGHT * 0.1)), bold=True)
+        load_surf = loading_font.render(theme.string("loading.text", "Loading..."), True, theme.color("text.title", 'white'))
+        SCREEN.blit(load_surf, (WIDTH // 2 - load_surf.get_width() // 2, HEIGHT - int(HEIGHT * theme.pos("loading.text_y", 0.29))))
+
+        title_font = load_font(theme.size("menu.title_font", int(HEIGHT * 0.29)), bold=True)
+        title_surf = title_font.render(theme.string("menu.title", "GUNK"), True, theme.color("text.title", 'white'))
         SCREEN.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, HEIGHT // 2 - title_surf.get_height() // 2))
 
-        bar_width = int(WIDTH * 0.31)
-        bar_height = int(HEIGHT * 0.03)
+        bar_width = theme.size("loading.bar_width", int(WIDTH * 0.31))
+        bar_height = theme.size("loading.bar_height", int(HEIGHT * 0.03))
         bar_x = WIDTH // 2 - bar_width // 2
-        bar_y = HEIGHT - int(HEIGHT * 0.15)
+        bar_y = HEIGHT - int(HEIGHT * theme.pos("loading.bar_y", 0.15))
 
-        pygame.draw.rect(SCREEN, (80, 80, 80), (bar_x, bar_y, bar_width, bar_height))
+        pygame.draw.rect(SCREEN, theme.color("loading.bar_bg", (80, 80, 80)), (bar_x, bar_y, bar_width, bar_height))
 
         if progress is not None:
             self.loading_progress = progress
         progress_width = bar_width * self.loading_progress
-        pygame.draw.rect(SCREEN, (0, 200, 0), (bar_x, bar_y, progress_width, bar_height))
+        pygame.draw.rect(SCREEN, theme.color("loading.bar_fill", (0, 200, 0)), (bar_x, bar_y, progress_width, bar_height))
         if progress is None:
             self.loading_progress += 0.2
         pygame.display.flip()
 
-    def _draw_main_button(self, events, text, y_pos, w, action=None, h=55, font_size=34, x=None):
+    def _draw_main_button(self, events, text, y_pos, w, action=None, h=None, font_size=None, x=None):
         if x is None:
             x = WIDTH//2 - w//2
+        if h is None:
+            h = theme.size("menu.btn_h", int(HEIGHT * 0.04))
         rect = pygame.Rect(x, y_pos, w, h)
         mouse = pygame.mouse.get_pos()
         hover = rect.collidepoint(mouse)
-        pygame.draw.rect(SCREEN, (100, 100, 100) if hover else (70, 70, 70), rect, border_radius=8)
+        pygame.draw.rect(SCREEN, theme.color("button.hover_bg", (100, 100, 100)) if hover else theme.color("button.bg", (70, 70, 70)), rect, border_radius=8)
         if hover:
-            pygame.draw.rect(SCREEN, (180, 180, 180), rect, 2, border_radius=8)
-        font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), font_size)
-        surf = font.render(text, True, 'white')
+            pygame.draw.rect(SCREEN, theme.color("button.border", (180, 180, 180)), rect, 2, border_radius=8)
+        font = load_font(font_size)
+        surf = font.render(text, True, theme.color("button.text", 'white'))
         SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y_pos + h//2 - surf.get_height()//2))
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -83,40 +104,39 @@ class Menu:
 
     def draw_main_menu(self, events, GAME):
         self.game = GAME
-        SCREEN.fill(self.bg_color)
-        title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.29))
-        title_font.set_bold(True)
-        title_surf = title_font.render("GUNK", True, 'white')
-        SCREEN.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, int(HEIGHT * 0.08)))
+        self._fill_bg()
+        title_font = load_font(theme.size("menu.title_font", int(HEIGHT * 0.29)), bold=True)
+        title_surf = title_font.render(theme.string("menu.title", "GUNK"), True, theme.color("text.title", 'white'))
+        SCREEN.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, int(HEIGHT * theme.pos("menu.title_y", 0.08))))
 
         c = WIDTH//2
-        btn_w = int(WIDTH * 0.12)
-        gap = int(WIDTH * 0.03)
-        self._draw_main_button(events, "SOLO", int(HEIGHT * 0.38), btn_w, lambda: GAME.reset_game(), font_size=36, x=c - btn_w - gap//2)
-        self._draw_main_button(events, "MULTIPLAYER", int(HEIGHT * 0.38), btn_w, lambda: setattr(GAME, 'state', 'multiplayer_menu'), font_size=36, x=c + gap//2)
-        self._draw_main_button(events, "OPTIONS", int(HEIGHT * 0.47), int(WIDTH * 0.11), lambda: setattr(GAME, 'state', 'settings'), font_size=36)
-        self._draw_main_button(events, "CREDITS", int(HEIGHT * 0.54), int(WIDTH * 0.11), lambda: setattr(GAME, 'state', 'credits'), font_size=36)
-        self._draw_main_button(events, "QUIT", int(HEIGHT * 0.62), int(WIDTH * 0.11), lambda: setattr(GAME, 'running', False), font_size=36)
+        btn_w = theme.size("menu.btn_wide", int(WIDTH * 0.12))
+        gap = theme.size("menu.btn_gap", int(WIDTH * 0.03))
+        self._draw_main_button(events, theme.string("menu.solo", "SOLO"), int(HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: GAME.reset_game(), font_size=36, x=c - btn_w - gap//2)
+        self._draw_main_button(events, theme.string("menu.multiplayer", "MULTIPLAYER"), int(HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: setattr(GAME, 'state', 'multiplayer_menu'), font_size=36, x=c + gap//2)
+        self._draw_main_button(events, theme.string("menu.options", "OPTIONS"), int(HEIGHT * theme.pos("menu.options_y", 0.47)), int(WIDTH * 0.11), lambda: setattr(GAME, 'state', 'settings'), font_size=36)
+        self._draw_main_button(events, theme.string("menu.credits", "CREDITS"), int(HEIGHT * theme.pos("menu.credits_y", 0.54)), int(WIDTH * 0.11), lambda: setattr(GAME, 'state', 'credits'), font_size=36)
+        self._draw_main_button(events, theme.string("menu.quit", "QUIT"), int(HEIGHT * theme.pos("menu.quit_y", 0.62)), int(WIDTH * 0.11), lambda: setattr(GAME, 'running', False), font_size=36)
     # --- Multiplayer UI ----------------------------------------
 
-    def _draw_text_input(self, events, label, current_text, x, y, width, height=35, field_id=None, numeric=False):
+    def _draw_text_input(self, events, label, current_text, x, y, width, height=None, field_id=None, numeric=False):
         """Draw a text input field. Returns the (possibly updated) text."""
         mouse = pygame.mouse.get_pos()
         rect = pygame.Rect(x, y, width, height)
 
-        label_font = pygame.font.Font(FONT, 22)
-        label_surf = label_font.render(label, True, 'white')
-        SCREEN.blit(label_surf, (x, y - 25))
+        label_font = load_font(theme.size("input.label_font", 22))
+        label_surf = label_font.render(label, True, theme.color("text.title", 'white'))
+        SCREEN.blit(label_surf, (x, y - theme.size("input.label_offset", 25)))
 
         focused = self.input_focus == field_id
-        bg_color = (60, 60, 80) if focused else (40, 40, 40)
+        bg_color = theme.color("input.focus_bg", (60, 60, 80)) if focused else theme.color("input.bg", (40, 40, 40))
         pygame.draw.rect(SCREEN, bg_color, rect, border_radius=4)
-        pygame.draw.rect(SCREEN, (180, 180, 255) if focused else (100, 100, 100), rect, 2, border_radius=4)
+        pygame.draw.rect(SCREEN, theme.color("input.focus_border", (180, 180, 255)) if focused else theme.color("input.border", (100, 100, 100)), rect, 2, border_radius=4)
 
-        font = pygame.font.Font(FONT, 22)
+        font = load_numeric_font(theme.size("input.text_font", 22))
         display_text = current_text + ("|" if focused else "")
-        text_surf = font.render(display_text, True, 'white')
-        SCREEN.blit(text_surf, (x + 6, y + (height - text_surf.get_height()) // 2))
+        text_surf = font.render(display_text, True, theme.color("text.title", 'white'))
+        SCREEN.blit(text_surf, (x + theme.size("input.text_inset_x", 6), y + (height - text_surf.get_height()) // 2))
 
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -125,11 +145,24 @@ class Menu:
                 elif self.input_focus == field_id:
                     self.input_focus = None
             if ev.type == pygame.KEYDOWN and self.input_focus == field_id:
-                if ev.key == pygame.K_BACKSPACE:
+                if ev.key == pygame.K_v and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                    root = tk.Tk()
+                    root.withdraw()
+                    try:
+                        pasted = root.clipboard_get()
+                        for ch in pasted:
+                            if numeric and ch in "0123456789":
+                                current_text += ch
+                            elif not numeric and ch.isprintable():
+                                current_text += ch
+                    except:
+                        pass
+                    root.destroy()
+                elif ev.key == pygame.K_BACKSPACE:
                     current_text = current_text[:-1]
                 elif ev.key == pygame.K_ESCAPE:
                     self.input_focus = None
-                elif ev.unicode and len(current_text) < 20:
+                elif ev.unicode:
                     if numeric and ev.unicode in "0123456789":
                         current_text += ev.unicode
                     elif not numeric and ev.unicode.isprintable():
@@ -141,11 +174,11 @@ class Menu:
         mouse = pygame.mouse.get_pos()
         rect = pygame.Rect(x, y, w, h)
         hover = rect.collidepoint(mouse)
-        pygame.draw.rect(SCREEN, (100, 100, 100) if hover else (70, 70, 70), rect, border_radius=6)
+        pygame.draw.rect(SCREEN, theme.color("button.hover_bg", (100, 100, 100)) if hover else theme.color("button.bg", (70, 70, 70)), rect, border_radius=6)
         if hover:
-            pygame.draw.rect(SCREEN, (180, 180, 180), rect, 2, border_radius=6)
-        font = pygame.font.Font(FONT, 28)
-        surf = font.render(text, True, 'white')
+            pygame.draw.rect(SCREEN, theme.color("button.border", (180, 180, 180)), rect, 2, border_radius=6)
+        font = load_font(theme.size("button.custom_font", 28))
+        surf = font.render(text, True, theme.color("button.text", 'white'))
         SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y + h//2 - surf.get_height()//2))
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -156,79 +189,79 @@ class Menu:
 
     def draw_multiplayer_menu(self, events, GAME):
         self.game = GAME
-        SCREEN.fill(self.bg_color)
+        self._fill_bg()
 
-        join_font = pygame.font.Font(FONT, 36)
-        join_label = join_font.render("JOIN SERVER", True, 'white')
-        SCREEN.blit(join_label, (WIDTH//2 - join_label.get_width()//2, int(HEIGHT * 0.04)))
+        join_font = load_font(36)
+        join_label = join_font.render(theme.string("multiplayer.title", "JOIN SERVER"), True, theme.color("text.title", 'white'))
+        SCREEN.blit(join_label, (WIDTH//2 - join_label.get_width()//2, int(HEIGHT * theme.pos("mp.title_y", 0.04))))
 
-        info_text = "Start de server apart: python run_server.py"
-        info = pygame.font.Font(FONT, 16).render(info_text, True, (150, 150, 150))
-        SCREEN.blit(info, (WIDTH//2 - info.get_width()//2, int(HEIGHT * 0.08)))
+        info_text = theme.string("multiplayer.info", "Start de server apart: python run_server.py")
+        info = load_font(16).render(info_text, True, theme.color("text.info", (150, 150, 150)))
+        SCREEN.blit(info, (WIDTH//2 - info.get_width()//2, int(HEIGHT * theme.pos("menu.title_y", 0.08))))
 
-        name_label = pygame.font.Font(FONT, 22).render("JOUW NAAM", True, (200, 200, 200))
-        SCREEN.blit(name_label, (WIDTH//2 - name_label.get_width()//2, int(HEIGHT * 0.13)))
-        self.mp_name_input = self._draw_text_input(events, "", self.mp_name_input, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.16), int(WIDTH * 0.125), field_id="mp_name")
+        name_label = load_font(22).render(theme.string("multiplayer.name_label", "JOUW NAAM"), True, theme.color("text.subtitle", (200, 200, 200)))
+        SCREEN.blit(name_label, (WIDTH//2 - name_label.get_width()//2, int(HEIGHT * theme.pos("mp.name_label_y", 0.13))))
+        self.mp_name_input = self._draw_text_input(events, "", self.mp_name_input, WIDTH//2 - int(WIDTH * 0.09), int(HEIGHT * theme.pos("mp.name_input_y", 0.16)), int(WIDTH * 0.18), field_id="mp_name")
 
-        ip_label = pygame.font.Font(FONT, 20).render("SERVER IP", True, (200, 200, 200))
-        SCREEN.blit(ip_label, (WIDTH//2 - ip_label.get_width()//2, int(HEIGHT * 0.22)))
-        self.mp_join_ip = self._draw_text_input(events, "", self.mp_join_ip, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.25), int(WIDTH * 0.125), field_id="mp_join_ip")
+        ip_label = load_font(20).render(theme.string("multiplayer.ip_label", "SERVER IP"), True, theme.color("text.subtitle", (200, 200, 200)))
+        SCREEN.blit(ip_label, (WIDTH//2 - ip_label.get_width()//2, int(HEIGHT * theme.pos("mp.ip_label_y", 0.22))))
+        self.mp_join_ip = self._draw_text_input(events, "", self.mp_join_ip, WIDTH//2 - int(WIDTH * 0.09), int(HEIGHT * theme.pos("mp.ip_input_y", 0.25)), int(WIDTH * 0.18), field_id="mp_join_ip")
 
-        port_label = pygame.font.Font(FONT, 20).render("POORT", True, (200, 200, 200))
-        SCREEN.blit(port_label, (WIDTH//2 - port_label.get_width()//2, int(HEIGHT * 0.31)))
-        self.mp_join_port = self._draw_text_input(events, "", self.mp_join_port, WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * 0.34), int(WIDTH * 0.125), field_id="mp_join_port", numeric=True)
+        port_label = load_font(20).render(theme.string("multiplayer.port_label", "POORT"), True, theme.color("text.subtitle", (200, 200, 200)))
+        SCREEN.blit(port_label, (WIDTH//2 - port_label.get_width()//2, int(HEIGHT * theme.pos("mp.port_label_y", 0.31))))
+        self.mp_join_port = self._draw_text_input(events, "", self.mp_join_port, WIDTH//2 - int(WIDTH * 0.09), int(HEIGHT * theme.pos("mp.port_input_y", 0.34)), int(WIDTH * 0.18), field_id="mp_join_port", numeric=True)
 
         def do_connect():
-            name = self.mp_name_input.strip() or "Player"
+            name = self.mp_name_input.strip() or theme.string("multiplayer.default_name", "Player")
             ip = self.mp_join_ip.strip() or "127.0.0.1"
             try:
                 port = int(self.mp_join_port) if self.mp_join_port else DEFAULT_PORT
             except ValueError:
                 port = DEFAULT_PORT
             GAME._do_connect(ip, port, name)
-        self._draw_button_custom(events, "JOIN GAME", WIDTH//2 - int(WIDTH * 0.05), int(HEIGHT * 0.40), int(WIDTH * 0.1), int(HEIGHT * 0.05), do_connect)
+        self._draw_button_custom(events, theme.string("multiplayer.join", "JOIN GAME"), WIDTH//2 - int(WIDTH * 0.06), int(HEIGHT * theme.pos("mp.join_btn_y", 0.40)), int(WIDTH * 0.12), int(HEIGHT * 0.05), do_connect)
 
         if self.mp_status:
-            color = (0, 200, 0) if "gelukt" in self.mp_status else (200, 0, 0)
-            status = pygame.font.Font(FONT, 22).render(self.mp_status, True, color)
-            SCREEN.blit(status, (WIDTH//2 - status.get_width()//2, int(HEIGHT * 0.48)))
+            color = theme.color("text.success", (0, 200, 0)) if "gelukt" in self.mp_status else theme.color("text.fail", (200, 0, 0))
+            status = load_font(22).render(self.mp_status, True, color)
+            SCREEN.blit(status, (WIDTH//2 - status.get_width()//2, int(HEIGHT * theme.pos("mp.status_y", 0.48))))
 
-        self._draw_button_custom(events, "BACK", WIDTH//2 - int(WIDTH * 0.03), HEIGHT - int(HEIGHT * 0.08), int(WIDTH * 0.06), int(HEIGHT * 0.03), lambda: setattr(GAME, 'state', 'menu'))
+        self._draw_button_custom(events, theme.string("button.back", "BACK"), WIDTH//2 - int(WIDTH * 0.04), HEIGHT - int(HEIGHT * theme.pos("menu.title_y", 0.08)), int(WIDTH * 0.08), int(HEIGHT * 0.04), lambda: setattr(GAME, 'state', 'menu'))
 
     def draw_waiting_lobby(self, events, GAME):
         self.game = GAME
-        SCREEN.fill(self.bg_color)
-        title = pygame.font.Font(FONT, 50).render("LOBBY", True, 'white')
-        SCREEN.blit(title, (WIDTH//2 - title.get_width()//2, int(HEIGHT * 0.08)))
+        self._fill_bg()
+        title = load_font(50).render(theme.string("lobby.title", "LOBBY"), True, theme.color("text.title", 'white'))
+        SCREEN.blit(title, (WIDTH//2 - title.get_width()//2, int(HEIGHT * theme.pos("menu.title_y", 0.08))))
 
         mouse = pygame.mouse.get_pos()
 
         # ── Left column: player list ──────────────────────────────
         left_x = int(WIDTH * 0.04)
         left_cx = int(WIDTH * 0.20)
-        y_left = int(HEIGHT * 0.15)
+        y_left = int(HEIGHT * theme.pos("lobby.left_start_y", 0.15))
         players = self.client_list if self.client_list else []
-        thumb_size = 36
+        thumb_size = theme.size("lobby.thumb_size", 36)
         for pd in players:
             pid = pd["pid"] if isinstance(pd, dict) else pd[1]
             name = pd["name"] if isinstance(pd, dict) else pd[0]
             skin_id = pd.get("skin_id", 0) if isinstance(pd, dict) else (pd[2] if len(pd) > 2 else 0)
-            color = (0, 200, 255) if pid == GAME.player_id else (255, 255, 255)
+            color = theme.color("player.highlight", (0, 200, 255)) if pid == GAME.player_id else theme.color("text.title", (255, 255, 255))
             if skin_id not in self._skin_thumbnails or self._skin_thumbnails[skin_id].get_width() != thumb_size:
                 self._skin_thumbnails[skin_id] = SkinManager.create_thumbnail(skin_id, (thumb_size, thumb_size))
             SCREEN.blit(self._skin_thumbnails[skin_id], (left_x, y_left - 4))
-            p_text = pygame.font.Font(FONT, 26).render(f"[P{pid}] {name}", True, color)
+            p_text = load_numeric_font(26).render(f"[P{pid}] {name}", True, color)
             SCREEN.blit(p_text, (left_x + thumb_size + 10, y_left))
-            y_left += int(HEIGHT * 0.045)
+            y_left += theme.size("lobby.player_row_gap", int(HEIGHT * 0.045))
         if not players:
-            wait = pygame.font.Font(FONT, 22).render("Wachten op spelers...", True, (150, 150, 150))
+            wait = load_font(22).render(theme.string("lobby.waiting", "Wachten op spelers..."), True, theme.color("text.info", (150, 150, 150)))
             SCREEN.blit(wait, (left_cx - wait.get_width()//2, y_left))
 
         # ── Right column: skin selector ───────────────────────────
         right_cx = int(WIDTH * 0.66)
-        y_right = int(HEIGHT * 0.15)
+        y_right = int(HEIGHT * theme.pos("lobby.right_start_y", 0.15))
 
-        sel_label = pygame.font.Font(FONT, 22).render("KIEZEN", True, (200, 200, 200))
+        sel_label = load_font(22).render(theme.string("lobby.skin_choose", "KIEZEN"), True, theme.color("text.subtitle", (200, 200, 200)))
         SCREEN.blit(sel_label, (right_cx - sel_label.get_width()//2, y_right))
         y_right += 28
 
@@ -250,16 +283,16 @@ class Menu:
             if sid not in self._skin_thumbnails or self._skin_thumbnails[sid].get_width() != t_size_b:
                 self._skin_thumbnails[sid] = SkinManager.create_thumbnail(sid, (t_size_b, t_size_b))
             SCREEN.blit(self._skin_thumbnails[sid], (x, y_right))
-            border_color = (0, 200, 255) if sid == GAME.skin_id else (60, 60, 60)
+            border_color = theme.color("skin.selected", (0, 200, 255)) if sid == GAME.skin_id else theme.color("skin.border", (60, 60, 60))
             pygame.draw.rect(SCREEN, border_color, rect, 3, border_radius=4)
-            name_font = pygame.font.Font(FONT, 13)
-            name_surf = name_font.render(info.get("name", f"S{sid}"), True, (150, 150, 150))
+            name_font = load_numeric_font(13)
+            name_surf = name_font.render(info.get("name", f"S{sid}"), True, theme.color("text.info", (150, 150, 150)))
             SCREEN.blit(name_surf, (x + t_size_b//2 - name_surf.get_width()//2, y_right + t_size_b + 2))
         y_right += t_size_b + 28
 
         # ── Upload section (always visible) ─────────────────────────
-        upload_font = pygame.font.Font(FONT, 16)
-        upload_label = upload_font.render("NIEUWE SKIN", True, (200, 200, 200))
+        upload_font = load_font(16)
+        upload_label = upload_font.render(theme.string("lobby.new_skin", "NIEUWE SKIN"), True, theme.color("text.subtitle", (200, 200, 200)))
         SCREEN.blit(upload_label, (right_cx - upload_label.get_width()//2, y_right))
         y_right += 22
         name_w = int(WIDTH * 0.08)
@@ -271,15 +304,15 @@ class Menu:
         btn_x = right_cx + int(WIDTH * 0.02)
         up_rect = pygame.Rect(btn_x, y_right, btn_w, 26)
         hover = up_rect.collidepoint(mouse)
-        pygame.draw.rect(SCREEN, (80, 120, 80) if hover else (60, 90, 60), up_rect, border_radius=4)
-        up_surf = upload_font.render("UPLOAD", True, (200, 255, 200))
+        pygame.draw.rect(SCREEN, theme.color("upload.hover_bg", (80, 120, 80)) if hover else theme.color("upload.bg", (60, 90, 60)), up_rect, border_radius=4)
+        up_surf = upload_font.render(theme.string("lobby.upload", "UPLOAD"), True, theme.color("upload.text", (200, 255, 200)))
         SCREEN.blit(up_surf, (btn_x + btn_w//2 - up_surf.get_width()//2, y_right + 5))
         self._skin_upload_rect = up_rect
         y_right += 32
 
         if self._upload_status:
-            col = (0, 200, 0) if "gelukt" in self._upload_status.lower() else (200, 100, 0)
-            st = pygame.font.Font(FONT, 15).render(self._upload_status, True, col)
+            col = theme.color("text.success", (0, 200, 0)) if "gelukt" in self._upload_status.lower() else theme.color("text.warning", (200, 100, 0))
+            st = load_numeric_font(15).render(self._upload_status, True, col)
             SCREEN.blit(st, (right_cx - st.get_width()//2, y_right))
             y_right += 20
 
@@ -287,7 +320,7 @@ class Menu:
         self._skin_custom_rects = []
         self._skin_custom_info = []
         if custom:
-            cus_label = pygame.font.Font(FONT, 18).render("CUSTOM", True, (160, 140, 255))
+            cus_label = load_font(18).render(theme.string("lobby.custom", "CUSTOM"), True, theme.color("text.custom", (160, 140, 255)))
             SCREEN.blit(cus_label, (right_cx - cus_label.get_width()//2, y_right))
             y_right += 24
 
@@ -301,7 +334,7 @@ class Menu:
             filter_text = getattr(self, 'mp_skin_search', "").lower()
             filtered = [s for s in custom if filter_text in s.get("name", "").lower()]
 
-            per_page = 4
+            per_page = theme.size("lobby.skins_per_page", 4)
             total_pages = max(1, (len(filtered) + per_page - 1) // per_page)
             page = getattr(self, '_skin_page', 0)
             if page >= total_pages:
@@ -325,13 +358,13 @@ class Menu:
                 if sid not in self._skin_thumbnails or self._skin_thumbnails[sid].get_width() != t_size_c:
                     self._skin_thumbnails[sid] = SkinManager.create_thumbnail(sid, (t_size_c, t_size_c))
                 SCREEN.blit(self._skin_thumbnails[sid], (x, y_right))
-                border_color = (0, 200, 255) if sid == GAME.skin_id else (40, 40, 50)
+                border_color = theme.color("skin.selected", (0, 200, 255)) if sid == GAME.skin_id else theme.color("skin.border", (60, 60, 60))
                 pygame.draw.rect(SCREEN, border_color, rect, 2, border_radius=4)
-                name_font = pygame.font.Font(FONT, 12)
+                name_font = load_numeric_font(12)
                 label = info.get("name", f"S{sid}")
                 if len(label) > 14:
                     label = label[:13] + "..."
-                name_surf = name_font.render(label, True, (160, 160, 160))
+                name_surf = name_font.render(label, True, theme.color("text.info", (160, 160, 160)))
                 SCREEN.blit(name_surf, (x + t_size_c//2 - name_surf.get_width()//2, y_right + t_size_c + 2))
 
             y_right += t_size_c + 22
@@ -340,22 +373,22 @@ class Menu:
             self._skin_prev_rect = None
             self._skin_next_rect = None
             if total_pages > 1:
-                arr_font = pygame.font.Font(FONT, 20)
-                prev_surf = arr_font.render("<", True, (200, 200, 200))
+                arr_font = load_numeric_font(20)
+                prev_surf = arr_font.render("<", True, theme.color("pagination.arrow", (200, 200, 200)))
                 prev_rect = pygame.Rect(right_cx - int(WIDTH * 0.08), y_right - 6,
                                         prev_surf.get_width() + 8, prev_surf.get_height() + 4)
-                pygame.draw.rect(SCREEN, (70, 70, 70) if page > 0 else (40, 40, 40), prev_rect, border_radius=4)
+                pygame.draw.rect(SCREEN, theme.color("pagination.active_bg", (70, 70, 70)) if page > 0 else theme.color("pagination.disabled_bg", (40, 40, 40)), prev_rect, border_radius=4)
                 SCREEN.blit(prev_surf, (prev_rect.x + 4, prev_rect.y + 2))
                 self._skin_prev_rect = prev_rect
                 self._skin_prev_page = page > 0
 
-                page_surf = arr_font.render(f"{page + 1}/{total_pages}", True, (180, 180, 180))
+                page_surf = arr_font.render(f"{page + 1}/{total_pages}", True, theme.color("pagination.page", (180, 180, 180)))
                 SCREEN.blit(page_surf, (right_cx - page_surf.get_width()//2, y_right - 4))
 
-                next_surf = arr_font.render(">", True, (200, 200, 200))
+                next_surf = arr_font.render(">", True, theme.color("pagination.arrow", (200, 200, 200)))
                 next_rect = pygame.Rect(right_cx + int(WIDTH * 0.06), y_right - 6,
                                         next_surf.get_width() + 8, next_surf.get_height() + 4)
-                pygame.draw.rect(SCREEN, (70, 70, 70) if page < total_pages - 1 else (40, 40, 40),
+                pygame.draw.rect(SCREEN, theme.color("pagination.active_bg", (70, 70, 70)) if page < total_pages - 1 else theme.color("pagination.disabled_bg", (40, 40, 40)),
                                  next_rect, border_radius=4)
                 SCREEN.blit(next_surf, (next_rect.x + 4, next_rect.y + 2))
                 self._skin_next_rect = next_rect
@@ -371,7 +404,7 @@ class Menu:
                 if getattr(self, '_skin_upload_rect', None) and self._skin_upload_rect.collidepoint(mouse):
                     skin_name = self.mp_skin_upload_name.strip()
                     if not skin_name:
-                        self._upload_status = "Vul een naam in"
+                        self._upload_status = theme.string("lobby.upload_name_empty", "Vul een naam in")
                     else:
                         root = tk.Tk()
                         root.withdraw()
@@ -382,7 +415,7 @@ class Menu:
                         root.destroy()
                         if filepath:
                             uploader = GAME.player_name
-                            self._upload_status = "Bezig met uploaden..."
+                            self._upload_status = theme.string("lobby.upload_progress", "Bezig met uploaden...")
                             ok, msg, *rest = GAME.network_client.upload_skin(skin_name, uploader, filepath)
                             self._upload_status = msg
                             if ok:
@@ -408,10 +441,10 @@ class Menu:
         def start_multi_game():
             GAME._primary_start_game()
         if players:
-            self._draw_button_custom(events, "START GAME", WIDTH//2 - int(WIDTH * 0.05),
-                HEIGHT - int(HEIGHT * 0.13), int(WIDTH * 0.1), int(HEIGHT * 0.05), start_multi_game)
-        self._draw_button_custom(events, "DISCONNECT", WIDTH//2 - int(WIDTH * 0.04),
-            HEIGHT - int(HEIGHT * 0.07), int(WIDTH * 0.08), int(HEIGHT * 0.03), dc)
+            self._draw_button_custom(events, theme.string("lobby.start_game", "START GAME"), WIDTH//2 - int(WIDTH * 0.05),
+                HEIGHT - int(HEIGHT * theme.pos("lobby.start_btn_y", 0.13)), int(WIDTH * 0.1), int(HEIGHT * 0.05), start_multi_game)
+        self._draw_button_custom(events, theme.string("lobby.disconnect", "DISCONNECT"), WIDTH//2 - int(WIDTH * 0.04),
+            HEIGHT - int(HEIGHT * theme.pos("lobby.disconnect_btn_y", 0.07)), int(WIDTH * 0.08), int(HEIGHT * 0.03), dc)
 
     def _select_skin(self, GAME, skin_id):
         GAME.skin_id = skin_id
@@ -424,14 +457,16 @@ class Menu:
 
     # ── Settings ──────────────────────────────────────────────
 
-    def _draw_section_header(self, text, y, color=(160, 160, 160)):
-        font = pygame.font.Font(FONT, 24)
+    def _draw_section_header(self, text, y, color=None):
+        if color is None:
+            color = theme.color("text.section_header", (160, 160, 160))
+        font = load_font(24)
         surf = font.render(text, True, color)
         cx = WIDTH // 2
-        left_margin = int(WIDTH * 0.08)
+        left_margin = int(WIDTH * theme.pos("section_header.left_margin", 0.08))
         right_margin = WIDTH - left_margin
         mid_y = y + surf.get_height() // 2
-        gap = 14
+        gap = theme.size("section_header.gap", 14)
         lx = cx - surf.get_width() // 2 - gap
         rx = cx + surf.get_width() // 2 + gap
         if lx > left_margin:
@@ -442,31 +477,30 @@ class Menu:
 
     def draw_settings(self, events, GAME):
         self.game = GAME
-        SCREEN.fill(self.bg_color)
+        self._fill_bg()
         c = WIDTH // 2
 
         # ── Title ─────────────────────────────────────────────
-        title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.07))
-        title_font.set_bold(True)
-        title_surf = title_font.render("SETTINGS", True, 'white')
-        SCREEN.blit(title_surf, (c - title_surf.get_width() // 2, int(HEIGHT * 0.04)))
+        title_font = load_font(theme.size("settings.title_font", int(HEIGHT * 0.07)), bold=True)
+        title_surf = title_font.render(theme.string("settings.title", "SETTINGS"), True, theme.color("text.title", 'white'))
+        SCREEN.blit(title_surf, (c - title_surf.get_width() // 2, int(HEIGHT * theme.pos("mp.title_y", 0.04))))
 
-        LABEL_FONT_SIZE = 20
+        LABEL_FONT_SIZE = theme.size("settings.label_font", 20)
         btn_w = int(WIDTH * 0.09)
-        btn_h = int(HEIGHT * 0.05)
+        btn_h = theme.size("settings.btn_h", int(HEIGHT * 0.05))
         gap = int(WIDTH * 0.02)
 
         # ── VIDEO ────────────────────────────────────────────
-        self._draw_section_header("VIDEO", int(HEIGHT * 0.14))
+        self._draw_section_header(theme.string("settings.video", "VIDEO"), int(HEIGHT * theme.pos("settings.video_header_y", 0.14)))
 
         hi_active = self.game.resolution == "high"
         lo_active = self.game.resolution == "low"
-        res_y = int(HEIGHT * 0.21)
-        Res_high = Button(c - btn_w - gap // 2, res_y, btn_w, btn_h, "HIGH RES", 22,
+        res_y = int(HEIGHT * theme.pos("settings.res_btn_y", 0.21))
+        Res_high = Button(c - btn_w - gap // 2, res_y, btn_w, btn_h, theme.string("settings.high_res", "HIGH RES"), 22,
             text_color="white", button_color=(40, 100, 160) if hi_active else (60, 60, 70),
             hover_text_color="white", hover_button_color=(60, 130, 190) if hi_active else (80, 80, 95),
             game=self.game, target_state="settings", function="res_high")
-        Res_low = Button(c + gap // 2, res_y, btn_w, btn_h, "LOW RES", 22,
+        Res_low = Button(c + gap // 2, res_y, btn_w, btn_h, theme.string("settings.low_res", "LOW RES"), 22,
             text_color="white", button_color=(40, 100, 160) if lo_active else (60, 60, 70),
             hover_text_color="white", hover_button_color=(60, 130, 190) if lo_active else (80, 80, 95),
             game=self.game, target_state="settings", function="res_low")
@@ -474,39 +508,39 @@ class Menu:
         Res_low.draw_button(events)
 
         # ── AUDIO ────────────────────────────────────────────
-        self._draw_section_header("AUDIO", int(HEIGHT * 0.30))
+        self._draw_section_header(theme.string("settings.audio", "AUDIO"), int(HEIGHT * theme.pos("settings.audio_header_y", 0.30)))
 
         self.get_volume_slider(GAME).draw(events)
         self.get_sfx_volume_slider(GAME).draw(events)
 
         # ── GAMEPLAY ─────────────────────────────────────────
-        self._draw_section_header("GAMEPLAY", int(HEIGHT * 0.52))
+        self._draw_section_header(theme.string("settings.gameplay", "GAMEPLAY"), int(HEIGHT * theme.pos("settings.gameplay_header_y", 0.52)))
 
         # Tutorial toggle
         tuto_active = self.game.bilal.flags["general"]
-        tuto_btn = Button(c - int(WIDTH * 0.045), int(HEIGHT * 0.59),
-            int(WIDTH * 0.09), int(HEIGHT * 0.05), "TUTORIAL", 22,
+        tuto_btn = Button(c - int(WIDTH * 0.045), int(HEIGHT * theme.pos("settings.tutorial_btn_y", 0.59)),
+            int(WIDTH * 0.09), int(HEIGHT * 0.05), theme.string("settings.tutorial", "TUTORIAL"), 22,
             text_color="white", button_color=(40, 100, 160) if tuto_active else (60, 60, 70),
             hover_text_color="white", hover_button_color=(60, 130, 190) if tuto_active else (80, 80, 95),
             game=self.game, target_state="settings", function="tutorial")
         tuto_btn.draw_button(events)
 
         # Texture pack label
-        label_font = pygame.font.Font(FONT, LABEL_FONT_SIZE)
-        pck_label = label_font.render("TEXTURE PACK", True, (200, 200, 200))
-        SCREEN.blit(pck_label, (c - pck_label.get_width() // 2, int(HEIGHT * 0.66)))
+        label_font = load_font(LABEL_FONT_SIZE)
+        pck_label = label_font.render(theme.string("settings.texture_pack", "TEXTURE PACK"), True, theme.color("text.subtitle", (200, 200, 200)))
+        SCREEN.blit(pck_label, (c - pck_label.get_width() // 2, int(HEIGHT * theme.pos("settings.pack_label_y", 0.66))))
 
         # Texture pack dropdown
         drop_w = int(WIDTH * 0.18)
-        drop_h = int(HEIGHT * 0.05)
+        drop_h = theme.size("settings.dropdown_h", int(HEIGHT * 0.05))
         packs = list_packs()
         if not hasattr(self, '_pack_dropdown') or self._pack_dropdown is None:
             def _on_pack_select(val):
                 from ..assets.texture_cache import preload as preload_tex
-                set_pack(val)
+                set_packs([val] if val else [])
                 self.game._preload_textures("settings")
             self._pack_dropdown = Dropdown(
-                c - drop_w // 2, int(HEIGHT * 0.72), drop_w, drop_h, packs,
+                c - drop_w // 2, int(HEIGHT * theme.pos("settings.dropdown_y", 0.72)), drop_w, drop_h, packs,
                 self.game, on_select=_on_pack_select
             )
             self._pack_dropdown.sync_from_pack()
@@ -529,35 +563,34 @@ class Menu:
                 pygame.mouse.set_visible(True)
                 pygame.event.set_grab(False)
             GAME._settings_return = "menu"
-        self._draw_main_button(events, "BACK", HEIGHT - int(HEIGHT * 0.08), int(WIDTH * 0.11), go_back, font_size=34)
+        self._draw_main_button(events, theme.string("button.back", "BACK"), HEIGHT - int(HEIGHT * theme.pos("menu.title_y", 0.08)), int(WIDTH * 0.11), go_back, font_size=34)
 
     def draw_credits(self, events, GAME):
         self.game = GAME
-        SCREEN.fill(self.bg_color)
+        self._fill_bg()
 
         y = self.credits_height
         x = WIDTH // 4
         white = "white"
 
-        self.title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.29))
-        self.title_font.set_bold(True)
-        title_surf = self.title_font.render("GUNK", True, white)
+        self.title_font = load_font(theme.size("credits.title_font", int(HEIGHT * 0.29)), bold=True)
+        title_surf = self.title_font.render(theme.string("menu.title", "GUNK"), True, white)
         SCREEN.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, y))
 
-        self.text_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.04))
+        self.text_font = load_font(int(HEIGHT * theme.pos("mp.title_y", 0.04)))
         lines = [
-            ("Developed by:", int(HEIGHT * 0.27)),
-            ("Kobe Motmans", int(HEIGHT * 0.31)),
-            ("Andreas Meuwissen", int(HEIGHT * 0.35)),
-            ("Ruben Verreth", int(HEIGHT * 0.39)),
-            ("Music by:", int(HEIGHT * 0.47)),
-            ("Rube van der Wielen", int(HEIGHT * 0.50)),
-            ("Special thanks to:", int(HEIGHT * 0.58)),
-            ("Andrei", int(HEIGHT * 0.62)),
-            ("Ahmed", int(HEIGHT * 0.66)),
-            ("Ruben", int(HEIGHT * 0.70)),
-            ("Jan", int(HEIGHT * 0.74)),
-            ("Bilal", int(HEIGHT * 0.78)),
+            ("Developed by:", int(HEIGHT * theme.pos("credits.dev_label_y", 0.27))),
+            ("Kobe Motmans", int(HEIGHT * theme.pos("credits.kobe_y", 0.31))),
+            ("Andreas Meuwissen", int(HEIGHT * theme.pos("credits.andreas_y", 0.35))),
+            ("Ruben Verreth", int(HEIGHT * theme.pos("credits.ruben_y", 0.39))),
+            ("Music by:", int(HEIGHT * theme.pos("credits.music_label_y", 0.47))),
+            ("Rube van der Wielen", int(HEIGHT * theme.pos("credits.rube_y", 0.50))),
+            ("Special thanks to:", int(HEIGHT * theme.pos("credits.thanks_label_y", 0.58))),
+            ("Andrei", int(HEIGHT * theme.pos("credits.andrei_y", 0.62))),
+            ("Ahmed", int(HEIGHT * theme.pos("credits.ahmed_y", 0.66))),
+            ("Ruben", int(HEIGHT * theme.pos("credits.ruben2_y", 0.70))),
+            ("Jan", int(HEIGHT * theme.pos("credits.jan_y", 0.74))),
+            ("Bilal", int(HEIGHT * theme.pos("credits.bilal_y", 0.78))),
         ]
 
         for text, offset in lines:
@@ -566,16 +599,16 @@ class Menu:
                 (x, y + offset)
             )
 
-        self.credits_height -= 2
-        if self.credits_height < -int(HEIGHT * 0.87):
+        self.credits_height -= theme.size("credits.scroll_speed", 2)
+        if self.credits_height < -int(HEIGHT * theme.pos("credits.scroll_reset", 0.87)):
             self.credits_height = HEIGHT
 
         btn_w = int(WIDTH * 0.07)
-        btn_h = int(HEIGHT * 0.06)
+        btn_h = theme.size("credits.btn_h", int(HEIGHT * 0.06))
         Menu_button = Button(
             WIDTH // 2 - btn_w // 2,
-            self.credits_height + HEIGHT // 2 - int(HEIGHT * 0.03) + int(HEIGHT * 0.52),
-            btn_w, btn_h, "MENU", 35,
+            self.credits_height + HEIGHT // 2 - int(HEIGHT * theme.pos("credits.btn_y_offset1", 0.03)) + int(HEIGHT * theme.pos("credits.btn_y_offset2", 0.52)),
+            btn_w, btn_h, theme.string("button.menu", "MENU"), 35,
             text_color="black", button_color="white",
             hover_text_color="white", hover_button_color="black",
             game=self.game, target_state="menu"
@@ -583,29 +616,27 @@ class Menu:
         Menu_button.draw_button(events)
         
     def draw_UI(self, events):
-        self.fps_font = pygame.font.Font(FONT, 20)
-        self.fps_font.set_bold(True)
-        self.hp_font = pygame.font.Font(FONT, int(HEIGHT * 0.08))
-        self.hp_font.set_bold(True)
-        SCREEN.blit(self.fps_font.render(f"{round(self.game.clock.get_fps())}", True, 'green'),(int(WIDTH * 0.01), int(HEIGHT * 0.02)))
-        SCREEN.blit(self.hp_font.render(f"{round(self.game.global_health)}/{START_HEALTH}", True, 'red'),(WIDTH - int(WIDTH * 0.15), int(HEIGHT * 0.02)))
-        SCREEN.blit(self.hp_font.render(f"{round(self.game.global_ammo)}/{AMMO_CAP}", True, 'grey'),(int(WIDTH * 0.01), HEIGHT - int(HEIGHT * 0.1)))
+        self.fps_font = load_numeric_font(theme.size("hud.fps_font", 20), bold=True)
+        self.hp_font = load_numeric_font(int(HEIGHT * theme.pos("menu.title_y", 0.08)), bold=True)
+        SCREEN.blit(self.fps_font.render(f"{round(self.game.clock.get_fps())}", True, theme.color("hud.fps", 'green')),(int(WIDTH * theme.pos("hud.fps_x", 0.01)), int(HEIGHT * theme.pos("hud.fps_y", 0.02))))
+        SCREEN.blit(self.hp_font.render(f"{round(self.game.global_health)}/{START_HEALTH}", True, theme.color("hud.hp", 'red')),(WIDTH - int(WIDTH * theme.pos("hud.hp_x", 0.15)), int(HEIGHT * theme.pos("hud.hp_y", 0.02))))
+        SCREEN.blit(self.hp_font.render(f"{round(self.game.global_ammo)}/{AMMO_CAP}", True, theme.color("hud.ammo", 'grey')),(int(WIDTH * theme.pos("hud.ammo_x", 0.01)), HEIGHT - int(HEIGHT * theme.pos("hud.ammo_y", 0.1))))
         if getattr(self.game, 'elevator_waiting', False):
-            warn_font = pygame.font.Font(FONT, 36)
+            warn_font = load_numeric_font(theme.size("hud.warning_font", 36))
             elev_ready = getattr(self.game, 'elevator_ready', False)
             wait_timer = getattr(self.game, 'elevator_wait_timer', 0)
             player_near = getattr(self.game, 'player_near_exit', False)
             if elev_ready and wait_timer > 0:
-                msg = f"Lift vertrekt in {wait_timer//60 + 1}..."
-                color = (255, 200, 0)
+                msg = theme.string("hud.elevator_countdown", "Lift vertrekt in {seconds}...").format(seconds=wait_timer//60 + 1)
+                color = theme.color("hud.warning_elevator", (255, 200, 0))
             elif not player_near:
-                msg = "GA NAAR DE LIFT!"
-                color = (255, 80, 80)
+                msg = theme.string("hud.elevator_go", "GA NAAR DE LIFT!")
+                color = theme.color("hud.warning_danger", (255, 80, 80))
             else:
-                msg = "Wacht op teamgenoten..."
-                color = (200, 200, 80)
+                msg = theme.string("hud.elevator_wait", "Wacht op teamgenoten...")
+                color = theme.color("hud.warning_info", (200, 200, 80))
             warn_surf = warn_font.render(msg, True, color)
-            SCREEN.blit(warn_surf, (WIDTH//2 - warn_surf.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.19)))
+            SCREEN.blit(warn_surf, (WIDTH//2 - warn_surf.get_width()//2, HEIGHT//2 - int(HEIGHT * theme.pos("hud.elevator_warn_y", 0.19))))
     def draw_paused_screen(self, events, GAME):
         self.game = GAME
         c = WIDTH//2
@@ -614,12 +645,12 @@ class Menu:
             pygame.event.set_grab(True)
             GAME.state = "game"
             pygame.mixer.unpause()
-        self._draw_main_button(events, "RESUME", HEIGHT//2 - int(HEIGHT * 0.1), int(WIDTH * 0.11), resume, font_size=34)
+        self._draw_main_button(events, theme.string("button.resume", "RESUME"), HEIGHT//2 - int(HEIGHT * theme.pos("pause.resume_y", 0.1)), int(WIDTH * 0.11), resume, font_size=34)
 
         def open_settings():
             GAME._settings_return = "paused"
             GAME.state = "settings"
-        self._draw_main_button(events, "SETTINGS", HEIGHT//2 - int(HEIGHT * 0.02), int(WIDTH * 0.11), open_settings, font_size=34)
+        self._draw_main_button(events, theme.string("settings.title", "SETTINGS"), HEIGHT//2 - int(HEIGHT * theme.pos("pause.settings_y", 0.02)), int(WIDTH * 0.11), open_settings, font_size=34)
 
         def go_menu():
             pygame.mixer.stop()
@@ -627,13 +658,13 @@ class Menu:
                 GAME._disconnect()
             else:
                 GAME.state = "menu"
-        self._draw_main_button(events, "MENU", HEIGHT//2 + int(HEIGHT * 0.06), int(WIDTH * 0.11), go_menu, font_size=34)
+        self._draw_main_button(events, theme.string("button.menu", "MENU"), HEIGHT//2 + int(HEIGHT * theme.pos("pause.menu_y", 0.06)), int(WIDTH * 0.11), go_menu, font_size=34)
     def draw_elevator(self, events, player):
         game = getattr(self, 'game', None)
         if game is None:
             return
         is_client = game.multiplayer
-        elev_color = pack_config("elevator_color")
+        elev_color = theme.color("elevator")
         self.elev_color = tuple(elev_color) if elev_color else (20,20,20)
         if player.door_pos <= WIDTH/2:
             pygame.draw.rect(SCREEN,self.elev_color,[0,0,player.door_pos,HEIGHT])
@@ -647,9 +678,8 @@ class Menu:
                     if not is_client:
                         game.level_up()
                         game.player.door_pos += ELEV_SPEED
-                        s = pygame.mixer.Sound(resolve_asset("sounds/sfx/elev_ding.ogg"))
-                        s.set_volume(SFX_VOLUME)
-                        s.play()
+                        game.sounds["elev_ding"].set_volume(SFX_VOLUME)
+                        game.sounds["elev_ding"].play()
                 self.lift_time -= 1
                 if is_client:
                     player.door_pos += ELEV_SPEED
@@ -658,9 +688,8 @@ class Menu:
                     pygame.mixer.stop()
                     game.player.door_pos += ELEV_SPEED
                     game.escaped = True
-                    s = pygame.mixer.Sound(resolve_asset("sounds/music/Motivator.ogg"))
-                    s.set_volume(SFX_VOLUME)
-                    s.play()
+                    game.sounds["victory"].set_volume(SFX_VOLUME)
+                    game.sounds["victory"].play()
                     pygame.mouse.set_visible(True)
                     pygame.event.set_grab(False)
                 else:
@@ -677,42 +706,38 @@ class Menu:
             self.lift_time = ELEV_TIME
     def draw_dead_screen(self,events,GAME):
         self.game = GAME
-        self.title_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.19))
-        self.title_font.set_bold(True)
+        self.title_font = load_font(theme.size("dead.title_font", int(HEIGHT * 0.19)), bold=True)
         SCREEN.blit(SCREEN_DEAD, (0,0))
-        self.score_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.08))
-        self.score_font.set_bold(True)
+        self.score_font = load_numeric_font(int(HEIGHT * theme.pos("menu.title_y", 0.08)), bold=True)
         btn_w = int(WIDTH * 0.07)
-        btn_h = int(HEIGHT * 0.06)
-        Menu_button = Button(WIDTH // 2 - btn_w // 2, HEIGHT // 2 - btn_h // 2 + int(HEIGHT * 0.1),
-            btn_w, btn_h, "MENU", 35,
+        btn_h = theme.size("credits.btn_h", int(HEIGHT * 0.06))
+        Menu_button = Button(WIDTH // 2 - btn_w // 2, HEIGHT // 2 - btn_h // 2 + int(HEIGHT * theme.pos("dead.btn_y", 0.1)),
+            btn_w, btn_h, theme.string("button.menu", "MENU"), 35,
             text_color="black", button_color="white",
             hover_text_color="white", hover_button_color="black",
             game=self.game, target_state="menu", function="disconnect")
         Menu_button.draw_button(events)
-        score_surf = self.score_font.render(f"Score:{self.game.player.score}", True, 'black')
-        SCREEN.blit(score_surf, (WIDTH//2 - score_surf.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.04)))
-        title_surf = self.title_font.render("GAME OVER", True, 'black')
-        SCREEN.blit(title_surf, (WIDTH//2 - title_surf.get_width()//2, HEIGHT//3 - int(HEIGHT * 0.05)))
+        score_surf = self.score_font.render(theme.string("hud.score_format", "Score:{score}").format(score=self.game.player.score), True, theme.color("hud.score_dead", 'black'))
+        SCREEN.blit(score_surf, (WIDTH//2 - score_surf.get_width()//2, HEIGHT//2 - int(HEIGHT * theme.pos("mp.title_y", 0.04))))
+        title_surf = self.title_font.render(theme.string("hud.game_over", "GAME OVER"), True, theme.color("hud.title_dead", 'black'))
+        SCREEN.blit(title_surf, (WIDTH//2 - title_surf.get_width()//2, HEIGHT//3 - int(HEIGHT * theme.pos("dead.title_y", 0.05))))
         
     def draw_escaped_screen(self,events,GAME):
         self.game = GAME
-        self.endscreen_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.15))
-        self.endscreen_font.set_bold(True)
-        self.score_font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.08))
-        self.score_font.set_bold(True)
+        self.endscreen_font = load_font(theme.size("escaped.title_font", int(HEIGHT * 0.15)), bold=True)
+        self.score_font = load_numeric_font(int(HEIGHT * theme.pos("menu.title_y", 0.08)), bold=True)
         SCREEN.blit(VICTORY_SCREEN, (0,0))
         pygame.mouse.set_visible(True)
-        s1 = self.endscreen_font.render("SUCCESFUL", True, 'white')
-        s2 = self.endscreen_font.render("ESKAPE", True, 'white')
-        score_surf = self.score_font.render(f"Score:{self.game.player.score}", True, 'white')
-        SCREEN.blit(s1, (WIDTH//2 - s1.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.45)))
-        SCREEN.blit(s2, (WIDTH//2 - s2.get_width()//2, HEIGHT//2 - int(HEIGHT * 0.27)))
-        SCREEN.blit(score_surf, (WIDTH//2 - score_surf.get_width()//2, HEIGHT//2 + int(HEIGHT * 0.01)))
+        s1 = self.endscreen_font.render(theme.string("hud.escaped_title_1", "SUCCESFUL"), True, theme.color("hud.title_escaped", 'white'))
+        s2 = self.endscreen_font.render(theme.string("hud.escaped_title_2", "ESKAPE"), True, theme.color("hud.title_escaped", 'white'))
+        score_surf = self.score_font.render(theme.string("hud.score_format", "Score:{score}").format(score=self.game.player.score), True, theme.color("hud.score_escaped", 'white'))
+        SCREEN.blit(s1, (WIDTH//2 - s1.get_width()//2, HEIGHT//2 - int(HEIGHT * theme.pos("escaped.line1_y", 0.45))))
+        SCREEN.blit(s2, (WIDTH//2 - s2.get_width()//2, HEIGHT//2 - int(HEIGHT * theme.pos("escaped.line2_y", 0.27))))
+        SCREEN.blit(score_surf, (WIDTH//2 - score_surf.get_width()//2, HEIGHT//2 + int(HEIGHT * theme.pos("escaped.score_y", 0.01))))
         btn_w = int(WIDTH * 0.07)
-        btn_h = int(HEIGHT * 0.06)
-        Menu_button = Button(WIDTH // 2 - btn_w // 2, HEIGHT // 2 - btn_h // 2 + int(HEIGHT * 0.15),
-            btn_w, btn_h, "MENU", 35,
+        btn_h = theme.size("credits.btn_h", int(HEIGHT * 0.06))
+        Menu_button = Button(WIDTH // 2 - btn_w // 2, HEIGHT // 2 - btn_h // 2 + int(HEIGHT * theme.pos("escaped.btn_y", 0.15)),
+            btn_w, btn_h, theme.string("button.menu", "MENU"), 35,
             text_color="black", button_color="white",
             hover_text_color="white", hover_button_color="black",
             game=self.game, target_state="menu", function="disconnect")
@@ -726,10 +751,10 @@ class Menu:
                 GAME.music_volume = val
                 GAME.main_music.set_volume(val)
             self.volume_slider = Slider(
-                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * 0.37),
+                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * theme.pos("slider.music_y", 0.37)),
                 int(WIDTH * 0.21), int(HEIGHT * 0.01),
                 min_val=0.0, max_val=1.0, initial_val=GAME.music_volume,
-                label="MUSIC VOLUME", game=GAME,
+                label=theme.string("settings.music_volume", "MUSIC VOLUME"), game=GAME,
                 on_change=on_music_change
                 )
         return self.volume_slider
@@ -740,10 +765,10 @@ class Menu:
                 GAME.sfx_volume = val
                 GAME.update_sfx_volume()
             self.sfx_volume_slider = Slider(
-                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * 0.44),
+                self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * theme.pos("slider.sfx_y", 0.44)),
                 int(WIDTH * 0.21), int(HEIGHT * 0.01),
                 min_val=0.0, max_val=1.0, initial_val=getattr(GAME, 'sfx_volume', 0.3),
-                label="SFX VOLUME", game=GAME,
+                label=theme.string("settings.sfx_volume", "SFX VOLUME"), game=GAME,
                 on_change=on_sfx_change
                 )
         return self.sfx_volume_slider
@@ -767,8 +792,7 @@ class Button:
         self.target_state = target_state
         self.mouse_visible = mouse_visible
         self.function = function
-        self.font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), text_size)
-        self.font.set_bold(True)
+        self.font = load_font(text_size, bold=True)
 
     def draw_button(self, events):
         mouse = pygame.mouse.get_pos()
@@ -813,11 +837,16 @@ class Button:
         SCREEN.blit(text_surf, (tx, ty))
 
 class Dropdown:
-    EXPAND_COLOR = (50, 60, 120)
-    OPTION_HOVER = (70, 70, 90)
-    OPTION_BG = (50, 50, 60)
-    OPTION_SELECTED = (40, 80, 120)
-    BORDER = (150, 150, 150)
+    @staticmethod
+    def _expand_color(): return theme.color("dropdown.expand_color", (50, 60, 120))
+    @staticmethod
+    def _option_hover(): return theme.color("dropdown.option_hover", (70, 70, 90))
+    @staticmethod
+    def _option_bg(): return theme.color("dropdown.option_bg", (50, 50, 60))
+    @staticmethod
+    def _option_selected(): return theme.color("dropdown.option_selected", (40, 80, 120))
+    @staticmethod
+    def _border(): return theme.color("dropdown.border", (150, 150, 150))
 
     def __init__(self, x, y, width, height, options, game, on_select=None):
         self.x = x
@@ -842,26 +871,25 @@ class Dropdown:
         mouse = pygame.mouse.get_pos()
         main_rect = pygame.Rect(self.x, self.y, self.w, self.h)
         hover = main_rect.collidepoint(mouse)
-        font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(self.h * 0.5))
-        font.set_bold(True)
+        font = load_font(int(self.h * 0.5), bold=True)
 
         # Main box
-        bg = Dropdown.EXPAND_COLOR if self.expanded else (60, 60, 70) if hover else (40, 40, 40)
+        bg = Dropdown._expand_color() if self.expanded else (theme.color("dropdown.hover_bg", (60, 60, 70)) if hover else theme.color("dropdown.bg", (40, 40, 40)))
         pygame.draw.rect(SCREEN, bg, main_rect, border_radius=6)
-        pygame.draw.rect(SCREEN, Dropdown.BORDER, main_rect, 2, border_radius=6)
+        pygame.draw.rect(SCREEN, Dropdown._border(), main_rect, 2, border_radius=6)
 
         # Selected text
         label = self.options[self.selected_index]["label"]
-        text_surf = font.render(label, True, 'white')
+        text_surf = font.render(label, True, theme.color("dropdown.text", 'white'))
         SCREEN.blit(text_surf, (self.x + 10, self.y + (self.h - text_surf.get_height()) // 2))
 
         # Arrow (drawn triangle to avoid unicode font issues)
         ax = self.x + self.w - 18
         ay = self.y + self.h // 2
         if self.expanded:
-            pygame.draw.polygon(SCREEN, 'white', [(ax, ay + 5), (ax - 6, ay - 4), (ax + 6, ay - 4)])
+            pygame.draw.polygon(SCREEN, theme.color("dropdown.arrow", 'white'), [(ax, ay + 5), (ax - 6, ay - 4), (ax + 6, ay - 4)])
         else:
-            pygame.draw.polygon(SCREEN, 'white', [(ax, ay - 5), (ax - 6, ay + 4), (ax + 6, ay + 4)])
+            pygame.draw.polygon(SCREEN, theme.color("dropdown.arrow", 'white'), [(ax, ay - 5), (ax - 6, ay + 4), (ax + 6, ay + 4)])
 
         # Expanded options
         if self.expanded:
@@ -869,10 +897,10 @@ class Dropdown:
             for i, opt in enumerate(self.options):
                 opt_rect = pygame.Rect(self.x, opt_y, self.w, self.h)
                 opt_hover = opt_rect.collidepoint(mouse)
-                bg2 = Dropdown.OPTION_SELECTED if i == self.selected_index else (Dropdown.OPTION_HOVER if opt_hover else Dropdown.OPTION_BG)
+                bg2 = Dropdown._option_selected() if i == self.selected_index else (Dropdown._option_hover() if opt_hover else Dropdown._option_bg())
                 pygame.draw.rect(SCREEN, bg2, opt_rect, border_radius=4)
-                pygame.draw.rect(SCREEN, Dropdown.BORDER, opt_rect, 1, border_radius=4)
-                opt_surf = font.render(opt["label"], True, 'white')
+                pygame.draw.rect(SCREEN, Dropdown._border(), opt_rect, 1, border_radius=4)
+                opt_surf = font.render(opt["label"], True, theme.color("dropdown.text", 'white'))
                 SCREEN.blit(opt_surf, (self.x + 10, opt_y + (self.h - opt_surf.get_height()) // 2))
                 opt_y += self.h + 2
 
@@ -895,8 +923,9 @@ class Dropdown:
                         self.expanded = False
 
     def sync_from_pack(self):
+        current = TEXTURE_PACKS[0] if TEXTURE_PACKS else None
         for i, opt in enumerate(self.options):
-            if opt["value"] == TEXTURE_PACK:
+            if opt["value"] == current:
                 self.selected_index = i
                 break
 
@@ -914,7 +943,7 @@ class Slider:
         self.game = game
         self.dragging = False
         self.on_change = on_change
-        self.handle_r = height
+        self.handle_r = theme.size("slider.handle_r", height)
 
 
     def get_handle_x(self):
@@ -922,7 +951,7 @@ class Slider:
         return self.track_x + ratio * self.w
 
     def draw(self, events):
-        self.font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), int(HEIGHT * 0.02))
+        self.font = load_numeric_font(theme.size("slider.label_font", int(HEIGHT * 0.02)))
         mouse = pygame.mouse.get_pos()
         mouse_buttons = pygame.mouse.get_pressed()
 
@@ -942,16 +971,16 @@ class Slider:
             if self.on_change:
                 self.on_change(self.value)
 
-        pygame.draw.rect(SCREEN, 'white', [self.track_x, self.track_y - 4, self.w, 8], border_radius=4)
+        pygame.draw.rect(SCREEN, theme.color("slider.track", 'white'), [self.track_x, self.track_y - 4, self.w, 8], border_radius=4)
 
         filled_w = self.get_handle_x() - self.track_x
-        pygame.draw.rect(SCREEN, (0, 200, 255), [self.track_x, self.track_y - 4, filled_w, 8], border_radius=4)
+        pygame.draw.rect(SCREEN, theme.color("slider.fill", (0, 200, 255)), [self.track_x, self.track_y - 4, filled_w, 8], border_radius=4)
 
         handle_x = self.get_handle_x()
-        pygame.draw.circle(SCREEN, (0, 200, 255) if self.dragging else 'white', (int(handle_x), int(self.track_y)), self.handle_r)
+        pygame.draw.circle(SCREEN, theme.color("slider.handle_drag", (0, 200, 255)) if self.dragging else theme.color("slider.handle", 'white'), (int(handle_x), int(self.track_y)), self.handle_r)
 
-        label_surf = self.font.render(f"{self.label}: {int(self.value * 100)}%", True, 'white')
-        SCREEN.blit(label_surf, (self.track_x, self.track_y - int(HEIGHT * 0.04)))
+        label_surf = self.font.render(f"{self.label}: {int(self.value * 100)}%", True, theme.color("slider.label", 'white'))
+        SCREEN.blit(label_surf, (self.track_x, self.track_y - int(HEIGHT * theme.pos("mp.title_y", 0.04))))
 
 
 # ---- Het grootste deel hiervan is AI code, eerder flavour en tutorial dan functionele game code-----
@@ -962,7 +991,7 @@ class Tekstballon:
         self.x_pos = x_pos
         self.max_width = max_width
         self.padding = padding
-        self.font = pygame.font.Font(asset_path(f"assets/font/{pack_config('font', 'ocraextended.ttf')}"), 20)
+        self.font = load_font(theme.size("speech_bubble.font", 20))
     @staticmethod
     def wrap_text(text, font, max_width):
         words = text.split(" ")
@@ -1000,20 +1029,20 @@ class Tekstballon:
 
         pygame.draw.rect(
             SCREEN,
-            (0, 0, 0),
+            theme.color("speech_bubble.border", (0, 0, 0)),
             [x - 4, y - 4, box_w + 8, box_h + 8],
             border_radius=8
         )
         pygame.draw.rect(
             SCREEN,
-            (255, 255, 255),
+            theme.color("speech_bubble.bg", (255, 255, 255)),
             [x, y, box_w, box_h],
             border_radius=8
         )
 
         for i, line in enumerate(raw_lines):
             SCREEN.blit(
-                self.font.render(line, False, (0, 0, 0)),
+                self.font.render(line, False, theme.color("speech_bubble.text", (0, 0, 0))),
                 (x + self.padding, y + self.padding + i * line_height)
             )
 
@@ -1022,14 +1051,14 @@ class Tekstballon:
 
         pygame.draw.polygon(
             SCREEN,
-            (0, 0, 0),
+            theme.color("speech_bubble.tail_outer", (0, 0, 0)),
             [(tail_x - 12, tail_y),
              (tail_x + 12, tail_y),
              (tail_x, tail_y + 22)]
         )
         pygame.draw.polygon(
             SCREEN,
-            (255, 255, 255),
+            theme.color("speech_bubble.tail_inner", (255, 255, 255)),
             [(tail_x - 8, tail_y),
              (tail_x + 8, tail_y),
              (tail_x, tail_y + 18)]
@@ -1094,8 +1123,8 @@ class Bilal:
             text = self.current
 
         if text:
-            Tekstballon(text, HEIGHT - int(HEIGHT * 0.43), int(WIDTH * 0.01), self.Game).draw()
-            SCREEN.blit(BILAL, (0, HEIGHT - int(HEIGHT * 0.33)))
+            Tekstballon(text, HEIGHT - int(HEIGHT * theme.pos("speech_bubble.y", 0.43)), int(WIDTH * theme.pos("speech_bubble.x", 0.01)), self.Game).draw()
+            SCREEN.blit(BILAL, (0, HEIGHT - int(HEIGHT * theme.pos("bilal.image_y", 0.33))))
 
     def trigger(self, event_name):
         if self.flags.get(event_name):
@@ -1105,41 +1134,49 @@ class Bilal:
 
         if event_name == "seen_enemy":
             self.interrupt(
-                "Pas op, de assistenten proberen je ontsnapping tegen te houden! "
-                "Je zal ze moeten neerschieten met linker-muisklik!"
+                theme.string("tutorial.seen_enemy",
+                    "Pas op, de assistenten proberen je ontsnapping tegen te houden! "
+                    "Je zal ze moeten neerschieten met linker-muisklik!")
             )
 
         elif event_name == "monster":
             self.interrupt(
-                "Door Monster Energy te drinken krijg je twee HP terug!", 200
+                theme.string("tutorial.monster",
+                    "Door Monster Energy te drinken krijg je twee HP terug!"), 200
             )
 
         elif event_name == "keycard":
             self.interrupt(
-                "Daar ligt de keycard! Breng hem naar de lift en verdwijn van deze verdieping"
+                theme.string("tutorial.keycard",
+                    "Daar ligt de keycard! Breng hem naar de lift en verdwijn van deze verdieping")
             )
 
         elif event_name == "boss_warning":
             self.interrupt(
-                "Daar is Jan! Dit is je kans om hier een einde aan te maken!"
+                theme.string("tutorial.boss_warning",
+                    "Daar is Jan! Dit is je kans om hier een einde aan te maken!")
             )
 
         elif event_name == "floor_3":
             self.say(
-                "We zijn op verdieping 3 geraakt. Je hebt ook een minigun gevonden "
-                "op verdieping 4. Duw op A om te wisselen",
+                theme.string("tutorial.floor_3",
+                    "We zijn op verdieping 3 geraakt. Je hebt ook een minigun gevonden "
+                    "op verdieping 4. Duw op A om te wisselen"),
                 400
             )
 
         elif event_name == "floor_1":
             self.say(
-                "Net wanneer we hier binnenkwamen lag hier een rifle. Zoek hem via A."
+                theme.string("tutorial.floor_1",
+                    "Net wanneer we hier binnenkwamen lag hier een rifle. Zoek hem via A.")
             )
 
         elif event_name == "floor_0":
             self.say(
-                "Dit is verdieping 0. Er is wel een probleempje. Jan is hier, en hij heeft de laatste keycard."
+                theme.string("tutorial.floor_0_a",
+                    "Dit is verdieping 0. Er is wel een probleempje. Jan is hier, en hij heeft de laatste keycard.")
             )
             self.say(
-                "Je kan hem vinden in de garage. Maar pas op, hij is heel erg sterk!"
+                theme.string("tutorial.floor_0_b",
+                    "Je kan hem vinden in de garage. Maar pas op, hij is heel erg sterk!")
             )

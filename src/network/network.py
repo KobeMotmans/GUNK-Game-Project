@@ -6,7 +6,6 @@ zijn gelijk.
 
 import socket
 import pickle
-import struct
 import threading
 import queue
 import time
@@ -33,21 +32,14 @@ def _save_surface_as_png(img):
 
 
 class ServerIO(threading.Thread):
-    """Headless server: TCP handshake + UDP game data I/O + state relay"""
+    """Headless server: all-UDP game data I/O + state relay"""
     def __init__(self, port, max_players=4):
         super().__init__(daemon=True)
         self.port = port
         self.max_players = max_players
         self.running = True
 
-        # TCP for initial handshake
-        self.tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.tcp_server.setblocking(False)
-        self.tcp_server.bind(('0.0.0.0', port))
-        self.tcp_server.listen(max_players)
-
-        # UDP for game data
+        # UDP for all communication (handshake + game data)
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.udp_socket.setblocking(False)
@@ -73,9 +65,8 @@ class ServerIO(threading.Thread):
         # Stale client tracking
         self.last_seen = {}
 
-        # Pending TCP registrations awaiting UDP registration
-        self._pending = {}
-        self._pending_lock = threading.Lock()
+        # Pending registrations (token → {name, skin_id, addr, time})
+        self._pending_connect = {}
         self.next_id = 0  # First client (host) gets 0
 
         # Server-side skin management
@@ -101,26 +92,23 @@ class ServerIO(threading.Thread):
         with open("server_skins/manifest.json", "w") as f:
             json.dump({"next_id": self._next_skin_id, "skins": self.skin_manifest}, f)
 
-    def _handle_skin_upload(self, sock, packet):
+    def _handle_skin_upload_udp(self, packet, addr):
         name = packet.get("name", "Unnamed")
         uploader = packet.get("uploader", "Unknown")
         raw = packet.get("data")
         if not isinstance(raw, (bytes, bytearray)):
             resp = {"type": "skin_upload_ack", "skin_id": -1, "success": False, "error": "Geen data"}
-            resp_data = pickle.dumps(resp)
-            sock.sendall(struct.pack('!I', len(resp_data)) + resp_data)
+            self.udp_socket.sendto(pickle.dumps(resp), addr)
             return
         if len(raw) > 5 * 1024 * 1024:
             resp = {"type": "skin_upload_ack", "skin_id": -1, "success": False, "error": "Bestand te groot"}
-            resp_data = pickle.dumps(resp)
-            sock.sendall(struct.pack('!I', len(resp_data)) + resp_data)
+            self.udp_socket.sendto(pickle.dumps(resp), addr)
             return
         try:
             img = pygame.image.load(io.BytesIO(raw))
         except pygame.error:
             resp = {"type": "skin_upload_ack", "skin_id": -1, "success": False, "error": "Niet-ondersteund beeldformaat"}
-            resp_data = pickle.dumps(resp)
-            sock.sendall(struct.pack('!I', len(resp_data)) + resp_data)
+            self.udp_socket.sendto(pickle.dumps(resp), addr)
             return
         raw = _save_surface_as_png(img)
         MAX_SIZE = 1024 * 1024
@@ -142,8 +130,7 @@ class ServerIO(threading.Thread):
         self.skin_manifest.append(entry)
         self._save_skin_manifest()
         resp = {"type": "skin_upload_ack", "skin_id": sid, "success": True}
-        resp_data = pickle.dumps(resp)
-        sock.sendall(struct.pack('!I', len(resp_data)) + resp_data)
+        self.udp_socket.sendto(pickle.dumps(resp), addr)
         self._broadcast_skin_manifest()
 
     def _get_skin_data(self, skin_id):
@@ -168,7 +155,6 @@ class ServerIO(threading.Thread):
         TICK_RATE = 1 / 60  # ~60 Hz server tick
         while self.running:
             t0 = time.perf_counter()
-            self._accept_tcp()
             self._receive_udp()
             self.server_game.process_inputs(self.inputs)
             self.server_game.tick()
@@ -178,69 +164,6 @@ class ServerIO(threading.Thread):
             elapsed = time.perf_counter() - t0
             if elapsed < TICK_RATE:
                 time.sleep(TICK_RATE - elapsed)
-
-    # ── TCP handshake ──────────────────────────────────────────
-
-    def _accept_tcp(self):
-        try:
-            sock, addr = self.tcp_server.accept()
-            sock.settimeout(10.0)
-            size_data = self._recv_all(sock, 4)
-            if size_data:
-                size = struct.unpack('!I', size_data)[0]
-                if 0 < size < 5 * 1024 * 1024:
-                    data = self._recv_all(sock, size)
-                    if data:
-                        try:
-                            packet = pickle.loads(data)
-                        except Exception:
-                            sock.close()
-                            return
-                        if packet.get("type") == "connect":
-                            name = packet.get("name", f"Player {self.next_id}")
-                            skin_id = packet.get("skin_id", 0)
-                            with self._pending_lock:
-                                pid = self.next_id
-                                self.next_id += 1
-                                self._pending[pid] = {"name": name, "skin_id": skin_id}
-                            resp = {"type": "accept", "player_id": pid,
-                                    "skin_manifest": self.skin_manifest}
-                            resp_data = pickle.dumps(resp)
-                            sock.sendall(struct.pack('!I', len(resp_data)) + resp_data)
-
-                        elif packet.get("type") == "skin_request":
-                            req_skin_id = packet.get("skin_id", -1)
-                            print(f"[SERVER] skin_request: id={req_skin_id} from {addr}")
-                            raw = self._get_skin_data(req_skin_id)
-                            if raw is not None:
-                                print(f"[SERVER] skin_request: id={req_skin_id} found, {len(raw)} bytes")
-                                resp = {"type": "skin_data", "skin_id": req_skin_id, "data": raw}
-                            else:
-                                print(f"[SERVER] skin_request: id={req_skin_id} NOT FOUND on disk")
-                                resp = {"type": "skin_data", "skin_id": req_skin_id, "data": None}
-                            resp_data = pickle.dumps(resp)
-                            sock.sendall(struct.pack('!I', len(resp_data)) + resp_data)
-
-                        elif packet.get("type") == "skin_upload":
-                            self._handle_skin_upload(sock, packet)
-            sock.close()
-        except BlockingIOError:
-            pass
-        except OSError:
-            pass
-
-    @staticmethod
-    def _recv_all(sock, n):
-        data = b''
-        while len(data) < n:
-            try:
-                chunk = sock.recv(n - len(data))
-                if not chunk:
-                    return None
-                data += chunk
-            except socket.timeout:
-                return None
-        return data
 
     # ── UDP receive ────────────────────────────────────────────
 
@@ -261,11 +184,45 @@ class ServerIO(threading.Thread):
             ptype = packet.get("type")
             pid = packet.get("player_id", -1)
 
-            if ptype == "register":
-                with self._pending_lock:
-                    pending = self._pending.pop(pid, {"name": f"Player {pid}", "skin_id": 0})
-                name = pending["name"]
-                skin_id = pending["skin_id"]
+            if ptype == "connect":
+                token = packet.get("token", "")
+                name = packet.get("name", f"Player {self.next_id}")
+                skin_id = packet.get("skin_id", 0)
+                if token in self._pending_connect:
+                    pid = self._pending_connect[token]["pid"]
+                else:
+                    pid = self.next_id
+                    self.next_id += 1
+                    self._pending_connect[token] = {"pid": pid, "name": name, "skin_id": skin_id, "addr": addr, "time": time.time()}
+                resp = {"type": "accept", "player_id": pid, "skin_manifest": self.skin_manifest}
+                self.udp_socket.sendto(pickle.dumps(resp), addr)
+
+            elif ptype == "skin_request":
+                req_skin_id = packet.get("skin_id", -1)
+                raw = self._get_skin_data(req_skin_id)
+                if raw is not None and len(raw) < 60000:
+                    resp = {"type": "skin_data", "skin_id": req_skin_id, "data": raw}
+                    self.udp_socket.sendto(pickle.dumps(resp), addr)
+                elif raw is not None:
+                    CHUNK = 4096
+                    total = (len(raw) + CHUNK - 1) // CHUNK
+                    for i in range(total):
+                        chunk = raw[i*CHUNK:(i+1)*CHUNK]
+                        self.udp_socket.sendto(pickle.dumps(
+                            {"type": "skin_chunk", "skin_id": req_skin_id, "chunk": i, "total": total, "data": chunk}
+                        ), addr)
+                else:
+                    resp = {"type": "skin_data", "skin_id": req_skin_id, "data": None}
+                    self.udp_socket.sendto(pickle.dumps(resp), addr)
+
+            elif ptype == "skin_upload":
+                self._handle_skin_upload_udp(packet, addr)
+
+            elif ptype == "register":
+                pid = packet.get("player_id", -1)
+                pending = self._pending_connect.get(packet.get("token", ""), {})
+                name = pending.get("name", f"Player {pid}")
+                skin_id = pending.get("skin_id", 0)
                 should_broadcast = False
                 with self.clients_lock:
                     for c_addr, c_pid, _ in self.clients:
@@ -376,6 +333,9 @@ class ServerIO(threading.Thread):
 
     def _cleanup_stale(self):
         now = time.time()
+        for token, info in list(self._pending_connect.items()):
+            if now - info["time"] > 15:
+                del self._pending_connect[token]
         stale = []
         should_reset = False
         with self.clients_lock:
@@ -410,7 +370,6 @@ class ServerIO(threading.Thread):
         self.running = False
         try:
             self.udp_socket.close()
-            self.tcp_server.close()
         except OSError:
             pass
 
@@ -427,43 +386,35 @@ class NetworkClient:
 
     def connect(self, host, port, name, skin_id=0):
         self.skin_id = skin_id
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5.0)
-            sock.connect((host, port))
-            packet = {"type": "connect", "name": name, "skin_id": skin_id}
-            data = pickle.dumps(packet)
-            sock.sendall(struct.pack('!I', len(data)) + data)
-            size_data = self._recv_all(sock, 4)
-            if size_data:
-                size = struct.unpack('!I', size_data)[0]
-                if 0 < size < 8192:
-                    resp_data = self._recv_all(sock, size)
-                    if not resp_data:
-                        sock.close()
-                        return False
-                    try:
-                        resp = pickle.loads(resp_data)
-                    except Exception:
-                        sock.close()
-                        return False
+        self.server_addr = (host, port)
+        token = f"{name}:{time.time()}:{id(self)}"
+        for attempt in range(15):
+            try:
+                packet = {"type": "connect", "name": name, "skin_id": skin_id, "token": token}
+                self.udp_socket.sendto(pickle.dumps(packet), self.server_addr)
+                self.udp_socket.settimeout(1.0)
+                try:
+                    data, addr = self.udp_socket.recvfrom(65536)
+                    resp = pickle.loads(data)
                     if resp.get("type") == "accept":
                         self.player_id = resp["player_id"]
-                        self.server_addr = (host, port)
                         self.connected = True
-                        sock.close()
                         from ..assets.skin_manager import SkinManager
                         SkinManager.set_server_addr(self.server_addr)
                         manifest = resp.get("skin_manifest", [])
                         SkinManager.set_manifest(manifest)
                         SkinManager.download_all_skins()
-                        reg = {"type": "register", "player_id": self.player_id}
+                        reg = {"type": "register", "player_id": self.player_id, "token": token}
                         self.udp_socket.sendto(pickle.dumps(reg), self.server_addr)
                         self._save_config(name, host, port, skin_id)
+                        self.udp_socket.setblocking(False)
                         return True
-            sock.close()
-        except (socket.timeout, ConnectionRefusedError, OSError):
-            pass
+                except socket.timeout:
+                    pass
+            except OSError:
+                pass
+            time.sleep(1.0)
+        self.udp_socket.setblocking(False)
         return False
 
     @staticmethod
@@ -482,19 +433,6 @@ class NetworkClient:
                 return json.load(f)
         except (OSError, json.JSONDecodeError):
             return {}
-
-    @staticmethod
-    def _recv_all(sock, n):
-        data = b''
-        while len(data) < n:
-            try:
-                chunk = sock.recv(n - len(data))
-                if not chunk:
-                    return None
-                data += chunk
-            except socket.timeout:
-                return None
-        return data
 
     def send_input(self, input_data):
         if not self.server_addr:
@@ -555,34 +493,27 @@ class NetworkClient:
             if len(raw) > 5 * 1024 * 1024:
                 return (False, "Bestand te groot (max 5MB)")
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(10.0)
-            sock.connect((host, port))
             req = {"type": "skin_upload", "name": name, "uploader": uploader, "data": raw}
-            data = pickle.dumps(req)
-            sock.sendall(struct.pack('!I', len(data)) + data)
-            size_data = self._recv_all(sock, 4)
-            if not size_data:
-                sock.close()
-                return (False, "Geen response van server")
-            size = struct.unpack('!I', size_data)[0]
-            if not (0 < size < 8192):
-                sock.close()
-                return (False, "Ongeldige response")
-            resp_data = self._recv_all(sock, size)
-            sock.close()
-            if not resp_data:
-                return (False, "Lege response")
-            resp = pickle.loads(resp_data)
-            if resp.get("type") == "skin_upload_ack":
-                if resp.get("success"):
-                    sid = resp.get("skin_id", -1)
-                    return (True, f"Skin #{sid} geupload!", sid)
-                else:
-                    return (False, resp.get("error", "Upload mislukt"))
-            return (False, "Ongeldige response type")
-        except (socket.timeout, ConnectionRefusedError, OSError, pickle.UnpicklingError) as e:
+            self.udp_socket.sendto(pickle.dumps(req), self.server_addr)
+            self.udp_socket.settimeout(10.0)
+            for _ in range(20):
+                try:
+                    data, addr = self.udp_socket.recvfrom(65536)
+                    resp = pickle.loads(data)
+                    if resp.get("type") == "skin_upload_ack":
+                        self.udp_socket.setblocking(False)
+                        if resp.get("success"):
+                            sid = resp.get("skin_id", -1)
+                            return (True, f"Skin #{sid} geupload!", sid)
+                        else:
+                            return (False, resp.get("error", "Upload mislukt"))
+                except socket.timeout:
+                    self.udp_socket.sendto(pickle.dumps(req), self.server_addr)
+        except OSError as e:
             return (False, f"Netwerkfout: {str(e)[:50]}")
+        finally:
+            self.udp_socket.setblocking(False)
+        return (False, "Geen response van server")
 
     def disconnect(self):
         self.connected = False
