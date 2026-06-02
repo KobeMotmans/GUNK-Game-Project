@@ -13,7 +13,7 @@ color_to_number = {
     (0, 255, 255): 4, #Player Spawn
     (0, 0, 255): 5, #Keycard
     (255, 255, 0): 6, #Ammo
-    (255, 0, 255): 7 #Final Boss
+    (255, 0, 255): 7 #Jan Lemeire
 }
 
 
@@ -56,7 +56,7 @@ def png_to_list_fast(path):
             elif number == 6:
                 spawns["ammo"].append((x_center,y_center))
             elif number == 7:
-                spawns["final_boss"] = (x_center, y_center)
+                spawns["jan"]= (x_center,y_center)
     return map_list, spawns, w, h
 
 class MapClass:
