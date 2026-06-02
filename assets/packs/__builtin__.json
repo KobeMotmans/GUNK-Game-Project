@@ -1,0 +1,76 @@
+{
+  "name": "__builtin__",
+  "display_name": "Built-in",
+  "builtin": true,
+  "pack_format": 1,
+  "description": "Default mappings — always loaded as lowest-priority pack. Maps theme keys to original asset files.",
+
+  "font": "ocraextended.ttf",
+  "font_has_numbers": true,
+
+  "colors": {},
+
+  "sizes": {},
+
+  "positions": {},
+
+  "textures": {
+    "enemies": {
+      "normal_enemy": "textures/enemies/andrei.png",
+      "fast_enemy": "textures/enemies/ahmed.png",
+      "tank_enemy": "textures/enemies/ruben.png",
+      "final_boss": "textures/enemies/jan.png",
+      "projectile": "textures/enemies/projectile.png"
+    },
+    "objects": {
+      "ammo": "textures/objects/ammo.png",
+      "health": "textures/objects/health.png",
+      "keycard": "textures/objects/keycard.png",
+      "exit": "textures/objects/exit.png"
+    },
+    "weapons": {
+      "pistol": {
+        "rest": "textures/weapons/pistol/GUN.png",
+        "recoil": "textures/weapons/pistol/GUN_recoil.png",
+        "muzzle": "textures/weapons/pistol/GUN_muzzle.png"
+      },
+      "rifle": {
+        "rest": "textures/weapons/rifle/GUN.png",
+        "recoil": "textures/weapons/rifle/GUN_recoil.png",
+        "muzzle": "textures/weapons/rifle/GUN_muzzle.png"
+      },
+      "minigun": {
+        "rest": "textures/weapons/minigun/GUN.png",
+        "recoil": "textures/weapons/minigun/GUN_recoil.png",
+        "muzzle": "textures/weapons/minigun/GUN_muzzle.png"
+      }
+    },
+    "ui": {
+      "dead": "textures/ui/dead.png",
+      "damage_flash": "textures/ui/Damage_Flash.png",
+      "tutorial": "textures/ui/bilal.png",
+      "victory": "textures/ui/victory.png",
+      "menu_bg": ""
+    },
+    "bg": ""
+  },
+
+  "sounds": {
+    "music": {
+      "main": "sounds/music/esKape Final.ogg",
+      "victory": "sounds/music/Motivator.ogg"
+    },
+    "sfx": {
+      "damage": "sounds/sfx/damage.ogg",
+      "ammo": "sounds/sfx/ammo.ogg",
+      "key": "sounds/sfx/key.ogg",
+      "drink": "sounds/sfx/drink.ogg",
+      "elevator_ding": "sounds/sfx/elev_ding.ogg",
+      "pistol": "sounds/sfx/pistol.ogg",
+      "rifle": "sounds/sfx/musket.ogg",
+      "minigun": "sounds/sfx/minigun.ogg",
+      "tank_enemy": "proj_fire.mp3",
+      "proj_hit": "proj_hit.mp3"
+    }
+  }
+}

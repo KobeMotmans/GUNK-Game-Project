@@ -140,10 +140,10 @@ class ServerEnemy:
 
 
 ENEMY_TYPES = {
-    "andrei": {"health": 13, "damage": 3, "speed": 3},
-    "ahmed": {"health": 6, "damage": 2, "speed": 5},
-    "ruben": {"health": 19, "damage": 2, "speed": 2},
-    "jan": {"health": 200, "damage": 6, "speed": 3},
+    "normal_enemy": {"health": 13, "damage": 3, "speed": 3},
+    "fast_enemy": {"health": 6, "damage": 2, "speed": 5},
+    "tank_enemy": {"health": 19, "damage": 2, "speed": 2},
+    "final_boss": {"health": 200, "damage": 6, "speed": 3},
 }
 
 
@@ -178,13 +178,13 @@ class ServerGame:
 
         self.enemies = []
         for epos in M.SPAWNS["enemies"]:
-            tn = random.choice(["andrei", "ahmed", "ruben"])
+            tn = random.choice(["normal_enemy", "fast_enemy", "tank_enemy"])
             t = ENEMY_TYPES[tn]
             self.enemies.append(ServerEnemy(tn, epos[0], epos[1], t["health"], t["damage"], t["speed"]))
-        if "jan" in M.SPAWNS:
-            jpos = M.SPAWNS["jan"]
-            t = ENEMY_TYPES["jan"]
-            self.enemies.append(ServerEnemy("jan", jpos[0], jpos[1], t["health"], t["damage"], t["speed"]))
+        if "final_boss" in M.SPAWNS:
+            boss_pos = M.SPAWNS["final_boss"]
+            t = ENEMY_TYPES["final_boss"]
+            self.enemies.append(ServerEnemy("final_boss", boss_pos[0], boss_pos[1], t["health"], t["damage"], t["speed"]))
 
         self.objects = {"ammo": [], "keycard": [], "health": [], "exit": None}
         for apos in M.SPAWNS["ammo"]:
@@ -275,7 +275,7 @@ class ServerGame:
         if killer_pid is not None and killer_pid in self.players:
             self.players[killer_pid]["score"] += 1
         enemy = self.enemies[idx]
-        if enemy.type == "enemies/jan":
+        if enemy.type == "enemies/final_boss":
             self.objects["keycard"].append({"pos": (enemy.pos.x, enemy.pos.y)})
         else:
             if random.random() < HEALTH_CHANCE:
