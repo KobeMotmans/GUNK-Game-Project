@@ -32,6 +32,13 @@ class Theme:
                     with open(lang_path, encoding="utf-8") as f:
                         self._lang_configs.append(json.load(f))
 
+        builtin_path = os.path.join(root, "assets", "packs", "__builtin__.json")
+        if os.path.exists(builtin_path):
+            with open(builtin_path, encoding="utf-8") as f:
+                builtin = json.load(f)
+            config = {k: v for k, v in builtin.items() if k != "lang"}
+            self._theme_configs.append(config)
+
     def get(self, key, default=None):
         for config in self._theme_configs:
             val = self._deep_get(config, key)

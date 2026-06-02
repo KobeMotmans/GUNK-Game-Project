@@ -84,7 +84,7 @@ MENU_BG = (70,70,70)
 if not _HEADLESS:
     SCREEN_FLASH = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.damage_flash", "textures/ui/Damage_Flash.png"))).convert_alpha(), (WIDTH, HEIGHT))
     SCREEN_DEAD = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.dead", "textures/ui/dead.png"))).convert_alpha(), (WIDTH, HEIGHT))
-    BILAL = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.bilal", "textures/ui/bilal.png"))).convert_alpha(), (200, 200))
+    TUTORIAL = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.tutorial", "textures/ui/bilal.png"))).convert_alpha(), (200, 200))
 
     VICTORY_SCREEN = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.victory", "textures/ui/victory.png"))).convert_alpha(), (WIDTH, HEIGHT))
 
@@ -103,7 +103,7 @@ if not _HEADLESS:
 else:
     SCREEN_FLASH = None
     SCREEN_DEAD = None
-    BILAL = None
+    TUTORIAL = None
     VICTORY_SCREEN = None
     DAMAGE_FLASH = None
     AMMO_FLASH = None

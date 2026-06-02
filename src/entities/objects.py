@@ -16,12 +16,20 @@ class RenderObject:
         theme_key = f"textures.{type.replace('/', '.')}"
         sprite_path = resolve_asset(theme.get(theme_key, f"textures/{type}.png"))
         self.sprite = get_cached_texture(sprite_path)
+        self._theme_key = theme_key
         # Cache voor sprite scaling
         self._cached_scale = None
         self._cached_dist = -1
         self.dist = 100000000
 
         self.size = SPRITE_SIZE
+
+    def reload_texture(self):
+        sprite_path = resolve_asset(theme.get(self._theme_key, f"textures/{self.type}.png"))
+        self.sprite = get_cached_texture(sprite_path)
+        self._cached_scale = None
+        self._cached_dist = -1
+
     def get_render_data_fast(self, player_pos, player_angle, wall_distances):
         """
         World-to-camera transformatie.
@@ -88,7 +96,7 @@ class RenderObject:
         # Centreer sprite
         draw_x = screen_x - sprite_h / 2
         draw_y = HEIGHT / 2 - sprite_h / 2
-        if hasattr(self, "draw_health_bar") and self.type != "enemies/jan":
+        if hasattr(self, "draw_health_bar") and self.type != "enemies/final_boss":
             self.draw_health_bar(sprite_h, draw_x, draw_y)
 
         SCREEN.blit(self._cached_scale, (draw_x, draw_y))

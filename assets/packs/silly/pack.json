@@ -28,10 +28,11 @@
   "positions": {},
   "textures": {
     "enemies": {
-      "andrei": "textures/enemies/andrei.png",
-      "ahmed": "textures/enemies/ahmed.png",
-      "ruben": "textures/enemies/ruben.png",
-      "jan": "textures/enemies/jan.png"
+      "normal_enemy": "textures/enemies/andrei.png",
+      "fast_enemy": "textures/enemies/ahmed.png",
+      "tank_enemy": "textures/enemies/ruben.png",
+      "final_boss": "textures/enemies/jan.png",
+      "projectile": "textures/enemies/projectile.png"
     },
     "objects": {},
     "weapons": {},

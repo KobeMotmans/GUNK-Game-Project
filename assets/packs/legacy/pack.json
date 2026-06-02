@@ -1,0 +1,44 @@
+{
+  "name": "legacy",
+  "display_name": "Legacy UI",
+  "pack_format": 1,
+  "description": "Original white-on-black button styling (pre-2026 restructure)",
+
+  "font": "ocraextended.ttf",
+  "font_has_numbers": true,
+
+  "colors": {
+    "button": {
+      "bg": [255, 255, 255],
+      "hover_bg": [0, 0, 0],
+      "text": [0, 0, 0],
+      "hover_text": [255, 255, 255],
+      "border": [0, 0, 0]
+    },
+    "bg": [70, 70, 70],
+    "menu": { "bg": [70, 70, 70] },
+    "elevator": [20, 20, 20]
+  },
+
+  "sizes": {
+    "menu": { "btn_h": 60 },
+    "button": { "border_radius": 0 }
+  },
+
+  "positions": {
+    "menu": {
+      "options_y": 0.47,
+      "credits_y": 0.56,
+      "quit_y": 0.66
+    }
+  },
+
+  "textures": {
+    "enemies": {},
+    "objects": {},
+    "weapons": {},
+    "ui": {}
+  },
+
+  "sounds": {}
+}

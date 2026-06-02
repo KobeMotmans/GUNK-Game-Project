@@ -30,7 +30,7 @@ class Enemy(EnemyAI, RenderObject):
     def draw_health_bar(self, sprite_h, draw_x, draw_y):
         health_ratio = max(0, self.health / self.max_health)
 
-        if self.type == "enemies/jan":
+        if self.type == "enemies/final_boss":
             bar_width = theme.size("boss_hp.bar_w", WIDTH // 2)
             bar_height = theme.size("boss_hp.bar_h", 20)
             bar_x = theme.size("boss_hp.bar_x", WIDTH // 4)
@@ -108,43 +108,48 @@ class Enemy(EnemyAI, RenderObject):
         self.health -= dmg
 
 
-class Andrei(Enemy):
+class NormalEnemy(Enemy):
     def __init__(self, x, y, health=13, damage=3, speed=3):
-        super().__init__(health, damage, speed, "andrei", x, y)
+        super().__init__(health, damage, speed, "normal_enemy", x, y)
 
-class Ahmed(Enemy):
+class FastEnemy(Enemy):
     def __init__(self, x, y, health=6, damage=2, speed=5):
-        super().__init__(health, damage, speed, "ahmed", x, y)
+        super().__init__(health, damage, speed, "fast_enemy", x, y)
 
-class Ruben(Enemy):
+class TankEnemy(Enemy):
     def __init__(self, x, y, health=19, damage=2, speed=2):
-        super().__init__(health, damage, speed, "ruben", x, y)
+        super().__init__(health, damage, speed, "tank_enemy", x, y)
         self.last_fire_time = 0
 
     def find_path(self, player, game, deal_damage=True, do_movement=True):
-        result = super().find_path(player, game, deal_damage=False, do_movement=do_movement)
         player_pos = player.pos
         self.is_los, dist = self.is_in_los(player_pos)
-        if self.is_los and dist <= RUBEN_ATTACK_DIST:
+        if self.is_los and dist >= TANK_ENEMY_ATTACK_DIST:
+            result = super().find_path(player, game, deal_damage=False, do_movement=do_movement)
             now = pygame.time.get_ticks()
             if now - self.last_fire_time > FIRE_COOLDOWN:
                 self.last_fire_time = now
                 angle = atan2(player.pos.y - self.pos.y, player.pos.x - self.pos.x)
                 if Fireball._fire_sound is None:
                     Fireball._fire_sound = pygame.mixer.Sound(resolve_asset(
-                        theme.get("sounds.sfx.ruben", "proj_fire.mp3")
+                        theme.get("sounds.sfx.tank_enemy", "proj_fire.mp3")
                     ))
                 Fireball._fire_sound.set_volume(SFX_VOLUME)
                 Fireball._fire_sound.play()
                 return Fireball(self.pos.x, self.pos.y, angle)
-        return result
+            return result
+        return super().find_path(player, game, deal_damage=deal_damage, do_movement=do_movement)
 
-RUBEN_ATTACK_DIST = 400
-FIRE_COOLDOWN = 100
+TANK_ENEMY_ATTACK_DIST = 400
+FIRE_COOLDOWN = 1000
 
 
 class Fireball(RenderObject):
     _fire_sound = None
+
+    @classmethod
+    def clear_sound_cache(cls):
+        cls._fire_sound = None
 
     def __init__(self, x, y, angle, speed=8):
         super().__init__("enemies/projectile", x, y)
@@ -171,6 +176,6 @@ class Fireball(RenderObject):
             self.alive = False
 
 
-class Jan(Enemy):
+class FinalBoss(Enemy):
     def __init__(self, x, y, health=200, damage=6, speed=3):
-        super().__init__(health, damage, speed, "jan", x, y)
+        super().__init__(health, damage, speed, "final_boss", x, y)

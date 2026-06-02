@@ -26,13 +26,16 @@ def preload(paths, progress_callback=None):
     """
     Batch-preload textures.
     paths: list of str (no scale) or (str, (w,h)) tuples.
-    progress_callback(ratio) called after each file.
+    progress_callback(ratio, path) called after each file.
     """
     total = len(paths)
     for i, entry in enumerate(paths):
         if isinstance(entry, str):
             get(entry)
+            cur = entry
         else:
             get(entry[0], entry[1])
+            cur = entry[0]
         if progress_callback:
-            progress_callback((i + 1) / total)
+            progress_callback((i + 1) / total, cur)
+        pygame.event.pump()

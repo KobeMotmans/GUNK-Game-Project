@@ -1,13 +1,30 @@
 import pygame
 import tkinter as tk
 from tkinter import filedialog
-from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, BILAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, SFX_VOLUME
-from ..core.paths import list_packs, set_packs, TEXTURE_PACKS, load_font, load_numeric_font, resolve_asset
+from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, TUTORIAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, SFX_VOLUME
+from ..core.paths import list_packs, set_packs, save_active_packs, load_active_packs, TEXTURE_PACKS, load_font, load_numeric_font, resolve_asset
 from ..core.theme import theme
 from collections import deque
 from ..core.map_loader import M
 from ..assets.skin_manager import SkinManager
 from ..network.network import NetworkClient
+
+def _draw_arrow(screen, rect, direction, color):
+    cx = rect.x + rect.w // 2
+    cy = rect.y + rect.h // 2
+    s = min(rect.w, rect.h) // 3
+    if direction == 'right':
+        pts = [(cx - s, cy - s), (cx - s, cy + s), (cx + s, cy)]
+    elif direction == 'left':
+        pts = [(cx + s, cy - s), (cx + s, cy + s), (cx - s, cy)]
+    elif direction == 'up':
+        pts = [(cx - s, cy + s), (cx + s, cy + s), (cx, cy - s)]
+    elif direction == 'down':
+        pts = [(cx - s, cy - s), (cx + s, cy - s), (cx, cy + s)]
+    else:
+        return
+    pygame.draw.polygon(screen, color, pts)
+
 class Menu:
     def __init__(self):
         self.bg_color = theme.color("menu.bg", (70, 70, 70))
@@ -38,6 +55,13 @@ class Menu:
         self.mp_skin_upload_name = ""
         self._upload_status = None
 
+        # Pack select state
+        self._working_packs = []
+        self._pack_sel_avail_idx = 0
+        self._pack_sel_active_idx = 0
+        self._pack_sel_avail_scroll = 0
+        self._pack_sel_active_scroll = 0
+
     def _load_bg_texture(self):
         path = theme.get("textures.menu_bg")
         if path:
@@ -56,7 +80,7 @@ class Menu:
         else:
             SCREEN.fill(self.bg_color)
 
-    def draw_loading_screen(self, progress=None):
+    def draw_loading_screen(self, progress=None, label=None):
         self._fill_bg()
         loading_font = load_font(theme.size("loading.text_font", int(HEIGHT * 0.1)), bold=True)
         load_surf = loading_font.render(theme.string("loading.text", "Loading..."), True, theme.color("text.title", 'white'))
@@ -79,6 +103,12 @@ class Menu:
         pygame.draw.rect(SCREEN, theme.color("loading.bar_fill", (0, 200, 0)), (bar_x, bar_y, progress_width, bar_height))
         if progress is None:
             self.loading_progress += 0.2
+
+        if label:
+            label_font = load_font(theme.size("loading.label_font", 16))
+            label_surf = label_font.render(label, True, theme.color("text.subtitle", (150, 150, 150)))
+            SCREEN.blit(label_surf, (WIDTH // 2 - label_surf.get_width() // 2, bar_y + bar_height + 6))
+
         pygame.display.flip()
 
     def _draw_main_button(self, events, text, y_pos, w, action=None, h=None, font_size=None, x=None):
@@ -89,11 +119,13 @@ class Menu:
         rect = pygame.Rect(x, y_pos, w, h)
         mouse = pygame.mouse.get_pos()
         hover = rect.collidepoint(mouse)
-        pygame.draw.rect(SCREEN, theme.color("button.hover_bg", (100, 100, 100)) if hover else theme.color("button.bg", (70, 70, 70)), rect, border_radius=8)
+        br = theme.size("button.border_radius", 8)
+        pygame.draw.rect(SCREEN, theme.color("button.hover_bg", (100, 100, 100)) if hover else theme.color("button.bg", (70, 70, 70)), rect, border_radius=br)
         if hover:
-            pygame.draw.rect(SCREEN, theme.color("button.border", (180, 180, 180)), rect, 2, border_radius=8)
+            pygame.draw.rect(SCREEN, theme.color("button.border", (180, 180, 180)), rect, 2, border_radius=br)
         font = load_font(font_size)
-        surf = font.render(text, True, theme.color("button.text", 'white'))
+        tc = theme.color("button.hover_text", 'white') if hover else theme.color("button.text", 'white')
+        surf = font.render(text, True, tc)
         SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y_pos + h//2 - surf.get_height()//2))
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -110,7 +142,7 @@ class Menu:
         SCREEN.blit(title_surf, (WIDTH // 2 - title_surf.get_width() // 2, int(HEIGHT * theme.pos("menu.title_y", 0.08))))
 
         c = WIDTH//2
-        btn_w = theme.size("menu.btn_wide", int(WIDTH * 0.12))
+        btn_w = theme.size("menu.btn_wide", int(WIDTH * 0.16))
         gap = theme.size("menu.btn_gap", int(WIDTH * 0.03))
         self._draw_main_button(events, theme.string("menu.solo", "SOLO"), int(HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: GAME.reset_game(), font_size=36, x=c - btn_w - gap//2)
         self._draw_main_button(events, theme.string("menu.multiplayer", "MULTIPLAYER"), int(HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: setattr(GAME, 'state', 'multiplayer_menu'), font_size=36, x=c + gap//2)
@@ -174,11 +206,13 @@ class Menu:
         mouse = pygame.mouse.get_pos()
         rect = pygame.Rect(x, y, w, h)
         hover = rect.collidepoint(mouse)
-        pygame.draw.rect(SCREEN, theme.color("button.hover_bg", (100, 100, 100)) if hover else theme.color("button.bg", (70, 70, 70)), rect, border_radius=6)
+        br = theme.size("button.border_radius", 6)
+        pygame.draw.rect(SCREEN, theme.color("button.hover_bg", (100, 100, 100)) if hover else theme.color("button.bg", (70, 70, 70)), rect, border_radius=br)
         if hover:
-            pygame.draw.rect(SCREEN, theme.color("button.border", (180, 180, 180)), rect, 2, border_radius=6)
+            pygame.draw.rect(SCREEN, theme.color("button.border", (180, 180, 180)), rect, 2, border_radius=br)
         font = load_font(theme.size("button.custom_font", 28))
-        surf = font.render(text, True, theme.color("button.text", 'white'))
+        tc = theme.color("button.hover_text", 'white') if hover else theme.color("button.text", 'white')
+        surf = font.render(text, True, tc)
         SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y + h//2 - surf.get_height()//2))
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -525,27 +559,13 @@ class Menu:
             game=self.game, target_state="settings", function="tutorial")
         tuto_btn.draw_button(events)
 
-        # Texture pack label
-        label_font = load_font(LABEL_FONT_SIZE)
-        pck_label = label_font.render(theme.string("settings.texture_pack", "TEXTURE PACK"), True, theme.color("text.subtitle", (200, 200, 200)))
-        SCREEN.blit(pck_label, (c - pck_label.get_width() // 2, int(HEIGHT * theme.pos("settings.pack_label_y", 0.66))))
-
-        # Texture pack dropdown
-        drop_w = int(WIDTH * 0.18)
-        drop_h = theme.size("settings.dropdown_h", int(HEIGHT * 0.05))
-        packs = list_packs()
-        if not hasattr(self, '_pack_dropdown') or self._pack_dropdown is None:
-            def _on_pack_select(val):
-                set_packs([val] if val else [])
-                self.game.reload_all_assets()
-            self._pack_dropdown = Dropdown(
-                c - drop_w // 2, int(HEIGHT * theme.pos("settings.dropdown_y", 0.72)), drop_w, drop_h, packs,
-                self.game, on_select=_on_pack_select
-            )
-            self._pack_dropdown.sync_from_pack()
-        else:
-            self._pack_dropdown.options = packs
-        self._pack_dropdown.draw(events)
+        # Texture pack → pack selector
+        self._draw_main_button(events,
+            theme.string("settings.texture_pack", "TEXTURE PACKS →"),
+            int(HEIGHT * theme.pos("settings.pack_btn_y", 0.66)),
+            int(WIDTH * 0.14),
+            lambda: self._open_pack_select(GAME),
+            font_size=28)
 
         # ── Back ──────────────────────────────────────────────
         back_target = getattr(GAME, '_settings_return', 'menu')
@@ -563,6 +583,201 @@ class Menu:
                 pygame.event.set_grab(False)
             GAME._settings_return = "menu"
         self._draw_main_button(events, theme.string("button.back", "BACK"), HEIGHT - int(HEIGHT * theme.pos("menu.title_y", 0.08)), int(WIDTH * 0.11), go_back, font_size=34)
+
+    # ── Pack Select ─────────────────────────────────────────
+
+    def _open_pack_select(self, GAME):
+        self._working_packs = list(TEXTURE_PACKS)
+        self._pack_sel_avail_idx = 0
+        self._pack_sel_active_idx = 0
+        self._pack_sel_avail_scroll = 0
+        self._pack_sel_active_scroll = 0
+        GAME.state = "pack_select"
+
+    def draw_pack_select(self, events, GAME):
+        self.game = GAME
+        self._fill_bg()
+        c = WIDTH // 2
+
+        title_font = load_font(theme.size("settings.title_font", int(HEIGHT * 0.07)), bold=True)
+        title_surf = title_font.render(theme.string("pack_select.title", "TEXTURE PACKS"), True, theme.color("text.title", 'white'))
+        SCREEN.blit(title_surf, (c - title_surf.get_width() // 2, int(HEIGHT * theme.pos("mp.title_y", 0.04))))
+
+        all_packs = [p["value"] for p in list_packs()]
+        avail = [p for p in all_packs if p not in self._working_packs]
+
+        # ── Layout constants ──────────────────────────────
+        col_w = int(WIDTH * 0.18)
+        col_h = int(HEIGHT * 0.50)
+        col_y = int(HEIGHT * 0.16)
+        item_h = int(HEIGHT * 0.048)
+        arr_w = int(WIDTH * 0.025)
+        prio_w = int(WIDTH * 0.018)
+        gap = int(WIDTH * 0.008)
+        visible = col_h // item_h
+        font = load_font(theme.size("pack_select.item_font", 22))
+        label_font = load_font(theme.size("pack_select.column_label", 20))
+        mouse = pygame.mouse.get_pos()
+
+        # Center the whole block:
+        block_w = col_w * 2 + arr_w + prio_w + gap * 4
+        block_x = (WIDTH - block_w) // 2
+        left_x = block_x
+        arr_x = left_x + col_w + gap
+        right_x = arr_x + arr_w + gap
+        prio_x = right_x + col_w + gap
+
+        box_border = theme.color("pack_select.box_border", (80, 80, 80))
+        box_bg = theme.color("pack_select.box_bg", (30, 30, 35))
+        sel_bg = theme.color("pack_select.selected_bg", (50, 70, 100))
+        hover_bg = theme.color("pack_select.hover_bg", (60, 60, 70))
+        item_bg = theme.color("pack_select.item_bg", (40, 40, 40))
+        text_col = theme.color("pack_select.text", 'white')
+        sub_col = theme.color("text.subtitle", (200, 200, 200))
+        arrow_col = theme.color("pack_select.arrow_text", 'white')
+        arr_idle = theme.color("pack_select.arrow_idle", (50, 50, 50))
+        arr_hov = theme.color("pack_select.arrow_bg", (60, 60, 70))
+
+        # ── Helper: draw a column list ────────────────────
+        def draw_column(items, x, scroll, sel_idx):
+            box = pygame.Rect(x, col_y, col_w, col_h)
+            pygame.draw.rect(SCREEN, box_bg, box, border_radius=6)
+            pygame.draw.rect(SCREEN, box_border, box, 2, border_radius=6)
+            for i in range(visible):
+                idx = scroll + i
+                if idx >= len(items):
+                    break
+                y = col_y + i * item_h + 4
+                rect = pygame.Rect(x + 4, y, col_w - 8, item_h - 4)
+                selected = idx == sel_idx
+                hover = rect.collidepoint(mouse)
+                bg = sel_bg if selected else (hover_bg if hover else item_bg)
+                pygame.draw.rect(SCREEN, bg, rect, border_radius=4)
+                label = items[idx]
+                surf = font.render(label, True, text_col)
+                SCREEN.blit(surf, (rect.x + 8, rect.y + (rect.h - surf.get_height()) // 2))
+
+        # ── Get display name helper ───────────────────────
+        def display_name(value):
+            for p in list_packs():
+                if p["value"] == value:
+                    return p["label"]
+            return value
+
+        # ── Left column: Available ─────────────────────────
+        avail_labels = [display_name(p) for p in avail]
+        left_label = label_font.render(theme.string("pack_select.available", "BESCHIKBAAR"), True, sub_col)
+        SCREEN.blit(left_label, (left_x + col_w // 2 - left_label.get_width() // 2, col_y - 28))
+        self._pack_sel_avail_scroll = max(0, min(self._pack_sel_avail_scroll, max(0, len(avail) - visible)))
+        draw_column(avail_labels, left_x, self._pack_sel_avail_scroll, self._pack_sel_avail_idx)
+
+        # ── Right column: Active ───────────────────────────
+        active_labels = [f"{i + 1}. {display_name(p)}" for i, p in enumerate(self._working_packs)]
+        right_label = label_font.render(theme.string("pack_select.active", "ACTIEF"), True, sub_col)
+        SCREEN.blit(right_label, (right_x + col_w // 2 - right_label.get_width() // 2, col_y - 28))
+        self._pack_sel_active_scroll = max(0, min(self._pack_sel_active_scroll, max(0, len(self._working_packs) - visible)))
+        draw_column(active_labels, right_x, self._pack_sel_active_scroll, self._pack_sel_active_idx)
+
+        # ── Arrow buttons (→ add, ← remove) ────────────────
+        arr_btn_h = int(item_h * 0.6)
+        arr_btn_w = arr_w
+        center_y = col_y + col_h // 2
+        left_btn = pygame.Rect(arr_x, center_y - arr_btn_h - 4, arr_btn_w, arr_btn_h)
+        right_btn = pygame.Rect(arr_x, center_y + 4, arr_btn_w, arr_btn_h)
+        def draw_arr_btn(rect, direction, enabled):
+            hover = rect.collidepoint(mouse)
+            pygame.draw.rect(SCREEN, arr_hov if hover else arr_idle, rect, border_radius=4)
+            if enabled:
+                _draw_arrow(SCREEN, rect, direction, arrow_col)
+        draw_arr_btn(left_btn, 'right', bool(avail))
+        draw_arr_btn(right_btn, 'left', bool(self._working_packs))
+
+        # ── Priority up/down buttons ───────────────────────
+        prio_btn_h = int(item_h * 0.5)
+        def draw_prio_btn(rect, direction, enabled):
+            hover = rect.collidepoint(mouse)
+            pygame.draw.rect(SCREEN, arr_hov if hover else arr_idle, rect, border_radius=4)
+            if enabled:
+                _draw_arrow(SCREEN, rect, direction, arrow_col)
+        up_rect = pygame.Rect(prio_x, col_y + int(item_h * 0.3), prio_w, prio_btn_h)
+        dn_rect = pygame.Rect(prio_x, col_y + col_h - int(item_h * 0.3) - prio_btn_h, prio_w, prio_btn_h)
+        has_multiple = len(self._working_packs) > 1
+        draw_prio_btn(up_rect, 'up', has_multiple)
+        draw_prio_btn(dn_rect, 'down', has_multiple)
+
+        # ── Event handling ──────────────────────────────────
+        for ev in events:
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                def hit_column(items, x, scroll, sel_attr):
+                    for i in range(visible):
+                        idx = scroll + i
+                        if idx >= len(items):
+                            break
+                        y = col_y + i * item_h + 4
+                        rect = pygame.Rect(x + 4, y, col_w - 8, item_h - 4)
+                        if rect.collidepoint(mouse):
+                            setattr(self, sel_attr, idx)
+                            return True
+                    return False
+
+                hit_column(avail, left_x, self._pack_sel_avail_scroll, '_pack_sel_avail_idx')
+                hit_column(self._working_packs, right_x, self._pack_sel_active_scroll, '_pack_sel_active_idx')
+
+                if avail and left_btn.collidepoint(mouse):
+                    p = avail[self._pack_sel_avail_idx]
+                    self._working_packs.append(p)
+                    self._pack_sel_active_idx = len(self._working_packs) - 1
+
+                if self._working_packs and right_btn.collidepoint(mouse):
+                    idx = self._pack_sel_active_idx
+                    self._working_packs.pop(idx)
+                    if self._pack_sel_active_idx >= len(self._working_packs):
+                        self._pack_sel_active_idx = max(0, len(self._working_packs) - 1)
+
+                if len(self._working_packs) > 1 and up_rect.collidepoint(mouse):
+                    idx = self._pack_sel_active_idx
+                    if idx > 0:
+                        self._working_packs[idx], self._working_packs[idx - 1] = \
+                            self._working_packs[idx - 1], self._working_packs[idx]
+                        self._pack_sel_active_idx = idx - 1
+                if len(self._working_packs) > 1 and dn_rect.collidepoint(mouse):
+                    idx = self._pack_sel_active_idx
+                    if idx < len(self._working_packs) - 1:
+                        self._working_packs[idx], self._working_packs[idx + 1] = \
+                            self._working_packs[idx + 1], self._working_packs[idx]
+                        self._pack_sel_active_idx = idx + 1
+
+            if ev.type == pygame.MOUSEWHEEL:
+                if pygame.Rect(left_x, col_y, col_w, col_h).collidepoint(mouse):
+                    self._pack_sel_avail_scroll -= ev.y
+                if pygame.Rect(right_x, col_y, col_w, col_h).collidepoint(mouse):
+                    self._pack_sel_active_scroll -= ev.y
+
+        # ── Back / Confirm ──────────────────────────────────
+        def confirm():
+            GAME.Menu.draw_loading_screen(0, "Applying packs...")
+            pygame.event.pump()
+            save_active_packs(self._working_packs)
+            set_packs(self._working_packs)
+            GAME.reload_all_assets()
+            back_target = getattr(GAME, '_settings_return', 'menu')
+            GAME.state = back_target
+            if back_target == "game":
+                pygame.mouse.set_visible(False)
+                pygame.event.set_grab(True)
+                pygame.mixer.unpause()
+                GAME.main_music.play()
+            elif back_target == "paused":
+                pygame.mouse.set_visible(True)
+                pygame.event.set_grab(False)
+                GAME.main_music.play()
+            else:
+                pygame.mouse.set_visible(True)
+                pygame.event.set_grab(False)
+            GAME._settings_return = "menu"
+        self._draw_main_button(events, theme.string("button.back", "TERUG"),
+            HEIGHT - int(HEIGHT * theme.pos("menu.title_y", 0.08)),
+            int(WIDTH * 0.11), confirm, font_size=34)
 
     def draw_credits(self, events, GAME):
         self.game = GAME
@@ -829,7 +1044,7 @@ class Button:
 
         bg = self.hover_button_color if hovering else self.button_color
         fg = self.hover_text_color if hovering else self.text_color
-        pygame.draw.rect(SCREEN, bg, self.rect, border_radius=6)
+        pygame.draw.rect(SCREEN, bg, self.rect, border_radius=theme.size("button.border_radius", 6))
         text_surf = self.font.render(self.text, True, fg)
         tx = self.rect.x + (self.rect.w - text_surf.get_width()) // 2
         ty = self.rect.y + (self.rect.h - text_surf.get_height()) // 2
@@ -1123,7 +1338,7 @@ class Bilal:
 
         if text:
             Tekstballon(text, HEIGHT - int(HEIGHT * theme.pos("speech_bubble.y", 0.43)), int(WIDTH * theme.pos("speech_bubble.x", 0.01)), self.Game).draw()
-            SCREEN.blit(BILAL, (0, HEIGHT - int(HEIGHT * theme.pos("bilal.image_y", 0.33))))
+            SCREEN.blit(TUTORIAL, (0, HEIGHT - int(HEIGHT * theme.pos("tutorial.image_y", 0.33))))
 
     def trigger(self, event_name):
         if self.flags.get(event_name):

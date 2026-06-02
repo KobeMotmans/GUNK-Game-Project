@@ -5,17 +5,18 @@ game.py - Hoofd game loop en initialisatie
 import pygame
 import random
 import time
+import os
 
 from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
                     set_resolution, VICTORY_SCREEN, MENU_BG, ELEV_TIME, MAX_DEPTH,
                     ELEVATOR_WAIT_DIST, ELEVATOR_WAIT_FRAMES)
-from src.core.paths import resolve_asset, load_font
+from src.core.paths import resolve_asset, load_font, init_packs
 from src.core.theme import theme
 from src.core.raycaster import dda
 from src.assets.texture_cache import preload as preload_textures, clear as clear_texture_cache
 from src.entities.weapons import Pistol, Minigun, Rifle
-from src.entities.enemies import Andrei, Ahmed, Ruben, Jan, Fireball
+from src.entities.enemies import NormalEnemy, FastEnemy, TankEnemy, FinalBoss, Fireball
 from src.entities.player import Player
 from src.ui.Menu import Menu_inst, Bilal
 from src.core.map_loader import M, png_to_list_fast
@@ -35,7 +36,6 @@ class Game:
 
         #Init Bilal/Tutorial
         self.Menu = Menu_inst
-        self.Menu.draw_loading_screen()
         self.bilal = Bilal(self)
         self.bilal.say("Welkom bij GUNK!", 100)
         self.bilal.say("Gebruik je muis om rond te kijken en ZQSD om te bewegen", 200)
@@ -43,14 +43,10 @@ class Game:
         self.bilal.say("Er moet in n van deze kamers een keycard liggen. Zoek hem!", 200)
         self.bilal.say("Maar pas op, want de andere assistenten zijn gek geworden van het K gebouw!", 200)
 
-        self.Menu.draw_loading_screen()
-
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
-
-        self.Menu.draw_loading_screen()
 
         # Init wapens
         self.pistol = Pistol()
@@ -63,27 +59,29 @@ class Game:
         self.music_volume = 0.5
         self.curr_flash = ""
         self.flash_time = 0
-        self.possible_enemies = [Andrei, Ahmed, Ruben]
-        self.jan = None
-        self.jan_spotted = False
-
-        self.Menu.draw_loading_screen()
+        self.possible_enemies = [NormalEnemy, FastEnemy, TankEnemy]
+        self.final_boss = None
+        self.final_boss_spotted = False
 
         # Init objects
         self.resolution = "high"
 
         pygame.mixer.init()
 
-        self.Menu.draw_loading_screen()
+        init_packs()
+
+        self.Menu.draw_loading_screen(0, "Loading sounds...")
+        pygame.event.pump()
 
         self.main_music = None
         self.sounds = {}
         self._load_sounds()
 
-        self.Menu.draw_loading_screen()
-
         # Preload all textures at startup (loading screen shown)
         self._preload_all()
+
+        self.Menu._fill_bg()
+        pygame.display.flip()
 
         # Multiplayer
         self.multiplayer = False
@@ -117,8 +115,16 @@ class Game:
         self.state = "menu"
 
     def _load_sounds(self):
+        if self.main_music:
+            self.main_music.stop()
+        for s in self.sounds.values():
+            try: s.stop()
+            except: pass
+        Fireball.clear_sound_cache()
         self.main_music = pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.main", "sounds/music/esKape Final.ogg")))
         self.main_music.set_volume(self.music_volume)
+        self.Menu.draw_loading_screen(0.15, "Loading music...")
+        pygame.event.pump()
         self.sounds = {
             "damage": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.damage", "sounds/sfx/damage.ogg"))),
             "ammo":   pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.ammo", "sounds/sfx/ammo.ogg"))),
@@ -127,12 +133,12 @@ class Game:
             "elev_ding": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.elevator_ding", "sounds/sfx/elev_ding.ogg"))),
             "victory": pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.victory", "sounds/music/Motivator.ogg"))),
         }
+        self.Menu.draw_loading_screen(0.40, "Loading sound effects...")
+        pygame.event.pump()
         self.update_sfx_volume()
 
     def _preload_all(self):
-        self.Menu.loading_progress = 0
-        self.Menu.draw_loading_screen(0)
-        preload_textures(self._get_all_texture_paths(), lambda p: self.Menu.draw_loading_screen(p))
+        preload_textures(self._get_all_texture_paths(), lambda p, path: self.Menu.draw_loading_screen(p, os.path.basename(path)))
 
     def reload_all_assets(self):
         self._load_sounds()
@@ -141,6 +147,16 @@ class Game:
         clear_texture_cache()
         self._preload_all()
         self.Menu._load_bg_texture()
+        if hasattr(self, 'objects'):
+            for obj_list in self.objects.values():
+                if isinstance(obj_list, list):
+                    for obj in obj_list:
+                        if hasattr(obj, 'reload_texture'):
+                            obj.reload_texture()
+                elif obj_list is not None and hasattr(obj_list, 'reload_texture'):
+                    obj_list.reload_texture()
+        if self.current_gun:
+            self.current_gun.reload()
 
     def update_sfx_volume(self):
         import src.core.config as cfg
@@ -157,11 +173,11 @@ class Game:
             randomnumber = random.randint(0,2)
             random_enemy =  self.possible_enemies[randomnumber]
             enemies.append(random_enemy(enemy_pos[0], enemy_pos[1]))
-        if "jan" in M.SPAWNS:
-            jan_pos = M.SPAWNS["jan"]
-            jan = Jan(jan_pos[0], jan_pos[1])
-            self.jan = jan
-            enemies.append(jan)
+        if "final_boss" in M.SPAWNS:
+            boss_pos = M.SPAWNS["final_boss"]
+            boss = FinalBoss(boss_pos[0], boss_pos[1])
+            self.final_boss = boss
+            enemies.append(boss)
         return enemies
 
     def create_objects(self):
@@ -293,9 +309,9 @@ class Game:
                         if not self.multiplayer:
                             self.player.score += 1
                             self.objects["enemies"].remove(enemy)
-                            if enemy.type == "enemies/jan":
+                            if enemy.type == "enemies/final_boss":
                                 self.objects["keycard"].append(PickupObject("objects/keycard", enemy.pos.x, enemy.pos.y))
-                                self.jan = None
+                                self.final_boss = None
                                 self.bilal.say("Je hebt het gedaan! Zorg dat je nu zo snel mogelijk buiten staat!")
                             else:
                                 if random.random() < HEALTH_CHANCE:
@@ -315,8 +331,8 @@ class Game:
                     if dist is not None:
                         sprites.append((dist, SCREEN_x, enemy))
                         self.bilal.trigger("seen_enemy")
-                        if enemy.type == "enemies/jan":
-                            self.jan_spotted = True
+                        if enemy.type == "enemies/final_boss":
+                            self.final_boss_spotted = True
                             self.bilal.trigger("boss_warning")
             elif obj == "ammo":
                 for item in list(self.objects["ammo"]):
@@ -446,7 +462,7 @@ class Game:
 
     def _get_all_texture_paths(self):
         paths = []
-        for t in ["andrei", "ahmed", "ruben", "jan", "projectile"]:
+        for t in ["normal_enemy", "fast_enemy", "tank_enemy", "final_boss", "projectile"]:
             paths.append(resolve_asset(theme.get(f"textures.enemies.{t}", f"textures/enemies/{t}.png")))
         for t in ["ammo", "health", "keycard", "exit"]:
             paths.append(resolve_asset(theme.get(f"textures.objects.{t}", f"textures/objects/{t}.png")))
@@ -459,8 +475,8 @@ class Game:
 
     def _preload_textures(self, target_state):
         self.Menu.loading_progress = 0
-        self.Menu.draw_loading_screen(0)
-        preload_textures(self._get_all_texture_paths(), lambda p: self.Menu.draw_loading_screen(p))
+        self.Menu.draw_loading_screen(0, "Loading textures...")
+        preload_textures(self._get_all_texture_paths(), lambda p, path: self.Menu.draw_loading_screen(p, os.path.basename(path)))
         self.state = target_state
 
     def reset_game(self):
@@ -496,7 +512,7 @@ class Game:
         self.exit_pos = None
         self._pos_seq = 0
         self._pending_removes.clear()
-        self.jan_spotted = False
+        self.final_boss_spotted = False
         self.escaped = False
         self.player.door_pos = 0
 
@@ -551,8 +567,8 @@ class Game:
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol]
         self.remote_players = []
-        self.jan = None
-        self.jan_spotted = False
+        self.final_boss = None
+        self.final_boss_spotted = False
         self.escaped = False
         self.elevator_waiting = False
         self.elevator_ready = False
@@ -607,12 +623,12 @@ class Game:
 
     def _create_enemy_from_type(self, type_str, pos):
         mapping = {
-            "enemies/andrei": Andrei,
-            "enemies/ahmed": Ahmed,
-            "enemies/ruben": Ruben,
-            "enemies/jan": Jan,
+            "enemies/normal_enemy": NormalEnemy,
+            "enemies/fast_enemy": FastEnemy,
+            "enemies/tank_enemy": TankEnemy,
+            "enemies/final_boss": FinalBoss,
         }
-        cls = mapping.get(type_str, Andrei)
+        cls = mapping.get(type_str, NormalEnemy)
         return cls(pos[0], pos[1])
 
     def _send_client_state(self):
@@ -675,15 +691,15 @@ class Game:
             self.objects["enemies"].append(self._create_enemy_from_type(edata["type"], edata["pos"]))
         while len(self.objects["enemies"]) > len(enemies_data):
             self.objects["enemies"].pop()
-        self.jan = None
+        self.final_boss = None
         for i, edata in enumerate(enemies_data):
             new_type = edata.get("type", "")
             if self.objects["enemies"][i].type != new_type:
                 self.objects["enemies"][i] = self._create_enemy_from_type(new_type, edata["pos"])
             self.objects["enemies"][i].pos = Vector(edata["pos"][0], edata["pos"][1])
             self.objects["enemies"][i].health = edata.get("health", 10)
-            if new_type == "enemies/jan":
-                self.jan = self.objects["enemies"][i]
+            if new_type == "enemies/final_boss":
+                self.final_boss = self.objects["enemies"][i]
 
         # 4. Objects — full sync from server (ALL clients)
         obj_data = state.get("objects", {})
@@ -816,8 +832,8 @@ class Game:
                 if (self.player.door_pos == 0 or self.player.door_pos > WIDTH/2 + ELEV_SPEED) and not self.escaped:
                     self.update()
                     self.render()
-                    if self.jan is not None and self.jan_spotted:
-                        self.jan.draw_health_bar(None, None, None)
+                    if self.final_boss is not None and self.final_boss_spotted:
+                        self.final_boss.draw_health_bar(None, None, None)
                     if self.bilal.flags["general"]:
                         self.bilal.update()
                         self.bilal.draw()
@@ -846,6 +862,8 @@ class Game:
                 self.Menu.draw_credits(events, self)
             elif self.state == 'settings':
                self.Menu.draw_settings(events, self)
+            elif self.state == 'pack_select':
+               self.Menu.draw_pack_select(events, self)
 
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
