@@ -9,3 +9,4 @@ GUNK.zip
 *.spec
 /tools/upx/upx.exe
 /.opencode
+gunk.log

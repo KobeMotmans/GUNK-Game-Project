@@ -15,6 +15,7 @@ import io
 import pygame
 
 from .protocol import encode_packet, decode_packet
+from ..core.logger import log as _log
 
 
 def _save_surface_as_png(img):
@@ -71,6 +72,9 @@ class ServerIO(threading.Thread):
         # Pending registrations (token → {name, skin_id, addr, time})
         self._pending_connect = {}
         self.next_id = 0  # First client (host) gets 0
+
+        # Lobby countdown (frames until game start)
+        self.countdown = 0
 
         # Server-side skin management
         self.skin_manifest = []
@@ -164,6 +168,7 @@ class ServerIO(threading.Thread):
             self._state_tick = (self._state_tick + 1) % 2
             if self.server_game.initialized and self._state_tick == 0:
                 self._send_server_state()
+            self._handle_countdown()
             self._cleanup_stale()
             elapsed = time.perf_counter() - t0
             if elapsed < TICK_RATE:
@@ -182,7 +187,8 @@ class ServerIO(threading.Thread):
 
             try:
                 packet = decode_packet(data)
-            except Exception:
+            except Exception as e:
+                _log(f"decode error: {e}")
                 continue
 
             ptype = packet.get("type")
@@ -230,6 +236,7 @@ class ServerIO(threading.Thread):
                 name = pending.get("name", f"Player {pid}")
                 skin_id = pending.get("skin_id", 0)
                 should_broadcast = False
+                game_already_started = self.server_game.initialized
                 with self.clients_lock:
                     for c_addr, c_pid, _ in self.clients:
                         if c_pid == pid:
@@ -240,6 +247,12 @@ class ServerIO(threading.Thread):
                             self.lobby_updates.put(("player_joined", pid, name))
                             should_broadcast = True
                             self.server_game.register_player(pid, name, skin_id)
+                            if game_already_started:
+                                spawn = self.server_game.get_spawn_position()
+                                if spawn:
+                                    self.server_game.players[pid]["pos"] = spawn
+                                    self.server_game.players[pid]["state"] = "game"
+                                    self.server_game.players[pid]["ready"] = True
                 if should_broadcast:
                     self._broadcast_lobby()
                 self.last_seen[pid] = time.time()
@@ -288,11 +301,14 @@ class ServerIO(threading.Thread):
                 self.inputs.pop(pid, None)
                 self.server_game.remove_player(pid)
                 self.lobby_updates.put(("player_left", pid, ""))
+                if self.countdown > 0:
+                    self.countdown = 0
                 if should_reset:
                     self.server_game.reset_to_lobby()
                     self.next_id = 0
                     self.inputs.clear()
                     self.last_seen.clear()
+                    self._pending_connect.clear()
                 if should_broadcast:
                     self._broadcast_lobby()
 
@@ -302,12 +318,72 @@ class ServerIO(threading.Thread):
                 self._broadcast_lobby()
                 self.last_seen[pid] = time.time()
 
+            elif ptype == "ready":
+                with self.clients_lock:
+                    if not any(c_pid == pid for _, c_pid, _ in self.clients):
+                        _log(f"ready: pid {pid} not in clients, ignoring")
+                        continue
+                ready_before = self.server_game.players.get(pid, {}).get("ready", False)
+                self.server_game.toggle_ready(pid)
+                ready_after = self.server_game.players.get(pid, {}).get("ready", False)
+                _log(f"ready from pid {pid}: {ready_before} -> {ready_after}")
+                print(f"[SERVER] ready: P{pid} {ready_before}->{ready_after}")
+                if not self.server_game.initialized:
+                    if self._all_players_ready():
+                        if self.countdown <= 0:
+                            self.countdown = 180
+                            _log(f"countdown started: {self.countdown}")
+                            print(f"[SERVER] countdown started: {self.countdown}")
+                    else:
+                        if self.countdown > 0:
+                            self.countdown = 0
+                            _log("countdown cancelled")
+                            print("[SERVER] countdown cancelled")
+                players = self.get_lobby_players()
+                # Direct unicast response to sender FIRST, then broadcast
+                direct_resp = {"type": "lobby_info", "players": players}
+                if self.server_game.initialized:
+                    direct_resp["game_active"] = True
+                try:
+                    self.udp_socket.sendto(encode_packet(direct_resp), addr)
+                except OSError:
+                    pass
+                self._broadcast_lobby()
+                self.last_seen[pid] = time.time()
+
             elif ptype == "request_lobby":
                 self._broadcast_lobby()
                 self.last_seen[pid] = time.time()
 
-            elif ptype == "ping":
+            elif ptype == "join_game":
+                with self.clients_lock:
+                    if not any(c_pid == pid for _, c_pid, _ in self.clients):
+                        continue
+                if self.server_game.initialized:
+                    spawn = self.server_game.get_spawn_position()
+                    if spawn and pid in self.server_game.players:
+                        self.server_game.players[pid]["pos"] = spawn
+                        self.server_game.players[pid]["state"] = "game"
+                    game_start_packet = encode_packet({
+                        "type": "game_start",
+                        "level": self.server_game.level
+                    })
+                    for _ in range(5):
+                        try:
+                            self.udp_socket.sendto(game_start_packet, addr)
+                        except OSError:
+                            pass
                 self.last_seen[pid] = time.time()
+
+            elif ptype == "ping":
+                with self.clients_lock:
+                    if not any(c_pid == pid for _, c_pid, _ in self.clients):
+                        continue
+                self.last_seen[pid] = time.time()
+                try:
+                    self.udp_socket.sendto(encode_packet({"type": "pong"}), addr)
+                except OSError:
+                    pass
 
     # ── State relay ────────────────────────────────────────────
 
@@ -326,6 +402,10 @@ class ServerIO(threading.Thread):
     def _broadcast_lobby(self):
         players = self.get_lobby_players()
         packet = {"type": "lobby_info", "players": players}
+        if self.server_game.initialized:
+            packet["game_active"] = True
+        if self.countdown > 0:
+            packet["countdown"] = self.countdown
         data = encode_packet(packet)
         with self.clients_lock:
             for c_addr, _, _ in self.clients:
@@ -347,7 +427,7 @@ class ServerIO(threading.Thread):
         with self.clients_lock:
             for addr, pid, name in self.clients:
                 last = self.last_seen.get(pid, now)
-                if now - last > 10:
+                if now - last > 20:
                     stale.append((addr, pid, name))
             for _, pid, name in stale:
                 self.clients = [(a, p, n) for a, p, n in self.clients if p != pid]
@@ -361,23 +441,70 @@ class ServerIO(threading.Thread):
             self.next_id = 0
             self.inputs.clear()
             self.last_seen.clear()
+            self._pending_connect.clear()
         if stale:
+            if self.countdown > 0:
+                self.countdown = 0
             self._broadcast_lobby()
+
+    def _handle_countdown(self):
+        if self.countdown > 0 and not self.server_game.initialized:
+            self.countdown -= 1
+            if self.countdown <= 0:
+                print("[SERVER] countdown reached 0, starting game...")
+                try:
+                    self.server_game.init_world()
+                    self._broadcast_game_start()
+                    print("[SERVER] game_start broadcast sent")
+                except Exception as e:
+                    print(f"[SERVER] ERROR in countdown init: {e}")
+
+    def _broadcast_game_start(self):
+        game_start_packet = encode_packet({"type": "game_start", "level": self.server_game.level})
+        with self.clients_lock:
+            for c_addr, _, _ in self.clients:
+                for _ in range(3):
+                    try:
+                        self.udp_socket.sendto(game_start_packet, c_addr)
+                    except OSError:
+                        pass
+
+    def _all_players_ready(self):
+        with self.clients_lock:
+            pids = [pid for _, pid, _ in self.clients]
+        if not pids:
+            return False
+        for pid in pids:
+            pd = self.server_game.players.get(pid)
+            if not pd or not pd.get("ready"):
+                return False
+        return True
 
     def get_lobby_players(self):
         result = []
         with self.clients_lock:
             for _, pid, name in self.clients:
-                skin_id = self.server_game.players.get(pid, {}).get("skin_id", 0)
-                result.append({"name": name, "pid": pid, "skin_id": skin_id})
+                pd = self.server_game.players.get(pid, {})
+                result.append({"name": name, "pid": pid, "skin_id": pd.get("skin_id", 0), "ready": pd.get("ready", False)})
         return result
 
     def stop(self):
         self.running = False
+        self._broadcast_server_stopped()
         try:
             self.udp_socket.close()
         except OSError:
             pass
+
+    def _broadcast_server_stopped(self):
+        packet = {"type": "server_stopped"}
+        data = encode_packet(packet)
+        with self.clients_lock:
+            for c_addr, _, _ in self.clients:
+                try:
+                    self.udp_socket.sendto(data, c_addr)
+                except OSError:
+                    pass
 
 
 class NetworkClient:
@@ -392,17 +519,18 @@ class NetworkClient:
 
     def connect(self, host, port, name, skin_id=0):
         self.skin_id = skin_id
-        self.server_addr = (host, port)
+        addr = (host, port)
         token = f"{name}:{time.time()}:{id(self)}"
-        for attempt in range(15):
+        for attempt in range(3):
             try:
                 packet = {"type": "connect", "name": name, "skin_id": skin_id, "token": token}
-                self.udp_socket.sendto(encode_packet(packet), self.server_addr)
-                self.udp_socket.settimeout(1.0)
+                self.udp_socket.sendto(encode_packet(packet), addr)
+                self.udp_socket.settimeout(0.5)
                 try:
-                    data, addr = self.udp_socket.recvfrom(65536)
+                    data, _ = self.udp_socket.recvfrom(65536)
                     resp = decode_packet(data)
                     if resp.get("type") == "accept":
+                        self.server_addr = addr
                         self.player_id = resp["player_id"]
                         self.connected = True
                         from ..assets.skin_manager import SkinManager
@@ -419,8 +547,8 @@ class NetworkClient:
                     pass
             except OSError:
                 pass
-            time.sleep(1.0)
         self.udp_socket.setblocking(False)
+        self.server_addr = None
         return False
 
     @staticmethod

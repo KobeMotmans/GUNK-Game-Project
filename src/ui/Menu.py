@@ -1,3 +1,4 @@
+import os
 import pygame
 import tkinter as tk
 from tkinter import filedialog
@@ -47,6 +48,8 @@ class Menu:
         self.input_focus = None
         self.lobby_status = ""
         self.client_list = []
+        self.lobby_countdown = 0
+        self.lobby_game_active = False
         self.waiting_text = theme.string("multiplayer.connecting", "Verbinden...")
         self.mp_status = ""
         self._skin_thumbnails = {}
@@ -54,6 +57,7 @@ class Menu:
         self.mp_skin_search = ""
         self.mp_skin_upload_name = ""
         self._upload_status = None
+        self._cd_ticks = 0
 
         # Pack select state
         self._working_packs = []
@@ -207,9 +211,11 @@ class Menu:
         """Simple custom button returning True if clicked."""
         mouse = pygame.mouse.get_pos()
         rect = pygame.Rect(x, y, w, h)
-        hover = rect.collidepoint(mouse)
+        enabled = action is not None
+        hover = rect.collidepoint(mouse) and enabled
         br = theme.size("button.border_radius", 6)
-        pygame.draw.rect(SCREEN, theme.color("button.hover_bg", (100, 100, 100)) if hover else theme.color("button.bg", (70, 70, 70)), rect, border_radius=br)
+        bg = theme.color("button.hover_bg", (100, 100, 100)) if hover else (theme.color("button.disabled_bg", (40, 40, 40)) if not enabled else theme.color("button.bg", (70, 70, 70)))
+        pygame.draw.rect(SCREEN, bg, rect, border_radius=br)
         if hover:
             pygame.draw.rect(SCREEN, theme.color("button.border", (180, 180, 180)), rect, 2, border_radius=br)
         font = load_font(theme.size("button.custom_font", 28))
@@ -218,7 +224,8 @@ class Menu:
         SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y + h//2 - surf.get_height()//2))
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
-                if rect.collidepoint(mouse) and action:
+                if rect.collidepoint(mouse) and enabled:
+                    print(f"[DEBUG] button clicked: '{text}'")
                     action()
                     return True
         return False
@@ -289,18 +296,27 @@ class Menu:
         y_left = int(HEIGHT * theme.pos("lobby.left_start_y", 0.15))
         players = self.client_list if self.client_list else []
         thumb_size = theme.size("lobby.thumb_size", 36)
+        all_ready = True
         for pd in players:
             pid = pd["pid"] if isinstance(pd, dict) else pd[1]
             name = pd["name"] if isinstance(pd, dict) else pd[0]
             skin_id = pd.get("skin_id", 0) if isinstance(pd, dict) else (pd[2] if len(pd) > 2 else 0)
+            ready = pd.get("ready", False) if isinstance(pd, dict) else False
+            if not ready:
+                all_ready = False
             color = theme.color("player.highlight", (0, 200, 255)) if pid == GAME.player_id else theme.color("text.title", (255, 255, 255))
             if skin_id not in self._skin_thumbnails or self._skin_thumbnails[skin_id].get_width() != thumb_size:
                 self._skin_thumbnails[skin_id] = SkinManager.create_thumbnail(skin_id, (thumb_size, thumb_size))
             SCREEN.blit(self._skin_thumbnails[skin_id], (left_x, y_left - 4))
+            ready_text = theme.string("lobby.ready", "READY") if ready else theme.string("lobby.not_ready", "NOT READY")
+            ready_color = theme.color("lobby.ready", (0, 200, 0)) if ready else theme.color("lobby.not_ready", (200, 80, 80))
+            ready_surf = load_font(16).render(ready_text, True, ready_color)
             p_text = load_numeric_font(26).render(f"[P{pid}] {name}", True, color)
             SCREEN.blit(p_text, (left_x + thumb_size + 10, y_left))
-            y_left += theme.size("lobby.player_row_gap", int(HEIGHT * 0.045))
+            SCREEN.blit(ready_surf, (left_x + thumb_size + 10, y_left + 28))
+            y_left += theme.size("lobby.player_row_gap", int(HEIGHT * 0.055))
         if not players:
+            all_ready = False
             wait = load_font(22).render(theme.string("lobby.waiting", "Wachten op spelers..."), True, theme.color("text.info", (150, 150, 150)))
             SCREEN.blit(wait, (left_cx - wait.get_width()//2, y_left))
 
@@ -342,19 +358,30 @@ class Menu:
         upload_label = upload_font.render(theme.string("lobby.new_skin", "NIEUWE SKIN"), True, theme.color("text.subtitle", (200, 200, 200)))
         SCREEN.blit(upload_label, (right_cx - upload_label.get_width()//2, y_right))
         y_right += 22
+        pending_path = getattr(self, '_pending_upload_path', None)
         name_w = int(WIDTH * 0.08)
-        name_x = right_cx - name_w - int(WIDTH * 0.02)
-        self.mp_skin_upload_name = self._draw_text_input(events, "",
-            self.mp_skin_upload_name, name_x, y_right, name_w,
-            height=26, field_id="mp_skin_upload_name")
         btn_w = int(WIDTH * 0.08)
-        btn_x = right_cx + int(WIDTH * 0.02)
-        up_rect = pygame.Rect(btn_x, y_right, btn_w, 26)
-        hover = up_rect.collidepoint(mouse)
-        pygame.draw.rect(SCREEN, theme.color("upload.hover_bg", (80, 120, 80)) if hover else theme.color("upload.bg", (60, 90, 60)), up_rect, border_radius=4)
-        up_surf = upload_font.render(theme.string("lobby.upload", "UPLOAD"), True, theme.color("upload.text", (200, 255, 200)))
-        SCREEN.blit(up_surf, (btn_x + btn_w//2 - up_surf.get_width()//2, y_right + 5))
-        self._skin_upload_rect = up_rect
+        name_x = right_cx - name_w - int(WIDTH * 0.02)
+        if pending_path:
+            self.mp_skin_upload_name = self._draw_text_input(events, "",
+                self.mp_skin_upload_name, name_x, y_right, name_w,
+                height=26, field_id="mp_skin_upload_name")
+            btn_x = right_cx + int(WIDTH * 0.02)
+            con_rect = pygame.Rect(btn_x, y_right, btn_w, 26)
+            hover = con_rect.collidepoint(mouse)
+            pygame.draw.rect(SCREEN, theme.color("upload.hover_bg", (80, 120, 80)) if hover else theme.color("upload.bg", (60, 90, 60)), con_rect, border_radius=4)
+            con_surf = upload_font.render(theme.string("lobby.confirm", "CONFIRM"), True, theme.color("upload.text", (200, 255, 200)))
+            SCREEN.blit(con_surf, (btn_x + btn_w//2 - con_surf.get_width()//2, y_right + 5))
+            self._skin_confirm_rect = con_rect
+            pending_label = upload_font.render(getattr(self, '_pending_upload_filename', ''), True, theme.color("text.info", (180, 180, 180)))
+            SCREEN.blit(pending_label, (name_x, y_right - 20))
+        else:
+            sel_rect = pygame.Rect(right_cx - btn_w//2, y_right, btn_w, 26)
+            hover = sel_rect.collidepoint(mouse)
+            pygame.draw.rect(SCREEN, theme.color("upload.hover_bg", (80, 120, 80)) if hover else theme.color("upload.bg", (60, 90, 60)), sel_rect, border_radius=4)
+            sel_surf = upload_font.render(theme.string("lobby.select_file", "SELECT"), True, theme.color("upload.text", (200, 255, 200)))
+            SCREEN.blit(sel_surf, (right_cx - sel_surf.get_width()//2, y_right + 5))
+            self._skin_select_rect = sel_rect
         y_right += 32
 
         if self._upload_status:
@@ -448,29 +475,36 @@ class Menu:
                     if rect.collidepoint(mouse):
                         self._select_skin(GAME, sid)
 
-                if getattr(self, '_skin_upload_rect', None) and self._skin_upload_rect.collidepoint(mouse):
+                if getattr(self, '_skin_select_rect', None) and self._skin_select_rect.collidepoint(mouse):
+                    root = tk.Tk()
+                    root.withdraw()
+                    filepath = filedialog.askopenfilename(
+                        title="Selecteer een afbeelding",
+                        filetypes=[("Afbeeldingen", "*.png *.jpg *.jpeg *.gif *.bmp"), ("Alle bestanden", "*.*")]
+                    )
+                    root.destroy()
+                    if filepath:
+                        self._pending_upload_path = filepath
+                        filename = os.path.splitext(os.path.basename(filepath))[0]
+                        self._pending_upload_filename = filename
+                        self.mp_skin_upload_name = filename
+                        self._upload_status = ""
+
+                if getattr(self, '_skin_confirm_rect', None) and self._skin_confirm_rect.collidepoint(mouse):
                     skin_name = self.mp_skin_upload_name.strip()
                     if not skin_name:
-                        self._upload_status = theme.string("lobby.upload_name_empty", "Vul een naam in")
-                    else:
-                        root = tk.Tk()
-                        root.withdraw()
-                        filepath = filedialog.askopenfilename(
-                            title="Selecteer een afbeelding",
-                            filetypes=[("Afbeeldingen", "*.png *.jpg *.jpeg *.gif *.bmp"), ("Alle bestanden", "*.*")]
-                        )
-                        root.destroy()
-                        if filepath:
-                            uploader = GAME.player_name
-                            self._upload_status = theme.string("lobby.upload_progress", "Bezig met uploaden...")
-                            ok, msg, *rest = GAME.network_client.upload_skin(skin_name, uploader, filepath)
-                            self._upload_status = msg
-                            if ok:
-                                self.mp_skin_upload_name = ""
-                                sid = rest[0] if rest else None
-                                if sid is not None:
-                                    SkinManager.download_skin(sid)
-                                    self._select_skin(GAME, sid)
+                        skin_name = getattr(self, '_pending_upload_filename', 'skin')
+                    uploader = GAME.player_name
+                    self._upload_status = theme.string("lobby.upload_progress", "Bezig met uploaden...")
+                    ok, msg, *rest = GAME.network_client.upload_skin(skin_name, uploader, self._pending_upload_path)
+                    self._upload_status = msg
+                    self._pending_upload_path = None
+                    if ok:
+                        self.mp_skin_upload_name = ""
+                        sid = rest[0] if rest else None
+                        if sid is not None:
+                            SkinManager.download_skin(sid)
+                            self._select_skin(GAME, sid)
 
                 if custom:
                     for sid, rect in self._skin_custom_rects:
@@ -482,14 +516,59 @@ class Menu:
                     if self._skin_next_rect and self._skin_next_rect.collidepoint(mouse) and self._skin_next_page:
                         self._skin_page += 1
 
+        # ── Countdown banner ───────────────────────────────────────────
+        if self.lobby_countdown > 0:
+            elapsed_ms = pygame.time.get_ticks() - getattr(self, '_cd_ticks', 0)
+            frames_passed = elapsed_ms / (1000 / 60)
+            remaining = max(0, int(self.lobby_countdown - frames_passed))
+            if remaining > 0:
+                seconds = max(1, remaining // 60 + 1)
+                count_text = theme.string("lobby.countdown", "STARTING IN {s}...").format(s=seconds)
+                count_surf = load_font(40).render(count_text, True, theme.color("lobby.countdown", (255, 200, 0)))
+                SCREEN.blit(count_surf, (WIDTH//2 - count_surf.get_width()//2, int(HEIGHT * 0.12)))
+
+        # ── Debug overlay ──────────────────────────────────────────────
+        debug_parts = ["DEBUG"]
+        for pd in players:
+            pid = pd["pid"] if isinstance(pd, dict) else pd[1]
+            ready = pd.get("ready", False) if isinstance(pd, dict) else False
+            tag = "READY" if ready else "UNREADY"
+            highlight = " ->" if pid == GAME.player_id else ""
+            debug_parts.append(f"P{pid}:{tag}{highlight}")
+        if not players:
+            debug_parts.append("no players")
+        debug_parts.append(f"cd={self.lobby_countdown}")
+        debug_parts.append(f"act={'YES' if self.lobby_game_active else 'no'}")
+        debug_surf = load_font(16).render(" | ".join(debug_parts), True, (255, 255, 0))
+        SCREEN.blit(debug_surf, (int(WIDTH * 0.02), int(HEIGHT * 0.05)))
+
         def dc():
             GAME._disconnect()
 
-        def start_multi_game():
-            GAME._primary_start_game()
-        if players:
-            self._draw_button_custom(events, theme.string("lobby.start_game", "START GAME"), WIDTH//2 - int(WIDTH * 0.05),
-                HEIGHT - int(HEIGHT * theme.pos("lobby.start_btn_y", 0.13)), int(WIDTH * 0.1), int(HEIGHT * 0.05), start_multi_game)
+        def toggle_ready():
+            GAME._toggle_ready()
+
+        def join_game():
+            GAME._join_active_game()
+
+        # ── Bottom buttons ─────────────────────────────────────────────
+        btn_y = HEIGHT - int(HEIGHT * theme.pos("lobby.start_btn_y", 0.13))
+        btn_w = int(WIDTH * 0.1)
+
+        if self.lobby_game_active:
+            self._draw_button_custom(events, theme.string("lobby.join_game", "JOIN GAME"),
+                WIDTH//2 - btn_w//2, btn_y, btn_w, int(HEIGHT * 0.05), join_game)
+        else:
+            my_ready = False
+            for pd in players:
+                pid = pd["pid"] if isinstance(pd, dict) else pd[1]
+                if pid == GAME.player_id:
+                    my_ready = pd.get("ready", False) if isinstance(pd, dict) else False
+                    break
+            ready_label = theme.string("lobby.ready_done", "✓ READY") if my_ready else theme.string("lobby.ready_up", "READY UP")
+            self._draw_button_custom(events, ready_label,
+                WIDTH//2 - btn_w//2, btn_y, btn_w, int(HEIGHT * 0.05), toggle_ready)
+
         self._draw_button_custom(events, theme.string("lobby.disconnect", "DISCONNECT"), WIDTH//2 - int(WIDTH * 0.04),
             HEIGHT - int(HEIGHT * theme.pos("lobby.disconnect_btn_y", 0.07)), int(WIDTH * 0.08), int(HEIGHT * 0.03), dc)
 
@@ -979,6 +1058,7 @@ class Menu:
             def on_music_change(val):
                 GAME.music_volume = val
                 GAME.main_music.set_volume(val)
+                GAME.save_settings()
             self.volume_slider = Slider(
                 self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * theme.pos("slider.music_y", 0.37)),
                 int(WIDTH * 0.21), int(HEIGHT * 0.01),
@@ -993,6 +1073,7 @@ class Menu:
             def on_sfx_change(val):
                 GAME.sfx_volume = val
                 GAME.update_sfx_volume()
+                GAME.save_settings()
             self.sfx_volume_slider = Slider(
                 self._slider_center_x(int(WIDTH * 0.21)), int(HEIGHT * theme.pos("slider.sfx_y", 0.44)),
                 int(WIDTH * 0.21), int(HEIGHT * 0.01),
@@ -1042,11 +1123,14 @@ class Button:
                     if self.function == "res_high":
                         set_resolution("high")
                         self.GAME.resolution = "high"
+                        self.GAME.save_settings()
                     elif self.function == "res_low":
                         set_resolution("low")
                         self.GAME.resolution = "low"
+                        self.GAME.save_settings()
                     elif self.function == "tutorial":
                         self.GAME.bilal.flags["general"] = not self.GAME.bilal.flags["general"]
+                        self.GAME.save_settings()
                     if self.target_state == "reset":
                         self.GAME.reset_game()
                     elif self.target_state == "Stop":

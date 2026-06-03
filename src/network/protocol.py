@@ -14,6 +14,7 @@ KEY_TO_ID = {
     "raw_data": 40, "skin_manifest": 41, "success": 42, "error": 43,
     "chunk": 44, "total": 45, "connected": 46, "max_players": 47,
     "host_name": 48, "players_connected": 49,
+    "countdown": 50, "game_active": 51, "ready": 52,
 }
 
 ID_TO_KEY = {v: k for k, v in KEY_TO_ID.items()}
@@ -24,7 +25,7 @@ PACKET_TYPE_TO_ID = {
     "skin_request": 8, "skin_upload": 9, "accept": 10, "state": 11,
     "lobby_info": 12, "game_start": 13, "skin_manifest_update": 14,
     "skin_data": 15, "skin_chunk": 16, "skin_upload_ack": 17,
-    "server_stopped": 18,
+    "server_stopped": 18, "countdown": 19, "join_game": 20, "ready": 21, "pong": 22,
 }
 
 ID_TO_PACKET_TYPE = {v: k for k, v in PACKET_TYPE_TO_ID.items()}

@@ -140,8 +140,13 @@ class ServerGame:
             "door_closed": False,
             "state": "game",
             "score": 0,
+            "ready": False,
         }
         self._last_player_seq[pid] = 0
+
+    def toggle_ready(self, pid):
+        if pid in self.players:
+            self.players[pid]["ready"] = not self.players[pid]["ready"]
 
     def set_skin(self, pid, skin_id):
         if pid in self.players:
@@ -169,6 +174,7 @@ class ServerGame:
         self.jan_spotted = False
         self.exit_pos = None
         self.initialized = False
+        self._post_transition_grace = 0
 
     def get_nearest_player_pos(self, enemy):
         nearest = None
@@ -322,6 +328,15 @@ class ServerGame:
         self.elevator_transition = False
         self._transition_timeout = 0
         self._post_transition_grace = 10
+
+    def get_spawn_position(self):
+        if not self.initialized:
+            return None
+        from ..core.map_loader import M
+        if M.SPAWNS and "player" in M.SPAWNS:
+            spawn = M.SPAWNS["player"]
+            return Vector(spawn[0], spawn[1])
+        return None
 
     def get_state(self):
         if not self.initialized:

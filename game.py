@@ -6,6 +6,7 @@ import pygame
 import random
 import time
 import os
+import json
 
 from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
                     SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
@@ -24,11 +25,13 @@ from src.entities.objects import PickupObject, PlayerSprite
 from src.assets.skin_manager import SkinManager
 from src.core.vector import Vector
 from src.network.network import NetworkClient
+from src.core.logger import log as _log
 
 
 class Game:
     def __init__(self):
         pygame.init()
+        pygame.key.set_repeat(400, 50)
         self.clock = pygame.time.Clock()
         self.running = False
         self.state = None
@@ -116,7 +119,38 @@ class Game:
         self._enemy_damage = []
         self._remove_pickup = []
 
+        self._load_settings()
+        from src.core.logger import clear_log
+        clear_log()
+        _log("Game started")
         self.state = "menu"
+
+    def _settings_path(self):
+        return os.path.join(os.path.dirname(__file__), "settings.json")
+
+    def save_settings(self):
+        data = {
+            "sfx_volume": self.sfx_volume,
+            "music_volume": self.music_volume,
+            "resolution": self.resolution,
+            "tutorial": self.bilal.flags["general"],
+        }
+        try:
+            with open(self._settings_path(), "w") as f:
+                json.dump(data, f)
+        except OSError:
+            pass
+
+    def _load_settings(self):
+        try:
+            with open(self._settings_path()) as f:
+                data = json.load(f)
+            self.sfx_volume = data.get("sfx_volume", self.sfx_volume)
+            self.music_volume = data.get("music_volume", self.music_volume)
+            self.resolution = data.get("resolution", self.resolution)
+            self.bilal.flags["general"] = data.get("tutorial", self.bilal.flags["general"])
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
 
     def _load_sounds(self):
         if self.main_music:
@@ -323,7 +357,7 @@ class Game:
                                     self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
                                     self.bilal.trigger("monster")
                         continue
-                    if self.state == "game":
+                    if self.state == "game" and self.player.door_pos == 0:
                         if self.multiplayer:
                             result = enemy.find_path(self.player, self, True, False)
                             if result is not None:
@@ -448,8 +482,10 @@ class Game:
 
         # Update and render projectiles
         self.projectiles = [p for p in self.projectiles if p.alive]
+        frozen = self.player.door_pos > 0
         for p in self.projectiles:
-            p.update(self.player, self)
+            if not frozen:
+                p.update(self.player, self)
             dist, screen_x, _, _ = p.get_render_data_fast(player_pos, player_angle, wall_distances)
             if dist is not None:
                 p.render_fast(dist, screen_x)
@@ -562,6 +598,16 @@ class Game:
         if self.network_client:
             self.network_client.send({"type": "start_game"})
 
+    def _toggle_ready(self):
+        _log(f"toggle_ready called, client={self.network_client}")
+        if self.network_client:
+            self.network_client.send({"type": "ready"})
+            _log("sent ready packet")
+
+    def _join_active_game(self):
+        if self.network_client:
+            self.network_client.send({"type": "join_game"})
+
     def _start_multiplayer_client(self, level=0):
         M.map_level = level
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[level])
@@ -605,6 +651,7 @@ class Game:
             self.multiplayer = True
             self.player_id = self.network_client.player_id
             self.player_name = name
+            self._last_server_packet = time.time()
             self.state = "waiting_lobby"
         else:
             self.Menu.mp_status = "Verbinding mislukt!"
@@ -640,6 +687,9 @@ class Game:
 
     def _send_client_state(self):
         """Send deltas to the server. Rate-limited to every 2 frames."""
+        if self.state == "dead":
+            self.network_client.send_input({"state": "dead"})
+            return
         if self.state not in ("game", "paused"):
             return
         self._pos_seq += 1
@@ -819,8 +869,22 @@ class Game:
                 if self.network_client:
                     packet = self.network_client.try_recv()
                     if packet:
+                        ptype = packet.get("type", "?")
+                        _log(f"recv: {ptype}")
+                        self._last_server_packet = time.time()
                         if packet.get("type") == "lobby_info":
-                            self.Menu.client_list = packet.get("players", [])
+                            players_raw = packet.get("players", [])
+                            self.Menu.client_list = players_raw
+                            self.Menu.lobby_game_active = packet.get("game_active", False)
+                            cd = packet.get("countdown", 0)
+                            if cd != self.Menu.lobby_countdown:
+                                self.Menu.lobby_countdown = cd
+                                self.Menu._cd_ticks = pygame.time.get_ticks()
+                            for p in players_raw:
+                                _log(f"  lobby info: pid={p.get('pid')} ready={p.get('ready')}")
+                                print(f"[CLIENT] lobby: P{p.get('pid')} ready={p.get('ready')}")
+                        elif packet.get("type") == "pong":
+                            pass
                         elif packet.get("type") == "game_start":
                             self._start_multiplayer_client(packet.get("level", 0))
                         elif packet.get("type") == "server_stopped":
@@ -829,9 +893,16 @@ class Game:
                             SkinManager.set_manifest(packet.get("skin_manifest", []))
                             SkinManager.start_background_download()
                     now = time.time()
-                    if now - getattr(self, '_last_lobby_ping', 0) > 2.0:
+                    if now - getattr(self, '_last_server_packet', now) > 30:
+                        self.Menu.mp_status = "Server verbinding verloren"
+                        self._disconnect()
+                    elif now - getattr(self, '_last_lobby_ping', 0) > 2.0:
                         self.network_client.send({"type": "ping"})
                         self._last_lobby_ping = now
+                for ev in events:
+                    if ev.type == pygame.KEYDOWN and ev.key == pygame.K_r:
+                        _log("R key pressed, toggling ready")
+                        self._toggle_ready()
                 self.Menu.draw_waiting_lobby(events, self)
 
             elif self.state == "game":
