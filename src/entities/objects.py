@@ -2,7 +2,7 @@ import pygame
 from math import atan2, hypot, tan, pi
 
 from ..core import config
-from ..core.config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN, SFX_VOLUME
+from ..core.config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN
 from ..core.vector import Vector
 from ..assets.skin_manager import SkinManager
 from ..core.paths import resolve_asset, load_font, load_numeric_font
@@ -159,9 +159,6 @@ class PlayerSprite(RenderObject):
         if skin_id != self._skin_id:
             self._skin_id = skin_id
             self._load_skin()
-
-    def take_damage(self, damage, game):
-        game.global_health -= damage
 
     def render_fast(self, dist, screen_x):
         super().render_fast(dist, screen_x)

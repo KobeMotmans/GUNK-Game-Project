@@ -11,9 +11,8 @@ KEY_TO_ID = {
     "level": 27, "escaped": 28, "elevator_ready": 29, "elevator_transition": 30,
     "elevator_wait_timer": 31, "jan_spotted": 32, "exit_pos": 33, "health": 34,
     "ammo": 35, "keycard": 36, "exit": 37, "pid": 38, "uploader": 39,
-    "raw_data": 40, "skin_manifest": 41, "success": 42, "error": 43,
-    "chunk": 44, "total": 45, "connected": 46, "max_players": 47,
-    "host_name": 48, "players_connected": 49,
+    "skin_manifest": 41, "success": 42, "error": 43,
+    "chunk": 44, "total": 45,
     "countdown": 50, "game_active": 51, "ready": 52,
 }
 
@@ -25,7 +24,7 @@ PACKET_TYPE_TO_ID = {
     "skin_request": 8, "skin_upload": 9, "accept": 10, "state": 11,
     "lobby_info": 12, "game_start": 13, "skin_manifest_update": 14,
     "skin_data": 15, "skin_chunk": 16, "skin_upload_ack": 17,
-    "server_stopped": 18, "countdown": 19, "join_game": 20, "ready": 21, "pong": 22,
+    "server_stopped": 18, "join_game": 20, "ready": 21, "pong": 22,
 }
 
 ID_TO_PACKET_TYPE = {v: k for k, v in PACKET_TYPE_TO_ID.items()}

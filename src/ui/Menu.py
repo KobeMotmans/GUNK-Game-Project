@@ -2,8 +2,8 @@ import os
 import pygame
 import tkinter as tk
 from tkinter import filedialog
-from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, TUTORIAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, SFX_VOLUME
-from ..core.paths import list_packs, set_packs, save_active_packs, load_active_packs, TEXTURE_PACKS, load_font, load_numeric_font, resolve_asset
+from ..core.config import HEIGHT, WIDTH, SCREEN, set_resolution, TUTORIAL, VICTORY_SCREEN, SCREEN_DEAD, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT
+from ..core.paths import list_packs, set_packs, save_active_packs, TEXTURE_PACKS, load_font, load_numeric_font, resolve_asset
 from ..core.theme import theme
 from collections import deque
 from ..core.map_loader import M
@@ -565,9 +565,16 @@ class Menu:
                 if pid == GAME.player_id:
                     my_ready = pd.get("ready", False) if isinstance(pd, dict) else False
                     break
-            ready_label = theme.string("lobby.ready_done", "✓ READY") if my_ready else theme.string("lobby.ready_up", "READY UP")
+            ready_label = theme.string("lobby.ready_done", "READY") if my_ready else theme.string("lobby.ready_up", "READY UP")
             self._draw_button_custom(events, ready_label,
                 WIDTH//2 - btn_w//2, btn_y, btn_w, int(HEIGHT * 0.05), toggle_ready)
+            if my_ready:
+                font = load_font(theme.size("button.custom_font", 28))
+                ts = font.render(ready_label, True, 'white')
+                cx = WIDTH//2 - ts.get_width()//2 - 18
+                cy = btn_y + int(HEIGHT * 0.05)//2
+                pts = [(cx, cy - 3), (cx + 5, cy + 4), (cx + 12, cy - 6)]
+                pygame.draw.lines(SCREEN, theme.color("lobby.ready_check", (0, 220, 0)), False, pts, 3)
 
         self._draw_button_custom(events, theme.string("lobby.disconnect", "DISCONNECT"), WIDTH//2 - int(WIDTH * 0.04),
             HEIGHT - int(HEIGHT * theme.pos("lobby.disconnect_btn_y", 0.07)), int(WIDTH * 0.08), int(HEIGHT * 0.03), dc)
@@ -653,7 +660,7 @@ class Menu:
 
         # Texture pack → pack selector
         self._draw_main_button(events,
-            theme.string("settings.texture_pack", "TEXTURE PACKS →"),
+            theme.string("settings.texture_pack", "TEXTURE PACKS >"),
             int(HEIGHT * theme.pos("settings.pack_btn_y", 0.66)),
             int(WIDTH * 0.14),
             lambda: self._open_pack_select(GAME),
@@ -1148,100 +1155,6 @@ class Button:
         tx = self.rect.x + (self.rect.w - text_surf.get_width()) // 2
         ty = self.rect.y + (self.rect.h - text_surf.get_height()) // 2
         SCREEN.blit(text_surf, (tx, ty))
-
-class Dropdown:
-    @staticmethod
-    def _expand_color(): return theme.color("dropdown.expand_color", (50, 60, 120))
-    @staticmethod
-    def _option_hover(): return theme.color("dropdown.option_hover", (70, 70, 90))
-    @staticmethod
-    def _option_bg(): return theme.color("dropdown.option_bg", (50, 50, 60))
-    @staticmethod
-    def _option_selected(): return theme.color("dropdown.option_selected", (40, 80, 120))
-    @staticmethod
-    def _border(): return theme.color("dropdown.border", (150, 150, 150))
-
-    def __init__(self, x, y, width, height, options, game, on_select=None):
-        self.x = x
-        self.y = y
-        self.w = width
-        self.h = height
-        self.options = options
-        self.game = game
-        self.on_select = on_select
-        self.selected_index = 0
-        self.expanded = False
-
-    def select(self, index):
-        if 0 <= index < len(self.options):
-            self.selected_index = index
-            self.expanded = False
-            val = self.options[index]["value"]
-            if self.on_select:
-                self.on_select(val)
-
-    def draw(self, events):
-        mouse = pygame.mouse.get_pos()
-        main_rect = pygame.Rect(self.x, self.y, self.w, self.h)
-        hover = main_rect.collidepoint(mouse)
-        font = load_font(int(self.h * 0.5), bold=True)
-
-        # Main box
-        bg = Dropdown._expand_color() if self.expanded else (theme.color("dropdown.hover_bg", (60, 60, 70)) if hover else theme.color("dropdown.bg", (40, 40, 40)))
-        pygame.draw.rect(SCREEN, bg, main_rect, border_radius=6)
-        pygame.draw.rect(SCREEN, Dropdown._border(), main_rect, 2, border_radius=6)
-
-        # Selected text
-        label = self.options[self.selected_index]["label"]
-        text_surf = font.render(label, True, theme.color("dropdown.text", 'white'))
-        SCREEN.blit(text_surf, (self.x + 10, self.y + (self.h - text_surf.get_height()) // 2))
-
-        # Arrow (drawn triangle to avoid unicode font issues)
-        ax = self.x + self.w - 18
-        ay = self.y + self.h // 2
-        if self.expanded:
-            pygame.draw.polygon(SCREEN, theme.color("dropdown.arrow", 'white'), [(ax, ay + 5), (ax - 6, ay - 4), (ax + 6, ay - 4)])
-        else:
-            pygame.draw.polygon(SCREEN, theme.color("dropdown.arrow", 'white'), [(ax, ay - 5), (ax - 6, ay + 4), (ax + 6, ay + 4)])
-
-        # Expanded options
-        if self.expanded:
-            opt_y = self.y + self.h + 4
-            for i, opt in enumerate(self.options):
-                opt_rect = pygame.Rect(self.x, opt_y, self.w, self.h)
-                opt_hover = opt_rect.collidepoint(mouse)
-                bg2 = Dropdown._option_selected() if i == self.selected_index else (Dropdown._option_hover() if opt_hover else Dropdown._option_bg())
-                pygame.draw.rect(SCREEN, bg2, opt_rect, border_radius=4)
-                pygame.draw.rect(SCREEN, Dropdown._border(), opt_rect, 1, border_radius=4)
-                opt_surf = font.render(opt["label"], True, theme.color("dropdown.text", 'white'))
-                SCREEN.blit(opt_surf, (self.x + 10, opt_y + (self.h - opt_surf.get_height()) // 2))
-                opt_y += self.h + 2
-
-        # Event handling
-        for ev in events:
-            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
-                if main_rect.collidepoint(mouse):
-                    self.expanded = not self.expanded
-                elif self.expanded:
-                    opt_y = self.y + self.h + 4
-                    clicked = False
-                    for i, opt in enumerate(self.options):
-                        opt_rect = pygame.Rect(self.x, opt_y, self.w, self.h)
-                        if opt_rect.collidepoint(mouse):
-                            self.select(i)
-                            clicked = True
-                            break
-                        opt_y += self.h + 2
-                    if not clicked:
-                        self.expanded = False
-
-    def sync_from_pack(self):
-        current = TEXTURE_PACKS[0] if TEXTURE_PACKS else None
-        for i, opt in enumerate(self.options):
-            if opt["value"] == current:
-                self.selected_index = i
-                break
-
 
 class Slider:
     def __init__(self, x, y, width, height, min_val, max_val, initial_val, label, game, on_change=None):

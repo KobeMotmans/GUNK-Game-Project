@@ -5,7 +5,7 @@ enemies.py - Vijand klassen en rendering
 import pygame
 from math import atan2, hypot, cos, sin
 
-from ..core.config import SCREEN, WIDTH, HEIGHT, AGGRO_DIST, PATHFIND_INTERVAL, ATTACK_DIST, SFX_VOLUME, SPRITE_SIZE, PROJ_DIST
+from ..core.config import SCREEN, WIDTH, HEIGHT, AGGRO_DIST, PATHFIND_INTERVAL, ATTACK_DIST, SPRITE_SIZE, PROJ_DIST, TILE_SIZE
 from ..core.vector import Vector
 from ..core.paths import load_font, resolve_asset
 from ..core.theme import theme
@@ -15,8 +15,7 @@ from .enemy_ai import EnemyAI
 
 class Enemy(EnemyAI, RenderObject):
     def __init__(self, health, damage, speed, enemy_type, x, y):
-        self.path = f"enemies/{enemy_type}"
-        super().__init__(self.path, x, y)
+        super().__init__(f"enemies/{enemy_type}", x, y)
         self.max_health = health
         self.health = health
         self.speed = speed
@@ -162,11 +161,19 @@ class Fireball(RenderObject):
     def update(self, player, game):
         self.pos.x += cos(self.angle) * self.speed
         self.pos.y += sin(self.angle) * self.speed
-        px = int(self.pos.x)
-        py = int(self.pos.y)
-        if 0 <= py < len(game.map) and 0 <= px < len(game.map[0]):
+        r = self.size // 2
+        for cx, cy in [(self.pos.x - r, self.pos.y - r),
+                       (self.pos.x + r, self.pos.y - r),
+                       (self.pos.x - r, self.pos.y + r),
+                       (self.pos.x + r, self.pos.y + r)]:
+            px = int(cx // TILE_SIZE)
+            py = int(cy // TILE_SIZE)
+            if py < 0 or py >= len(game.map) or px < 0 or px >= len(game.map[0]):
+                self.alive = False
+                break
             if game.map[py][px] == 1:
                 self.alive = False
+                break
         if (self.pos - player.pos).norm() < self.size / 2 + SPRITE_SIZE / 2:
             player.take_damage(2, game)
             if Fireball._fire_sound is None:

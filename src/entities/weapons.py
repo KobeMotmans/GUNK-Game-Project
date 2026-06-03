@@ -10,18 +10,14 @@ from ..core.paths import resolve_asset
 from ..core.theme import theme
 from ..assets.texture_cache import get as get_cached_texture
 
-# Sound init
-pygame.mixer.init()
-
 class Gun:
-    def __init__(self, damage, recoil_speed, shoot_speed, ammo_weight, guntype, default_sound, auto=False):
+    def __init__(self, damage, recoil_speed, shoot_speed, ammo_weight, guntype, default_sound):
         self.damage = damage
         self.recoil_speed = recoil_speed
         self.weapon_state = 0
         self.ammo_weight = ammo_weight
         self.flash_time = shoot_speed
         self.recoil_time = recoil_speed
-        self.auto = auto
         self.guntype = guntype
         self.default_sound = default_sound
 
@@ -49,7 +45,7 @@ class Gun:
         weapon_size = theme.get("sizes.weapon.texture", (300, 300))
         return get_cached_texture(path, weapon_size)
 
-    def shoot(self, pos, angle, enemies, player, current_gun, apply_damage=True):
+    def shoot(self, pos, angle, enemies, apply_damage=True):
         """Start schiet animatie als wapen in rust is. Returnt hit enemy pos of None."""
         if self.weapon_state == 0:
             self.weapon_state = 1
@@ -68,7 +64,6 @@ class Gun:
                             return i, (enemy.pos.x, enemy.pos.y)
                 else:
                     continue
-                break
         return None
 
     def update(self):
@@ -108,5 +103,5 @@ class Rifle(Gun):
         super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "rifle", "musket.ogg")
 
 class Minigun(Gun):
-    def __init__(self, damage=0.75, recoil_speed=0, shoot_speed=5, ammo_weight=1, auto=True):
-        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", "minigun.ogg", auto)
+    def __init__(self, damage=0.75, recoil_speed=0, shoot_speed=5, ammo_weight=1):
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "minigun", "minigun.ogg")

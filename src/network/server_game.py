@@ -4,7 +4,6 @@ Runs enemy AI, maintains world state, processes client deltas.
 """
 
 import random
-from math import pi
 
 from ..core.vector import Vector
 from ..core.map_loader import M
@@ -280,7 +279,7 @@ class ServerGame:
             all_done = all(
                 pdata["door_closed"]
                 for pdata in self.players.values()
-                if pdata["state"] != "dead"
+                if pdata["state"] not in ("dead", "paused")
             ) or self._transition_timeout > 180
             if all_done:
                 self._level_up()
@@ -294,7 +293,7 @@ class ServerGame:
         if self.elevator_waiting and not self.elevator_ready and self.exit_pos:
             all_near = True
             for pdata in self.players.values():
-                if pdata["state"] == "dead":
+                if pdata["state"] in ("dead", "paused"):
                     continue
                 dist = (pdata["pos"] - self.exit_pos).norm()
                 if dist >= ELEVATOR_WAIT_DIST:

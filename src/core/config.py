@@ -50,7 +50,6 @@ def set_resolution(quality: str):
     DELTA_ANGLE = FOV / NUM_RAYS
 
 # Speler instellingen
-PLAYER_RADIUS = 10
 PLAYER_SPEED = 6
 PLAYER_ROT_SPEED = 0.0008
 
@@ -65,7 +64,6 @@ ATTACK_DIST = 43
 PATHFIND_INTERVAL = 20
 
 # Wapen instellingen
-WEAPON_SIZE = (300, 300)
 WEAPON_OFFSET_X = 0.04  # 4% van schermbreedte
 
 #Object instellingen
@@ -77,9 +75,6 @@ HEALTH_REGEN = 2
 START_AMMO = 100
 AMMO_CAP = 200
 
-
-
-MENU_BG = (70,70,70)
 
 if not _HEADLESS:
     SCREEN_FLASH = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.damage_flash", "textures/ui/Damage_Flash.png"))).convert_alpha(), (WIDTH, HEIGHT))

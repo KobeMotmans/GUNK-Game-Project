@@ -8,7 +8,6 @@ from ..core.paths import asset_path, appdata_path
 from ..network.protocol import encode_packet, decode_packet
 
 BUILTIN_MAX = 99
-CUSTOM_MIN = 100
 
 def _get_builtin_dir():
     return asset_path(os.path.join("assets", "players"))
@@ -207,6 +206,4 @@ class SkinManager:
     def clear_completed_downloads(cls):
         cls._download_completed.clear()
 
-    @classmethod
-    def clear_cache(cls):
-        cls._cache.clear()
+

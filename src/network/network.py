@@ -6,11 +6,11 @@ zijn gelijk.
 
 import socket
 import threading
-import queue
 import time
 import json
 import os
 import io
+import tempfile
 
 import pygame
 
@@ -19,7 +19,6 @@ from ..core.logger import log as _log
 
 
 def _save_surface_as_png(img):
-    import tempfile
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmpf:
         tmp_path = tmpf.name
     try:
@@ -60,11 +59,7 @@ class ServerIO(threading.Thread):
         from .server_game import ServerGame
         self.server_game = ServerGame()
 
-        # Lobby updates for lobby phase
-        self.lobby_updates = queue.Queue()
 
-        # Host name for lobby
-        self.host_name = "Host"
 
         # Stale client tracking
         self.last_seen = {}
@@ -221,8 +216,6 @@ class ServerIO(threading.Thread):
                             ), addr)
                         except OSError:
                             pass
-                    if total > 50:
-                        print(f"[SERVER] sent skin {req_skin_id}: {total} chunks, {len(raw)} bytes")
                 else:
                     resp = {"type": "skin_data", "skin_id": req_skin_id, "data": None}
                     self.udp_socket.sendto(encode_packet(resp), addr)
@@ -244,7 +237,6 @@ class ServerIO(threading.Thread):
                     else:
                         if len(self.clients) < self.max_players:
                             self.clients.append((addr, pid, name))
-                            self.lobby_updates.put(("player_joined", pid, name))
                             should_broadcast = True
                             self.server_game.register_player(pid, name, skin_id)
                             if game_already_started:
@@ -300,7 +292,6 @@ class ServerIO(threading.Thread):
                 self.last_seen.pop(pid, None)
                 self.inputs.pop(pid, None)
                 self.server_game.remove_player(pid)
-                self.lobby_updates.put(("player_left", pid, ""))
                 if self.countdown > 0:
                     self.countdown = 0
                 if should_reset:
@@ -333,12 +324,10 @@ class ServerIO(threading.Thread):
                         if self.countdown <= 0:
                             self.countdown = 180
                             _log(f"countdown started: {self.countdown}")
-                            print(f"[SERVER] countdown started: {self.countdown}")
                     else:
                         if self.countdown > 0:
                             self.countdown = 0
                             _log("countdown cancelled")
-                            print("[SERVER] countdown cancelled")
                 players = self.get_lobby_players()
                 # Direct unicast response to sender FIRST, then broadcast
                 direct_resp = {"type": "lobby_info", "players": players}
@@ -414,9 +403,6 @@ class ServerIO(threading.Thread):
                 except OSError:
                     pass
 
-    def set_host_name(self, name):
-        self.host_name = name
-
     def _cleanup_stale(self):
         now = time.time()
         for token, info in list(self._pending_connect.items()):
@@ -434,7 +420,6 @@ class ServerIO(threading.Thread):
                 self.last_seen.pop(pid, None)
                 self.inputs.pop(pid, None)
                 self.server_game.remove_player(pid)
-                self.lobby_updates.put(("player_left", pid, name))
             should_reset = len(self.clients) == 0 and stale
         if should_reset:
             self.server_game.reset_to_lobby()
@@ -451,13 +436,11 @@ class ServerIO(threading.Thread):
         if self.countdown > 0 and not self.server_game.initialized:
             self.countdown -= 1
             if self.countdown <= 0:
-                print("[SERVER] countdown reached 0, starting game...")
                 try:
                     self.server_game.init_world()
                     self._broadcast_game_start()
-                    print("[SERVER] game_start broadcast sent")
                 except Exception as e:
-                    print(f"[SERVER] ERROR in countdown init: {e}")
+                    _log(f"[SERVER] ERROR in countdown init: {e}")
 
     def _broadcast_game_start(self):
         game_start_packet = encode_packet({"type": "game_start", "level": self.server_game.level})

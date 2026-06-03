@@ -47,11 +47,6 @@ def set_packs(names):
                 _pack_config = json.load(f)
 
 
-def set_pack(pack_name):
-    """Backward compat: zet één pack."""
-    set_packs([pack_name] if pack_name else [])
-
-
 def save_active_packs(names):
     with open(_PACK_CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump({"active_packs": names}, f)

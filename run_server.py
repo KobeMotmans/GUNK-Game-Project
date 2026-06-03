@@ -24,7 +24,6 @@ def main():
                 pass
 
     server = ServerIO(port, max_players=4)
-    server.set_host_name("Server")
     server.start()
     print(f"[SERVER] Gestart op poort {port}")
     print(f"[SERVER] Druk Ctrl+C om te stoppen")

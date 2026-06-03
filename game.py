@@ -8,10 +8,9 @@ import time
 import os
 import json
 
-from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, AMMO_CAP, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
-                    SCREEN_DEAD, START_HEALTH, ELEV_SPEED, MAX_LEVEL, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE, 
-                    set_resolution, VICTORY_SCREEN, MENU_BG, ELEV_TIME, MAX_DEPTH,
-                    ELEVATOR_WAIT_DIST, ELEVATOR_WAIT_FRAMES)
+from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
+                    START_HEALTH, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE,
+                    set_resolution, ELEVATOR_WAIT_DIST)
 from src.core.paths import resolve_asset, load_font, init_packs
 from src.core.theme import theme
 from src.core.raycaster import dda
@@ -25,7 +24,7 @@ from src.entities.objects import PickupObject, PlayerSprite
 from src.assets.skin_manager import SkinManager
 from src.core.vector import Vector
 from src.network.network import NetworkClient
-from src.core.logger import log as _log
+from src.core.logger import log as _log, clear_log
 
 
 class Game:
@@ -97,6 +96,8 @@ class Game:
         self.network_server = None
         self.network_client = None
         self.remote_players = []
+        self.objects = {}
+        self.projectiles = []
 
         # Elevator wait (multiplayer)
         self.keycard_acquired = False
@@ -112,6 +113,8 @@ class Game:
 
         # Pos update rate limiting
         self._pos_seq = 0
+        self._last_server_packet = 0
+        self._last_lobby_ping = 0
 
         # Delta accumulatoren voor server sync
         self._health_delta = 0
@@ -120,7 +123,10 @@ class Game:
         self._remove_pickup = []
 
         self._load_settings()
-        from src.core.logger import clear_log
+        self.update_sfx_volume()
+        if self.main_music:
+            self.main_music.set_volume(self.music_volume)
+        set_resolution(self.resolution)
         clear_log()
         _log("Game started")
         self.state = "menu"
@@ -221,10 +227,10 @@ class Game:
 
     def create_objects(self):
         objects = {
+            "exit": PickupObject("objects/exit", M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1]),
             "enemies": self.create_enemies(),
             "ammo": [],
             "keycard": [],
-            "exit": PickupObject("objects/exit", M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1]),
             "health": []
         }
         for ammo_pos in M.SPAWNS["ammo"]:
@@ -232,7 +238,6 @@ class Game:
         if M.SPAWNS["keycard"]:
             keycard_pos = M.SPAWNS["keycard"][random.randint(0, len( M.SPAWNS["keycard"])-1)]
             objects["keycard"].append(PickupObject("objects/keycard", keycard_pos[0], keycard_pos[1]))
-            print("Chosen keycard pos:", keycard_pos)
         
         return objects
 
@@ -263,7 +268,7 @@ class Game:
                                 if not self.multiplayer:
                                     self.global_ammo -= self.current_gun.ammo_weight
                                 self._ammo_delta -= self.current_gun.ammo_weight
-                                hit = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]),self.player,self.current_gun, apply_damage=True)
+                                hit = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]), apply_damage=True)
                                 if hit:
                                     idx, pos = hit
                                     self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
@@ -287,7 +292,7 @@ class Game:
             self.state = None
             pygame.quit()
 
-        if self.state == "game" and not self.escaped:
+        if self.state == "game" and not self.escaped and self.player.door_pos == 0:
             # === UNIFIED: all players move and auto-fire locally ===
             self.player.rotate(pygame.mouse.get_rel()[0])
             pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
@@ -307,7 +312,7 @@ class Game:
                         if not self.multiplayer:
                             self.global_ammo -= self.current_gun.ammo_weight
                         self._ammo_delta -= self.current_gun.ammo_weight
-                        hit = self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), self.player, self.current_gun, apply_damage=True)
+                        hit = self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), apply_damage=True)
                         if hit:
                             idx, pos = hit
                             self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
@@ -516,12 +521,6 @@ class Game:
                 paths.append((path, weapon_size))
         return paths
 
-    def _preload_textures(self, target_state):
-        self.Menu.loading_progress = 0
-        self.Menu.draw_loading_screen(0, "Loading textures...")
-        preload_textures(self._get_all_texture_paths(), lambda p, path: self.Menu.draw_loading_screen(p, os.path.basename(path)))
-        self.state = target_state
-
     def reset_game(self):
         self.multiplayer = False
         self.player_id = 0
@@ -592,12 +591,6 @@ class Game:
 
     #  Multiplayer methods 
 
-    def _primary_start_game(self):
-        """Primary client (player_id=0) sends start_game to server.
-        Server broadcasts 'game_start' to ALL clients, including this one."""
-        if self.network_client:
-            self.network_client.send({"type": "start_game"})
-
     def _toggle_ready(self):
         _log(f"toggle_ready called, client={self.network_client}")
         if self.network_client:
@@ -663,7 +656,6 @@ class Game:
         if self.network_client:
             for _ in range(3):
                 self.network_client.send({"type": "disconnect"})
-            import time
             time.sleep(0.05)
             self.network_client.disconnect()
             self.network_client = None
@@ -812,6 +804,7 @@ class Game:
             self.player_near_exit = False
             self.player.got_keycard = False
             self.keycard_acquired = False
+            self.projectiles = []
             self.exit_pos = None
         self.state = state.get("state", self.state)
         self.escaped = state.get("escaped", self.escaped)
@@ -855,7 +848,6 @@ class Game:
         set_resolution("high")
         self.running = True
         self.state = "menu"
-        self.credits_height = HEIGHT
         while self.running:
             events = self.handle_events()
             self.handle_input()
@@ -882,7 +874,7 @@ class Game:
                                 self.Menu._cd_ticks = pygame.time.get_ticks()
                             for p in players_raw:
                                 _log(f"  lobby info: pid={p.get('pid')} ready={p.get('ready')}")
-                                print(f"[CLIENT] lobby: P{p.get('pid')} ready={p.get('ready')}")
+                
                         elif packet.get("type") == "pong":
                             pass
                         elif packet.get("type") == "game_start":
@@ -893,10 +885,10 @@ class Game:
                             SkinManager.set_manifest(packet.get("skin_manifest", []))
                             SkinManager.start_background_download()
                     now = time.time()
-                    if now - getattr(self, '_last_server_packet', now) > 30:
+                    if now - self._last_server_packet > 30:
                         self.Menu.mp_status = "Server verbinding verloren"
                         self._disconnect()
-                    elif now - getattr(self, '_last_lobby_ping', 0) > 2.0:
+                    elif now - self._last_lobby_ping > 2.0:
                         self.network_client.send({"type": "ping"})
                         self._last_lobby_ping = now
                 for ev in events:

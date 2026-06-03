@@ -3,7 +3,7 @@ from math import atan2, hypot, cos, sin
 
 from ..core.vector import Vector
 from ..core.map_loader import map_to_cord, cord_to_map, is_in_wall, will_collide, M
-from ..core.config import MAX_DEPTH, TILE_SIZE, PATHFIND_INTERVAL, AGGRO_DIST, ATTACK_DIST
+from ..core.config import MAX_DEPTH, TILE_SIZE
 
 
 class EnemyAI:

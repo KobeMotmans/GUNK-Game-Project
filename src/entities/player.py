@@ -4,7 +4,7 @@ player.py - Speler klasse met movement en rotatie
 import pygame
 from math import sin, cos, pi
 
-from ..core.config import PLAYER_SPEED, PLAYER_ROT_SPEED, MAX_DEPTH, START_HEALTH, START_ANGLES, SFX_VOLUME
+from ..core.config import PLAYER_SPEED, PLAYER_ROT_SPEED, START_HEALTH, START_ANGLES
 from ..core.map_loader import will_collide
 from ..core.vector import Vector
 
@@ -17,9 +17,7 @@ class Player:
         self.inv_time = 0
         self.death = False
         self.score = 0
-        self.ammo = 0
         self.got_keycard = False
-        self.level = 0
         self.door_pos = 0
 
     def rotate(self, direction):
