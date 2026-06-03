@@ -19,6 +19,12 @@ class Vector:
         except:
             return Vector(self.x * other, self.y * other)  # Scale
 
+    def __truediv__(self, other):
+        return Vector(self.x / other, self.y / other)
+
+    def __floordiv__(self, other):
+        return Vector(int(self.x // other), int(self.y // other))
+
     def norm(self):
         return (self.x ** 2 + self.y ** 2) ** 0.5
 
