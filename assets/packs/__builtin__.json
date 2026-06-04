@@ -24,7 +24,7 @@
       "fast_enemy": "textures/enemies/ahmed.png",
       "tank_enemy": "textures/enemies/ruben.png",
       "final_boss": "textures/enemies/jan.png",
-      "projectile": "textures/enemies/projectile.png"
+      "projectile": "textures/enemies/fireball.png"
     },
     "objects": {
       "ammo": "textures/objects/ammo.png",
