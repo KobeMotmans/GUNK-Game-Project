@@ -73,7 +73,7 @@
       "pistol": "sounds/sfx/pistol.ogg",
       "rifle": "sounds/sfx/musket.ogg",
       "minigun": "sounds/sfx/minigun.ogg",
-      "tank_enemy": "proj_fire.mp3",
+      "tank_enemy": "sounds/sfx/fireball.ogg",
       "proj_hit": "proj_hit.mp3"
     }
   }
