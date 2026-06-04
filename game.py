@@ -99,10 +99,11 @@ class Game:
         self.objects = {}
         self.projectiles = []
 
-        # Elevator wait (multiplayer)
+        # Elevator
         self.keycard_acquired = False
         self.elevator_waiting = False
         self.elevator_ready = False
+        self.elevator_locked = False
         self.elevator_wait_timer = 0
         self.player_near_exit = False
         self.exit_pos = None
@@ -292,7 +293,7 @@ class Game:
             self.state = None
             pygame.quit()
 
-        if self.state == "game" and not self.escaped and self.player.door_pos == 0:
+        if self.state == "game" and not self.escaped and not self.elevator_locked:
             # === UNIFIED: all players move and auto-fire locally ===
             self.player.rotate(pygame.mouse.get_rel()[0])
             pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
@@ -362,7 +363,7 @@ class Game:
                                     self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
                                     self.bilal.trigger("monster")
                         continue
-                    if self.state == "game" and self.player.door_pos == 0:
+                    if self.state == "game" and not self.elevator_locked:
                         if self.multiplayer:
                             result = enemy.find_path(self.player, self, True, False)
                             if result is not None:
@@ -487,7 +488,7 @@ class Game:
 
         # Update and render projectiles
         self.projectiles = [p for p in self.projectiles if p.alive]
-        frozen = self.player.door_pos > 0
+        frozen = self.elevator_locked
         for p in self.projectiles:
             if not frozen:
                 p.update(self.player, self)
@@ -548,6 +549,7 @@ class Game:
         self.projectiles = []
         self.elevator_waiting = False
         self.elevator_ready = False
+        self.elevator_locked = False
         self.elevator_transition = False
         self.elevator_wait_timer = 0
         self.player_near_exit = False
@@ -584,6 +586,7 @@ class Game:
         self.projectiles = []
         self.elevator_waiting = False
         self.elevator_ready = False
+        self.elevator_locked = False
         self.elevator_transition = False
         self.elevator_wait_timer = 0
         self.player_near_exit = False
@@ -618,6 +621,7 @@ class Game:
         self.escaped = False
         self.elevator_waiting = False
         self.elevator_ready = False
+        self.elevator_locked = False
         self.elevator_transition = False
         self.elevator_wait_timer = 0
         self.exit_pos = None

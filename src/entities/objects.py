@@ -118,7 +118,8 @@ class PickupObject(RenderObject):
             game.sounds["key"].play()
         if self.type == "objects/exit":
             if player.got_keycard:
-                player.door_pos  = 1
+                player.door_pos = 1
+                game.elevator_locked = True
             else:
                 self.font = load_font(80, bold=True)
                 no_kc = self.font.render(theme.string("hud.no_keycard", "NO KEYCARD"), True,'green')
