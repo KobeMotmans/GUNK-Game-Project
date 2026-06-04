@@ -83,6 +83,10 @@ class ServerGame:
         self.initialized = False
         self._last_player_seq = {}
 
+        # Lobby options (shared vs per-player resources)
+        self.shared_health = True
+        self.shared_ammo = True
+
     def _setup_level(self):
         from ..core.map_loader import png_to_list_fast
         M.map_level = self.level
@@ -128,6 +132,14 @@ class ServerGame:
         for pid in self._last_player_seq:
             self._last_player_seq[pid] = 0
         self.initialized = True
+        # Reset per-player resources to starting values
+        for pdata in self.players.values():
+            pdata["health"] = START_HEALTH
+            pdata["ammo"] = START_AMMO
+
+    def set_shared_options(self, options):
+        self.shared_health = options.get("shared_health", True)
+        self.shared_ammo = options.get("shared_ammo", True)
 
     def register_player(self, pid, name, skin_id=0):
         self.players[pid] = {
@@ -140,6 +152,8 @@ class ServerGame:
             "state": "game",
             "score": 0,
             "ready": False,
+            "health": START_HEALTH,
+            "ammo": START_AMMO,
         }
         self._last_player_seq[pid] = 0
 
@@ -214,11 +228,21 @@ class ServerGame:
         if "pos" in data:
             p["pos"] = Vector(data["pos"][0], data["pos"][1])
         if "health_delta" in data:
-            self.global_health += data["health_delta"]
-            self.global_health = max(0, self.global_health)
+            delta = data["health_delta"]
+            if self.shared_health:
+                self.global_health += delta
+                self.global_health = max(0, self.global_health)
+            else:
+                p["health"] += delta
+                p["health"] = max(0, p["health"])
         if "ammo_delta" in data:
-            self.global_ammo += data["ammo_delta"]
-            self.global_ammo = max(0, min(AMMO_CAP, self.global_ammo))
+            delta = data["ammo_delta"]
+            if self.shared_ammo:
+                self.global_ammo += delta
+                self.global_ammo = max(0, min(AMMO_CAP, self.global_ammo))
+            else:
+                p["ammo"] += delta
+                p["ammo"] = max(0, min(AMMO_CAP, p["ammo"]))
         if "got_keycard" in data:
             if data["got_keycard"] and self._post_transition_grace <= 0:
                 self.keycard_acquired = True
@@ -255,9 +279,15 @@ class ServerGame:
                     if abs(obj["pos"][0] - pos[0]) < 2 and abs(obj["pos"][1] - pos[1]) < 2:
                         self.objects[ot].pop(i)
                         if ot == "ammo":
-                            self.global_ammo = min(self.global_ammo + 50, AMMO_CAP)
+                            if self.shared_ammo:
+                                self.global_ammo = min(self.global_ammo + 50, AMMO_CAP)
+                            else:
+                                p["ammo"] = min(p["ammo"] + 50, AMMO_CAP)
                         elif ot == "health":
-                            self.global_health = min(self.global_health + HEALTH_REGEN, START_HEALTH)
+                            if self.shared_health:
+                                self.global_health = min(self.global_health + HEALTH_REGEN, START_HEALTH)
+                            else:
+                                p["health"] = min(p["health"] + HEALTH_REGEN, START_HEALTH)
                         elif ot == "keycard":
                             if self._post_transition_grace <= 0:
                                 self.keycard_acquired = True
@@ -353,7 +383,9 @@ class ServerGame:
                          "skin_id": p["skin_id"],
                          "got_keycard": p["got_keycard"],
                          "state": p["state"],
-                         "score": p["score"]}
+                         "score": p["score"],
+                         "health": p.get("health", START_HEALTH),
+                         "ammo": p.get("ammo", START_AMMO)}
                         for pid, p in self.players.items()],
             "enemies": [{"pos": (e.pos.x, e.pos.y), "health": e.health, "type": e.type}
                         for e in self.enemies],

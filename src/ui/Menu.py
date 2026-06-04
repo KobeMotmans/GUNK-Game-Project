@@ -50,6 +50,8 @@ class Menu:
         self.client_list = []
         self.lobby_countdown = 0
         self.lobby_game_active = False
+        self.host_pid = -1
+        self.lobby_options = {"shared_health": True, "shared_ammo": True}
         self.waiting_text = theme.string("multiplayer.connecting", "Verbinden...")
         self.mp_status = ""
         self._skin_thumbnails = {}
@@ -304,6 +306,7 @@ class Menu:
             ready = pd.get("ready", False) if isinstance(pd, dict) else False
             if not ready:
                 all_ready = False
+            is_host = (pid == self.host_pid if self.host_pid >= 0 else False)
             color = theme.color("player.highlight", (0, 200, 255)) if pid == GAME.player_id else theme.color("text.title", (255, 255, 255))
             if skin_id not in self._skin_thumbnails or self._skin_thumbnails[skin_id].get_width() != thumb_size:
                 self._skin_thumbnails[skin_id] = SkinManager.create_thumbnail(skin_id, (thumb_size, thumb_size))
@@ -311,7 +314,11 @@ class Menu:
             ready_text = theme.string("lobby.ready", "READY") if ready else theme.string("lobby.not_ready", "NOT READY")
             ready_color = theme.color("lobby.ready", (0, 200, 0)) if ready else theme.color("lobby.not_ready", (200, 80, 80))
             ready_surf = load_font(16).render(ready_text, True, ready_color)
-            p_text = load_numeric_font(26).render(f"[P{pid}] {name}", True, color)
+            label = f"[P{pid}] {name}"
+            if is_host:
+                label += " (HOST)"
+                color = (255, 220, 0)  # gold for host
+            p_text = load_numeric_font(26).render(label, True, color)
             SCREEN.blit(p_text, (left_x + thumb_size + 10, y_left))
             SCREEN.blit(ready_surf, (left_x + thumb_size + 10, y_left + 28))
             y_left += theme.size("lobby.player_row_gap", int(HEIGHT * 0.055))
@@ -516,6 +523,11 @@ class Menu:
                     if self._skin_next_rect and self._skin_next_rect.collidepoint(mouse) and self._skin_next_page:
                         self._skin_page += 1
 
+                for opt_key, opt_rect in getattr(self, '_lobby_option_rects', []):
+                    if opt_rect.collidepoint(mouse):
+                        new_val = not self.lobby_options.get(opt_key, True)
+                        GAME._set_lobby_option(opt_key, new_val)
+
         # ── Countdown banner ───────────────────────────────────────────
         if self.lobby_countdown > 0:
             elapsed_ms = pygame.time.get_ticks() - getattr(self, '_cd_ticks', 0)
@@ -526,6 +538,36 @@ class Menu:
                 count_text = theme.string("lobby.countdown", "STARTING IN {s}...").format(s=seconds)
                 count_surf = load_font(40).render(count_text, True, theme.color("lobby.countdown", (255, 200, 0)))
                 SCREEN.blit(count_surf, (WIDTH//2 - count_surf.get_width()//2, int(HEIGHT * 0.12)))
+
+        # ── Lobby settings (host only) ─────────────────────────────────
+        if not self.lobby_game_active:
+            opts = self.lobby_options if hasattr(self, 'lobby_options') else {}
+            is_host = GAME.is_host if hasattr(GAME, 'is_host') else False
+            sx = int(WIDTH * 0.55)
+            sy = int(HEIGHT * 0.55)
+            set_font = load_font(18)
+            set_label = set_font.render("LOBBY SETTINGS", True, theme.color("text.subtitle", (200, 200, 200)))
+            SCREEN.blit(set_label, (sx, sy))
+            sy += 26
+
+            self._lobby_option_rects = []
+            for opt_key, opt_display in [("shared_health", "Shared Health"), ("shared_ammo", "Shared Ammo")]:
+                val = opts.get(opt_key, True)
+                txt = f"{opt_display}: {'ON' if val else 'OFF'}"
+                col = theme.color("lobby.ready", (0, 200, 0)) if val else theme.color("lobby.not_ready", (200, 80, 80))
+                rect = pygame.Rect(sx, sy, int(WIDTH * 0.14), 24)
+                if is_host:
+                    hover = rect.collidepoint(mouse)
+                    bg = theme.color("button.hover_bg", (80, 80, 80)) if hover else theme.color("button.bg", (60, 60, 60))
+                    pygame.draw.rect(SCREEN, bg, rect, border_radius=4)
+                    if hover:
+                        pygame.draw.rect(SCREEN, (180, 180, 180), rect, 1, border_radius=4)
+                    self._lobby_option_rects.append((opt_key, rect))
+                else:
+                    pygame.draw.rect(SCREEN, (40, 40, 40), rect, border_radius=4)
+                opt_surf = set_font.render(txt, True, col)
+                SCREEN.blit(opt_surf, (sx + 6, sy + 3))
+                sy += 30
 
         # ── Debug overlay ──────────────────────────────────────────────
         debug_parts = ["DEBUG"]
@@ -539,6 +581,8 @@ class Menu:
             debug_parts.append("no players")
         debug_parts.append(f"cd={self.lobby_countdown}")
         debug_parts.append(f"act={'YES' if self.lobby_game_active else 'no'}")
+        if hasattr(GAME, 'host_pid'):
+            debug_parts.append(f"host=P{GAME.host_pid}")
         debug_surf = load_font(16).render(" | ".join(debug_parts), True, (255, 255, 0))
         SCREEN.blit(debug_surf, (int(WIDTH * 0.02), int(HEIGHT * 0.05)))
 

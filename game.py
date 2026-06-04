@@ -96,6 +96,9 @@ class Game:
         self.network_server = None
         self.network_client = None
         self.remote_players = []
+        self.host_pid = -1
+        self.lobby_options = {"shared_health": True, "shared_ammo": True}
+        self.is_host = False
         self.objects = {}
         self.projectiles = []
 
@@ -595,10 +598,12 @@ class Game:
     #  Multiplayer methods 
 
     def _toggle_ready(self):
-        _log(f"toggle_ready called, client={self.network_client}")
         if self.network_client:
             self.network_client.send({"type": "ready"})
-            _log("sent ready packet")
+
+    def _set_lobby_option(self, key, value):
+        if self.network_client and self.is_host:
+            self.network_client.send({"type": "set_lobby_option", "option_key": key, "option_value": value})
 
     def _join_active_game(self):
         if self.network_client:
@@ -618,6 +623,8 @@ class Game:
         self.remote_players = []
         self.final_boss = None
         self.final_boss_spotted = False
+        self.host_pid = -1
+        self.is_host = False
         self.escaped = False
         self.elevator_waiting = False
         self.elevator_ready = False
@@ -713,14 +720,31 @@ class Game:
         if not state:
             return
 
+        # 0. Lobby options (from server state during game)
+        opts = state.get("lobby_options")
+        if opts:
+            self.lobby_options = opts
+
         # 1. Overwrite shared resources from server (absolute values)
-        self.global_health = state.get("global_health", self.global_health)
-        self.global_ammo = state.get("global_ammo", self.global_ammo)
+        players_data = state.get("players", [])
+        if self.lobby_options.get("shared_health", True):
+            self.global_health = state.get("global_health", self.global_health)
+        else:
+            for pdata in players_data:
+                if pdata.get("id") == self.player_id:
+                    self.global_health = pdata.get("health", self.global_health)
+                    break
+        if self.lobby_options.get("shared_ammo", True):
+            self.global_ammo = state.get("global_ammo", self.global_ammo)
+        else:
+            for pdata in players_data:
+                if pdata.get("id") == self.player_id:
+                    self.global_ammo = pdata.get("ammo", self.global_ammo)
+                    break
         self.keycard_acquired = state.get("keycard_acquired", False)
         self.player.got_keycard = state.get("keycard_acquired", self.player.got_keycard)
 
         # 2. Players — sync own state flags from server (not pos/angle — client-authoritative movement)
-        players_data = state.get("players", [])
         for pdata in players_data:
             if pdata.get("id") == self.player_id:
                 self.player.score = pdata.get("score", self.player.score)
@@ -876,9 +900,18 @@ class Game:
                             if cd != self.Menu.lobby_countdown:
                                 self.Menu.lobby_countdown = cd
                                 self.Menu._cd_ticks = pygame.time.get_ticks()
+                            new_host = packet.get("host_pid", -1)
+                            if new_host != self.host_pid:
+                                self.host_pid = new_host
+                                self.is_host = (self.host_pid == self.player_id)
+                                self.Menu.host_pid = new_host
+                            opts = packet.get("lobby_options")
+                            if opts:
+                                self.lobby_options = opts
+                                self.Menu.lobby_options = dict(opts)
                             for p in players_raw:
                                 _log(f"  lobby info: pid={p.get('pid')} ready={p.get('ready')}")
-                
+
                         elif packet.get("type") == "pong":
                             pass
                         elif packet.get("type") == "game_start":

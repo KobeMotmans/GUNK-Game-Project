@@ -71,6 +71,12 @@ class ServerIO(threading.Thread):
         # Lobby countdown (frames until game start)
         self.countdown = 0
 
+        # Pseudo-host tracking (first joiner is host)
+        self.host_pid = -1
+
+        # Lobby options (host can toggle these)
+        self.lobby_options = {"shared_health": True, "shared_ammo": True}
+
         # Server-side skin management
         self.skin_manifest = []
         self._next_skin_id = 100
@@ -237,6 +243,8 @@ class ServerIO(threading.Thread):
                     else:
                         if len(self.clients) < self.max_players:
                             self.clients.append((addr, pid, name))
+                            if self.host_pid == -1:
+                                self.host_pid = pid
                             should_broadcast = True
                             self.server_game.register_player(pid, name, skin_id)
                             if game_already_started:
@@ -269,6 +277,7 @@ class ServerIO(threading.Thread):
                         except OSError:
                             pass
                 else:
+                    self.server_game.set_shared_options(self.lobby_options)
                     self.server_game.init_world()
                     game_start_packet = encode_packet({"type": "game_start", "level": 0})
                     with self.clients_lock:
@@ -288,6 +297,9 @@ class ServerIO(threading.Thread):
                             self.clients.pop(i)
                             should_broadcast = True
                             break
+                    if pid == self.host_pid:
+                        remaining = [c_pid for _, c_pid, _ in self.clients]
+                        self.host_pid = min(remaining) if remaining else -1
                     should_reset = len(self.clients) == 0
                 self.last_seen.pop(pid, None)
                 self.inputs.pop(pid, None)
@@ -297,6 +309,7 @@ class ServerIO(threading.Thread):
                 if should_reset:
                     self.server_game.reset_to_lobby()
                     self.next_id = 0
+                    self.host_pid = -1
                     self.inputs.clear()
                     self.last_seen.clear()
                     self._pending_connect.clear()
@@ -364,6 +377,19 @@ class ServerIO(threading.Thread):
                             pass
                 self.last_seen[pid] = time.time()
 
+            elif ptype == "set_lobby_option":
+                with self.clients_lock:
+                    if not any(c_pid == pid for _, c_pid, _ in self.clients):
+                        continue
+                if pid == self.host_pid:
+                    key = packet.get("option_key", "")
+                    value = packet.get("option_value")
+                    if key in ("shared_health", "shared_ammo") and isinstance(value, bool):
+                        self.lobby_options[key] = value
+                        self.server_game.set_shared_options(self.lobby_options)
+                        self._broadcast_lobby()
+                self.last_seen[pid] = time.time()
+
             elif ptype == "ping":
                 with self.clients_lock:
                     if not any(c_pid == pid for _, c_pid, _ in self.clients):
@@ -380,6 +406,7 @@ class ServerIO(threading.Thread):
         state = self.server_game.get_state()
         if not state:
             return
+        state["lobby_options"] = self.lobby_options
         data = encode_packet(state)
         with self.clients_lock:
             for c_addr, _, _ in self.clients:
@@ -395,6 +422,8 @@ class ServerIO(threading.Thread):
             packet["game_active"] = True
         if self.countdown > 0:
             packet["countdown"] = self.countdown
+        packet["host_pid"] = self.host_pid
+        packet["lobby_options"] = self.lobby_options
         data = encode_packet(packet)
         with self.clients_lock:
             for c_addr, _, _ in self.clients:
@@ -420,10 +449,14 @@ class ServerIO(threading.Thread):
                 self.last_seen.pop(pid, None)
                 self.inputs.pop(pid, None)
                 self.server_game.remove_player(pid)
+                if pid == self.host_pid:
+                    remaining = [c_pid for _, c_pid, _ in self.clients]
+                    self.host_pid = min(remaining) if remaining else -1
             should_reset = len(self.clients) == 0 and stale
         if should_reset:
             self.server_game.reset_to_lobby()
             self.next_id = 0
+            self.host_pid = -1
             self.inputs.clear()
             self.last_seen.clear()
             self._pending_connect.clear()
@@ -437,6 +470,7 @@ class ServerIO(threading.Thread):
             self.countdown -= 1
             if self.countdown <= 0:
                 try:
+                    self.server_game.set_shared_options(self.lobby_options)
                     self.server_game.init_world()
                     self._broadcast_game_start()
                 except Exception as e:
