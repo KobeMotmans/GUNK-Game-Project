@@ -8,15 +8,39 @@
   "font": "ocraextended.ttf",
   "font_has_numbers": true,
 
-  "colors": {},
+  "colors": {
+    "minimap": {
+      "bg": [0, 0, 0, 160],
+      "wall": [80, 80, 80],
+      "floor": [40, 40, 40],
+      "player": [0, 255, 0],
+      "player_outline": [0, 180, 0],
+      "ally": [0, 150, 255],
+      "enemy": [255, 50, 50],
+      "exit": [255, 255, 0],
+      "keycard": [0, 255, 0],
+      "border": [200, 200, 200],
+      "name_bg": [0, 0, 0]
+    }
+  },
 
   "sizes": {
     "input": {
       "height": 30
+    },
+    "minimap": {
+      "size": 0.12,
+      "view_radius": 7,
+      "border": 2
     }
   },
 
-  "positions": {},
+  "positions": {
+    "minimap": {
+      "x": 0.92,
+      "y": 0.12
+    }
+  },
 
   "textures": {
     "enemies": {
@@ -59,11 +83,12 @@
     "bg": ""
   },
 
-  "sounds": {
-    "music": {
-      "main": "sounds/music/esKape Final.ogg",
-      "victory": "sounds/music/Motivator.ogg"
-    },
+    "sounds": {
+        "music": {
+            "main_intro": "sounds/music/esKape Intro.ogg",
+            "main_loop": "sounds/music/esKape Main Loop.ogg",
+            "victory": "sounds/music/Motivator.ogg"
+        },
     "sfx": {
       "damage": "sounds/sfx/damage.ogg",
       "ammo": "sounds/sfx/ammo.ogg",

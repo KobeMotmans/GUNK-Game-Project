@@ -4,15 +4,16 @@ player.py - Speler klasse met movement en rotatie
 import pygame
 from math import sin, cos, pi
 
-from ..core.config import PLAYER_SPEED, PLAYER_ROT_SPEED, START_HEALTH, START_ANGLES
+from ..core.config import PLAYER_SPEED, PLAYER_ROT_SPEED, START_HEALTH
 from ..core.map_loader import will_collide
 from ..core.vector import Vector
 
 
 class Player:
-    def __init__(self, x=150, y=150, health=START_HEALTH):
+    def __init__(self, x=150, y=150, health=START_HEALTH, angle=None):
         self.pos = Vector(x, y)
-        self.angle = START_ANGLES[0]
+        from math import pi
+        self.angle = angle if angle is not None else -pi / 2
         self.health = health
         self.inv_time = 0
         self.death = False

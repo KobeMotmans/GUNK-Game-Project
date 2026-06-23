@@ -8,9 +8,9 @@ import time
 import os
 import json
 
-from src.core.config import (SCREEN, WIDTH, HEIGHT, START_AMMO, DAMAGE_FLASH, AMMO_FLASH, KEYCARD_FLASH,
-                    START_HEALTH, MAP_PATH, START_ANGLES, HEALTH_FLASH, HEALTH_CHANCE,
-                    set_resolution, ELEVATOR_WAIT_DIST)
+from src.core import config as cfg
+from src.core.config import (START_AMMO, MAP_PATH, START_ANGLES, HEALTH_CHANCE, MAX_LEVEL,
+                    set_resolution, ELEVATOR_WAIT_DIST, START_HEALTH)
 from src.core.paths import resolve_asset, load_font, init_packs
 from src.core.theme import theme
 from src.core.raycaster import dda
@@ -46,7 +46,7 @@ class Game:
         self.bilal.say("Maar pas op, want de andere assistenten zijn gek geworden van het K gebouw!", 200)
 
         # Init speler
-        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
+        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[0])
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
 
@@ -78,7 +78,12 @@ class Game:
         self.Menu.draw_loading_screen(0, "Loading sounds...")
         pygame.event.pump()
 
-        self.main_music = None
+        self.main_music_intro = None
+        self.main_music_loop = None
+        self._has_intro = False
+        self._intro_duration = 0
+        self._intro_start = 0
+        self._main_loop_started = False
         self.sounds = {}
         self._load_sounds()
 
@@ -111,6 +116,10 @@ class Game:
         self.player_near_exit = False
         self.exit_pos = None
 
+        # Minimap
+        self.minimap_show_enemies = True
+        self.minimap_show_objects = True
+
         self._settings_return = "menu"
         self._paused_frame = None
         self._pending_removes = set()
@@ -128,12 +137,28 @@ class Game:
 
         self._load_settings()
         self.update_sfx_volume()
-        if self.main_music:
-            self.main_music.set_volume(self.music_volume)
+        if self.main_music_intro:
+            self.main_music_intro.set_volume(self.music_volume)
+        if self.main_music_loop:
+            self.main_music_loop.set_volume(self.music_volume)
         set_resolution(self.resolution)
         clear_log()
         _log("Game started")
         self.state = "menu"
+
+    def _play_music(self):
+        self.main_music_loop.stop()
+        if self.main_music_intro:
+            self.main_music_intro.stop()
+            self.main_music_intro.set_volume(self.music_volume)
+        self.main_music_loop.set_volume(self.music_volume)
+        self._intro_start = pygame.time.get_ticks()
+        self._main_loop_started = False
+        if self._has_intro:
+            self.main_music_intro.play()
+        else:
+            self._main_loop_started = True
+            self.main_music_loop.play(loops=-1)
 
     def _settings_path(self):
         return os.path.join(os.path.dirname(__file__), "settings.json")
@@ -163,14 +188,31 @@ class Game:
             pass
 
     def _load_sounds(self):
-        if self.main_music:
-            self.main_music.stop()
+        if self.main_music_intro:
+            self.main_music_intro.stop()
+        if self.main_music_loop:
+            self.main_music_loop.stop()
         for s in self.sounds.values():
             try: s.stop()
             except: pass
-        Fireball.clear_sound_cache()
-        self.main_music = pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.main", "sounds/music/esKape Final.ogg")))
-        self.main_music.set_volume(self.music_volume)
+
+        intro_path = theme.get("sounds.music.main_intro")
+        if intro_path:
+            self.main_music_intro = pygame.mixer.Sound(resolve_asset(intro_path))
+            self._has_intro = True
+            self._intro_duration = int(self.main_music_intro.get_length() * 1000)
+        else:
+            self.main_music_intro = None
+            self._has_intro = False
+            self._intro_duration = 0
+
+        loop_path = theme.get("sounds.music.main") or theme.get("sounds.music.main_loop", "sounds/music/esKape Main Loop.ogg")
+        self.main_music_loop = pygame.mixer.Sound(resolve_asset(loop_path))
+        if self.main_music_intro:
+            self.main_music_intro.set_volume(self.music_volume)
+        self.main_music_loop.set_volume(self.music_volume)
+        self._intro_start = 0
+        self._main_loop_started = False
         self.Menu.draw_loading_screen(0.15, "Loading music...")
         pygame.event.pump()
         self.sounds = {
@@ -251,6 +293,10 @@ class Game:
         for event in events:
             if event.type == pygame.QUIT:
                 self.running = False
+
+            if event.type == pygame.VIDEORESIZE:
+                self.Menu._minimap_bg = None
+                cfg.resize_display(event.w, event.h)
     
             if self.state == "game":
                 if event.type == pygame.KEYDOWN: #Switch guns
@@ -299,7 +345,7 @@ class Game:
         if self.state == "game" and not self.escaped and not self.elevator_locked:
             # === UNIFIED: all players move and auto-fire locally ===
             self.player.rotate(pygame.mouse.get_rel()[0])
-            pygame.mouse.set_pos(WIDTH // 2, HEIGHT // 2)
+            pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
             pygame.mouse.get_rel()
             if keys[pygame.K_UP] or keys[pygame.K_z]:
                 self.player.move("up")
@@ -334,12 +380,12 @@ class Game:
         if bg_texture:
             if not hasattr(self, '_bg_img') or self._bg_img_path != bg_texture:
                 img = pygame.image.load(resolve_asset(bg_texture)).convert()
-                self._bg_img = pygame.transform.scale(img, (WIDTH, HEIGHT))
+                self._bg_img = pygame.transform.scale(img, (cfg.WIDTH, cfg.HEIGHT))
                 self._bg_img_path = bg_texture
-            SCREEN.blit(self._bg_img, (0, 0))
+            cfg.SCREEN.blit(self._bg_img, (0, 0))
         else:
             bg = theme.color("bg", (0, 0, 0))
-            SCREEN.fill(tuple(bg) if bg else 'black')
+            cfg.SCREEN.fill(tuple(bg) if bg else 'black')
 
 
         player_pos = self.player.get_pos()
@@ -500,15 +546,15 @@ class Game:
                 p.render_fast(dist, screen_x)
 
         if self.player.inv_time > 10:
-            SCREEN.blit(DAMAGE_FLASH, (0,0))
+            cfg.SCREEN.blit(cfg.DAMAGE_FLASH, (0,0))
         if self.flash_time > 0:
             self.flash_time -= 1
             if self.curr_flash == "keycard":
-                SCREEN.blit(KEYCARD_FLASH, (0, 0))
+                cfg.SCREEN.blit(cfg.KEYCARD_FLASH, (0, 0))
             elif self.curr_flash == "ammo":
-                SCREEN.blit(AMMO_FLASH, (0, 0))
+                cfg.SCREEN.blit(cfg.AMMO_FLASH, (0, 0))
             elif self.curr_flash == "health":
-                SCREEN.blit(HEALTH_FLASH, (0, 0))
+                cfg.SCREEN.blit(cfg.HEALTH_FLASH, (0, 0))
         # 5. Wapen laatst
         self.current_gun.draw()
 
@@ -544,7 +590,9 @@ class Game:
         self.player.score = 0
         M.MAP, M.SPAWNS, M.width, M.height  = png_to_list_fast(MAP_PATH[M.map_level])
         self.map = M.MAP
-        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
+        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[M.map_level])
+        pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
+        pygame.mouse.get_rel()
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
         M.start_angle = START_ANGLES[M.map_level]
@@ -566,11 +614,11 @@ class Game:
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
 
-        self.main_music.stop()
-        self.main_music.set_volume(self.music_volume)
-        self.main_music.play()
-        
+        self._play_music()
+
     def level_up(self):
+        if M.map_level >= MAX_LEVEL:
+            return
         M.map_level += 1
         if M.map_level == 1:
             self.unlocked_guns.append(self.minigun)
@@ -585,6 +633,8 @@ class Game:
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.player.got_keycard = False
         self.player.angle = START_ANGLES[M.map_level]
+        pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
+        pygame.mouse.get_rel()
         self.objects = self.create_objects()
         self.projectiles = []
         self.elevator_waiting = False
@@ -613,13 +663,19 @@ class Game:
         M.map_level = level
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[level])
         M.start_angle = START_ANGLES[M.map_level]
-        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
+        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[level])
+        pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
+        pygame.mouse.get_rel()
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
         self.player.door_pos = 0
         self.player.got_keycard = False
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol]
+        if level >= 1:
+            self.unlocked_guns.append(self.minigun)
+        if level >= 3:
+            self.unlocked_guns.append(self.rifle)
         self.remote_players = []
         self.final_boss = None
         self.final_boss_spotted = False
@@ -643,9 +699,7 @@ class Game:
         self.projectiles = []
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
-        self.main_music.stop()
-        self.main_music.set_volume(self.music_volume)
-        self.main_music.play()
+        self._play_music()
         self.state = "game"
 
     def _do_connect(self, ip, port, name):
@@ -706,7 +760,7 @@ class Game:
             "enemy_damage": self._enemy_damage,
             "remove_pickup": self._remove_pickup,
             "got_keycard": self.player.got_keycard,
-            "door_closed": self.player.door_pos > WIDTH // 2,
+            "door_closed": self.player.door_pos > cfg.WIDTH // 2,
             "elevator_waiting": self.elevator_waiting,
             "state": self.state,
         }
@@ -814,6 +868,7 @@ class Game:
                 if pdata.get("id") == self.player_id:
                     self.player.pos = Vector(pdata["pos"][0], pdata["pos"][1])
                     self.player.angle = pdata.get("angle", M.start_angle)
+                    pygame.mouse.get_rel()
                     break
             if M.map_level == 1:
                 if self.minigun not in self.unlocked_guns:
@@ -889,8 +944,6 @@ class Game:
                 if self.network_client:
                     packet = self.network_client.try_recv()
                     if packet:
-                        ptype = packet.get("type", "?")
-                        _log(f"recv: {ptype}")
                         self._last_server_packet = time.time()
                         if packet.get("type") == "lobby_info":
                             players_raw = packet.get("players", [])
@@ -909,8 +962,7 @@ class Game:
                             if opts:
                                 self.lobby_options = opts
                                 self.Menu.lobby_options = dict(opts)
-                            for p in players_raw:
-                                _log(f"  lobby info: pid={p.get('pid')} ready={p.get('ready')}")
+
 
                         elif packet.get("type") == "pong":
                             pass
@@ -930,7 +982,6 @@ class Game:
                         self._last_lobby_ping = now
                 for ev in events:
                     if ev.type == pygame.KEYDOWN and ev.key == pygame.K_r:
-                        _log("R key pressed, toggling ready")
                         self._toggle_ready()
                 self.Menu.draw_waiting_lobby(events, self)
 
@@ -942,6 +993,7 @@ class Game:
                 if not self.escaped:
                     self.update()
                     self.render()
+                    self.Menu.draw_minimap(self)
                     if self.final_boss is not None and self.final_boss_spotted:
                         self.final_boss.draw_health_bar(None, None, None)
                     if self.bilal.flags["general"]:
@@ -952,7 +1004,7 @@ class Game:
                 if self.player.got_keycard:
                     self.keycard_font = load_font(20, bold=True)
                     kc_surf = self.keycard_font.render("KEYCARD ACQUIRED", True, 'green')
-                    SCREEN.blit(kc_surf, (WIDTH - kc_surf.get_width() - int(WIDTH * 0.04), HEIGHT - int(HEIGHT * 0.06)))
+                    cfg.SCREEN.blit(kc_surf, (cfg.WIDTH - kc_surf.get_width() - int(cfg.WIDTH * 0.04), cfg.HEIGHT - int(cfg.HEIGHT * 0.06)))
                     
                 if self.escaped:
                     self.Menu.draw_escaped_screen(events, self)
@@ -964,7 +1016,7 @@ class Game:
             elif self.state == "paused":
                 self.handle_network()
                 if self._paused_frame:
-                    SCREEN.blit(self._paused_frame, (0, 0))
+                    cfg.SCREEN.blit(self._paused_frame, (0, 0))
                 self.Menu.draw_paused_screen(events, self)
             elif self.state == 'dead':
                 self.Menu.draw_dead_screen(events, self)
@@ -975,11 +1027,16 @@ class Game:
             elif self.state == 'pack_select':
                self.Menu.draw_pack_select(events, self)
 
+            if not self._main_loop_started and self._intro_start:
+                if pygame.time.get_ticks() - self._intro_start >= self._intro_duration:
+                    self._main_loop_started = True
+                    self.main_music_loop.play(loops=-1)
+
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
                 self.state = "dead"
             if self.state == "game":
-                self._paused_frame = SCREEN.copy()
+                self._paused_frame = cfg.SCREEN.copy()
             pygame.display.flip()
 
         pygame.quit()

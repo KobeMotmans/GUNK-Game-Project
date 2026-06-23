@@ -5,8 +5,8 @@ raycaster.py - DDA raycasting algoritme voor 3D rendering
 import pygame
 from math import sin, cos, tan, pi
 
-from . import config
-from .config import SCREEN, WIDTH, HEIGHT, TILE_SIZE,MAX_DEPTH, PROJ_DIST
+from . import config as cfg
+from .config import TILE_SIZE, MAX_DEPTH, PROJ_DIST
 from .map_loader import cord_to_map, map_to_cord, hit_wall
 from .vector import Vector
 
@@ -26,14 +26,13 @@ def gnc(a, sg):
 
 def draw_wall(dist, ray):
     wall_height = TILE_SIZE * PROJ_DIST / dist
-    y = HEIGHT / 2 - wall_height / 2
-    col_w = WIDTH // config.NUM_RAYS
+    y = cfg.HEIGHT / 2 - wall_height / 2
+    col_w = cfg.WIDTH // cfg.NUM_RAYS
     column_x = ray * col_w
 
-    # Distance-based shading
     shade = max(0, min(255, 255 - int(dist * 255 / MAX_DEPTH)))
     color = (shade, shade, shade)
-    pygame.draw.rect(SCREEN, color, (column_x, y, col_w, wall_height))
+    pygame.draw.rect(cfg.SCREEN, color, (column_x, y, col_w, wall_height))
 
 
 def dda(player_pos, player_angle):
@@ -43,8 +42,8 @@ def dda(player_pos, player_angle):
     """
     wall_distances = []  # Alleen afstanden, geen dictionaries!
 
-    for ray in range(config.NUM_RAYS):
-        angle = player_angle - pi / 4 + (ray + 0.5) * config.DELTA_ANGLE
+    for ray in range(cfg.NUM_RAYS):
+        angle = player_angle - pi / 4 + (ray + 0.5) * cfg.DELTA_ANGLE
         ray_pos = Vector(player_pos.x, player_pos.y)
 
         sina = sin(angle)

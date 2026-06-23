@@ -1,7 +1,10 @@
 import os
 import json
+from math import inf
 from .paths import _project_root
 
+
+_NOT_FOUND = object()
 
 class Theme:
     def __init__(self):
@@ -42,7 +45,7 @@ class Theme:
     def get(self, key, default=None):
         for config in self._theme_configs:
             val = self._deep_get(config, key)
-            if val is not None:
+            if val is not _NOT_FOUND:
                 return val
         return default
 
@@ -63,6 +66,18 @@ class Theme:
     def pos(self, key, default=0.0):
         return float(self.get(f"positions.{key}", default))
 
+    def scaled(self, key, default, ref="min"):
+        from .config import WIDTH, HEIGHT
+        fraction = self.get(f"sizes.{key}", None)
+        if fraction is None:
+            fraction = default
+        val = float(fraction)
+        if ref == "width":
+            return int(WIDTH * val)
+        elif ref == "height":
+            return int(HEIGHT * val)
+        return int(min(WIDTH, HEIGHT) * val)
+
     def _deep_get(self, config, dotted_key):
         parts = dotted_key.split(".")
         val = config
@@ -70,7 +85,7 @@ class Theme:
             if isinstance(val, dict) and part in val:
                 val = val[part]
             else:
-                return None
+                return _NOT_FOUND
         return val
 
 

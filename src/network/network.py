@@ -327,20 +327,14 @@ class ServerIO(threading.Thread):
                     if not any(c_pid == pid for _, c_pid, _ in self.clients):
                         _log(f"ready: pid {pid} not in clients, ignoring")
                         continue
-                ready_before = self.server_game.players.get(pid, {}).get("ready", False)
                 self.server_game.toggle_ready(pid)
-                ready_after = self.server_game.players.get(pid, {}).get("ready", False)
-                _log(f"ready from pid {pid}: {ready_before} -> {ready_after}")
-                print(f"[SERVER] ready: P{pid} {ready_before}->{ready_after}")
                 if not self.server_game.initialized:
                     if self._all_players_ready():
                         if self.countdown <= 0:
                             self.countdown = 180
-                            _log(f"countdown started: {self.countdown}")
                     else:
                         if self.countdown > 0:
                             self.countdown = 0
-                            _log("countdown cancelled")
                 players = self.get_lobby_players()
                 # Direct unicast response to sender FIRST, then broadcast
                 direct_resp = {"type": "lobby_info", "players": players}
@@ -442,7 +436,7 @@ class ServerIO(threading.Thread):
         with self.clients_lock:
             for addr, pid, name in self.clients:
                 last = self.last_seen.get(pid, now)
-                if now - last > 20:
+                if now - last > 8:
                     stale.append((addr, pid, name))
             for _, pid, name in stale:
                 self.clients = [(a, p, n) for a, p, n in self.clients if p != pid]

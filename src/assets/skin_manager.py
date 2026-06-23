@@ -3,6 +3,7 @@ import glob
 import socket
 import time
 import threading
+import tempfile
 import pygame
 from ..core.paths import asset_path, appdata_path
 from ..network.protocol import encode_packet, decode_packet
@@ -129,8 +130,17 @@ class SkinManager:
                             return False
                         out = _get_custom_path(skin_id)
                         os.makedirs(os.path.dirname(out), exist_ok=True)
-                        with open(out, "wb") as f:
-                            f.write(raw)
+                        tmp = tempfile.NamedTemporaryFile(dir=os.path.dirname(out), delete=False, suffix=".tmp")
+                        try:
+                            tmp.write(raw)
+                            tmp.close()
+                            os.replace(tmp.name, out)
+                        except Exception:
+                            try:
+                                os.unlink(tmp.name)
+                            except OSError:
+                                pass
+                            raise
                         cls._cache.pop(skin_id, None)
                         sock.close()
                         return True
@@ -141,8 +151,17 @@ class SkinManager:
                             raw = b''.join(chunks[i] for i in range(total_chunks))
                             out = _get_custom_path(skin_id)
                             os.makedirs(os.path.dirname(out), exist_ok=True)
-                            with open(out, "wb") as f:
-                                f.write(raw)
+                            tmp = tempfile.NamedTemporaryFile(dir=os.path.dirname(out), delete=False, suffix=".tmp")
+                            try:
+                                tmp.write(raw)
+                                tmp.close()
+                                os.replace(tmp.name, out)
+                            except Exception:
+                                try:
+                                    os.unlink(tmp.name)
+                                except OSError:
+                                    pass
+                                raise
                             cls._cache.pop(skin_id, None)
                             sock.close()
                             return True

@@ -20,7 +20,9 @@
       "minigun": "sounds/sfx/Pew.ogg"
     },
     "music": {
+      "main_intro": null,
       "main": "sounds/music/Funny Music.ogg",
+      "main_loop": "sounds/music/Funny Music.ogg",
       "victory": "sounds/music/Banjo.ogg"
     }
   },

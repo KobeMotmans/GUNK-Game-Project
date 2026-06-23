@@ -3,7 +3,8 @@ weapons.py - Wapen klassen en rendering
 """
 
 import pygame
-from ..core.config import SCREEN, WIDTH, HEIGHT, WEAPON_OFFSET_X, MAX_DEPTH
+from ..core import config as cfg
+from ..core.config import WEAPON_OFFSET_X, MAX_DEPTH
 from math import sin, cos
 from ..core.vector import Vector
 from ..core.paths import resolve_asset
@@ -50,6 +51,7 @@ class Gun:
         """Start schiet animatie als wapen in rust is. Returnt hit enemy pos of None."""
         if self.weapon_state == 0:
             self.weapon_state = 1
+            self.shoot_sound.play()
             self.temp_flash_time = self.flash_time
             self.temp_recoil_time = self.recoil_time
             ray_pos = pos
@@ -80,18 +82,14 @@ class Gun:
 
     def draw(self):
         """Teken het wapen op scherm volgens huidige staat"""
-        x_pos = (WIDTH - self.weapon_rect[2]) // 2 + WIDTH * WEAPON_OFFSET_X
-        y_pos = HEIGHT - self.weapon_rect[3]
+        x_pos = (cfg.WIDTH - self.weapon_rect[2]) // 2 + cfg.WIDTH * WEAPON_OFFSET_X
+        y_pos = cfg.HEIGHT - self.weapon_rect[3]
         if self.weapon_state == 0:
-            SCREEN.blit(self.gun_rest, (x_pos, y_pos))
-            self.played_sound = False
+            cfg.SCREEN.blit(self.gun_rest, (x_pos, y_pos))
         elif self.weapon_state == 1:
-            SCREEN.blit(self.gun_shoot, (x_pos, y_pos))
-            if not self.played_sound:
-                self.shoot_sound.play()
-                self.played_sound = True
-        elif self.weapon_state == 2:
-            SCREEN.blit(self.gun_recoil, (x_pos, y_pos))
+            cfg.SCREEN.blit(self.gun_shoot, (x_pos, y_pos))
+        else:
+            cfg.SCREEN.blit(self.gun_recoil, (x_pos, y_pos))
             
 
 

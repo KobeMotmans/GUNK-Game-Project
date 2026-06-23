@@ -1,8 +1,8 @@
 import pygame
 from math import atan2, hypot, tan, pi
 
-from ..core import config
-from ..core.config import SCREEN, WIDTH, HEIGHT, FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN
+from ..core import config as cfg
+from ..core.config import FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN
 from ..core.vector import Vector
 from ..assets.skin_manager import SkinManager
 from ..core.paths import resolve_asset, load_font, load_numeric_font
@@ -66,13 +66,13 @@ class RenderObject:
             return None, None, None, is_hit
 
         # Projectie: screen_x = center + tan(rel_angle) * PROJ_DIST
-        screen_x = WIDTH / 2 + tan(rel_angle) * PROJ_DIST
+        screen_x = cfg.WIDTH / 2 + tan(rel_angle) * PROJ_DIST
 
         # Ray nummer
-        ray_num = int((screen_x / WIDTH) * config.NUM_RAYS)
+        ray_num = int((screen_x / cfg.WIDTH) * cfg.NUM_RAYS)
 
         # Bounds check
-        if ray_num < 0 or ray_num >= config.NUM_RAYS:
+        if ray_num < 0 or ray_num >= cfg.NUM_RAYS:
             return None, None, None, is_hit
 
         # Check of sprite voor de muur staat op deze ray
@@ -95,11 +95,11 @@ class RenderObject:
 
         # Centreer sprite
         draw_x = screen_x - sprite_h / 2
-        draw_y = HEIGHT / 2 - sprite_h / 2
+        draw_y = cfg.HEIGHT / 2 - sprite_h / 2
         if hasattr(self, "draw_health_bar") and self.type != "enemies/final_boss":
             self.draw_health_bar(sprite_h, draw_x, draw_y)
 
-        SCREEN.blit(self._cached_scale, (draw_x, draw_y))
+        cfg.SCREEN.blit(self._cached_scale, (draw_x, draw_y))
 
     def interact(self, player):
         pass
@@ -123,7 +123,7 @@ class PickupObject(RenderObject):
             else:
                 self.font = load_font(80, bold=True)
                 no_kc = self.font.render(theme.string("hud.no_keycard", "NO KEYCARD"), True,'green')
-                SCREEN.blit(no_kc, (WIDTH//2 - no_kc.get_width()//2, HEIGHT//2))
+                cfg.SCREEN.blit(no_kc, (cfg.WIDTH//2 - no_kc.get_width()//2, cfg.HEIGHT//2))
                 return "fail"
         if self.type == "objects/health":
             game.global_health = min(game.global_health + HEALTH_REGEN, START_HEALTH)
@@ -172,8 +172,38 @@ class PlayerSprite(RenderObject):
                 font = pygame.font.Font(None, name_size)
             name_surf = font.render(self.name, True, (255, 255, 255))
             name_x = screen_x - name_surf.get_width() / 2
-            name_y = HEIGHT / 2 - sprite_h / 2 - name_surf.get_height() - 4
-            SCREEN.blit(name_surf, (name_x, name_y))
+            name_y = cfg.HEIGHT / 2 - sprite_h / 2 - name_surf.get_height() - 4
+            cfg.SCREEN.blit(name_surf, (name_x, name_y))
+
+    def get_screen_pos(self, player_pos, player_angle):
+        dx = self.pos.x - player_pos.x
+        dy = self.pos.y - player_pos.y
+        rel_angle = atan2(dy, dx) - player_angle
+        while rel_angle > pi:
+            rel_angle -= 2 * pi
+        while rel_angle < -pi:
+            rel_angle += 2 * pi
+        dist = hypot(dx, dy)
+        screen_x = cfg.WIDTH / 2 + tan(rel_angle) * PROJ_DIST
+        return dist, screen_x, rel_angle
+
+    def render_name_through_walls(self, dist, screen_x):
+        if dist <= 0:
+            return
+        sprite_h = SPRITE_SIZE * PROJ_DIST / dist
+        name_size = max(10, int(sprite_h / 4))
+        try:
+            font = load_numeric_font(name_size)
+        except:
+            font = pygame.font.Font(None, name_size)
+        name_surf = font.render(self.name, True, (255, 255, 255))
+        bg = pygame.Surface((name_surf.get_width() + 8, name_surf.get_height() + 4))
+        bg.set_alpha(140)
+        bg.fill(tuple(theme.color("minimap.name_bg", (0, 0, 0))))
+        nx = screen_x - name_surf.get_width() / 2
+        ny = cfg.HEIGHT / 2 - sprite_h / 2 - name_surf.get_height() - 4
+        cfg.SCREEN.blit(bg, (nx - 4, ny - 2))
+        cfg.SCREEN.blit(name_surf, (nx, ny))
 
 
 

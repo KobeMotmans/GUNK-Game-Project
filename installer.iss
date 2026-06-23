@@ -2,7 +2,7 @@
 ; Compile: ISCC installer.iss
 
 #define MyAppName "GUNK"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.0.6"
 #define MyAppPublisher "ShelfHead"
 #define MyAppURL "https://github.com/KobeMotmans/GUNK-Game-Project"
 #define MyAppExeName "GUNK.exe"
@@ -43,6 +43,9 @@ Source: "assets\textures\ui\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\GUNK\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\GUNK\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName}"
 
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\*"; Check: IsCleanInstall
+
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
 Type: filesandordirs; Name: "{userappdata}\GUNK"
@@ -57,3 +60,26 @@ Filename: "{sys}\attrib.exe"; Parameters: "+h ""{app}\_internal"""; Flags: runhi
 
 [UninstallRun]
 Filename: "{sys}\attrib.exe"; Parameters: "-h ""{app}\_internal"""; Flags: runhidden
+
+[Code]
+var
+  CleanInstallCheckbox: TNewCheckBox;
+
+function IsCleanInstall: Boolean;
+begin
+  Result := CleanInstallCheckbox.Checked;
+end;
+
+procedure InitializeWizard;
+begin
+  CleanInstallCheckbox := TNewCheckBox.Create(WizardForm.SelectTasksPage);
+  CleanInstallCheckbox.Parent := WizardForm.SelectTasksPage;
+  CleanInstallCheckbox.Caption := 'Schone installatie (verwijder eerst alle bestaande bestanden)';
+  CleanInstallCheckbox.Checked := False;
+  CleanInstallCheckbox.Width := WizardForm.SelectTasksPage.ClientWidth - 50;
+  CleanInstallCheckbox.Height := 24;
+  CleanInstallCheckbox.Left := WizardForm.TasksList.Left;
+
+  WizardForm.TasksList.Height := WizardForm.TasksList.Height - 40;
+  CleanInstallCheckbox.Top := WizardForm.TasksList.Top + WizardForm.TasksList.Height + 8;
+end;

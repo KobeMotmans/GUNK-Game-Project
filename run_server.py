@@ -9,6 +9,7 @@ os.environ["GUNK_HEADLESS"] = "1"
 
 import sys
 import signal
+import threading
 from src.network.network import ServerIO
 from src.core.config import DEFAULT_PORT
 
@@ -28,21 +29,20 @@ def main():
     print(f"[SERVER] Gestart op poort {port}")
     print(f"[SERVER] Druk Ctrl+C om te stoppen")
 
+    stop_event = threading.Event()
+
     def shutdown(sig, frame):
         print("\n[SERVER] Stoppen...")
         server.stop()
-        sys.exit(0)
+        stop_event.set()
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
     try:
-        while True:
-            signal.pause()
-    except AttributeError:
-        import time
-        while True:
-            time.sleep(1)
+        stop_event.wait()
+    except KeyboardInterrupt:
+        shutdown(None, None)
 
 
 if __name__ == "__main__":
