@@ -7,7 +7,7 @@ GUNK.zip
 /build/
 /Output/
 *.spec
-/tools/upx/upx.exe
+/tools/
 /.opencode
 gunk.log
 settings.json
