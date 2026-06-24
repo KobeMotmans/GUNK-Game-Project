@@ -1225,8 +1225,18 @@ class Menu:
             if exit_obj is not None:
                 mm_x, mm_y = to_mm(exit_obj.pos.x, exit_obj.pos.y)
                 exit_c = tuple(theme.color("minimap.exit", (255, 255, 0)))
-                s = max(2, int(size * 0.02))
-                pygame.draw.rect(mm, exit_c, (int(mm_x) - s // 2, int(mm_y) - s // 2, s, s))
+                s = max(2, int(size * 0.025))
+                if 0 <= mm_x <= size and 0 <= mm_y <= size:
+                    pygame.draw.rect(mm, exit_c, (int(mm_x) - s // 2, int(mm_y) - s // 2, s, s))
+                else:
+                    dx = exit_obj.pos.x - px
+                    dy = exit_obj.pos.y - py
+                    a = math.atan2(dy, dx)
+                    r = size / 2 - s
+                    cx = cy = size / 2
+                    mm_x = cx + math.cos(a) * r
+                    mm_y = cy + math.sin(a) * r
+                    pygame.draw.circle(mm, exit_c, (int(mm_x), int(mm_y)), s)
 
         border = theme.size("minimap.border", 2)
         if border > 0:

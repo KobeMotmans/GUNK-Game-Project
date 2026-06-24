@@ -67,6 +67,8 @@ class Game:
         self.possible_enemies = [NormalEnemy, FastEnemy, TankEnemy]
         self.final_boss = None
         self.final_boss_spotted = False
+        self.boss_music = None
+        self.boss_music_playing = False
 
         # Init objects
         self.resolution = "high"
@@ -147,6 +149,10 @@ class Game:
         self.state = "menu"
 
     def _play_music(self):
+        if self.boss_music_playing:
+            self.boss_music_playing = False
+            if self.boss_music:
+                self.boss_music.stop()
         self.main_music_loop.stop()
         if self.main_music_intro:
             self.main_music_intro.stop()
@@ -223,6 +229,14 @@ class Game:
             "elev_ding": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.elevator_ding", "sounds/sfx/elev_ding.ogg"))),
             "victory": pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.victory", "sounds/music/Motivator.ogg"))),
         }
+        boss_path = theme.get("sounds.music.boss")
+        if boss_path:
+            self.boss_music = pygame.mixer.Sound(resolve_asset(boss_path))
+            self.boss_music.set_volume(self.music_volume)
+        else:
+            self.boss_music = None
+        self.boss_music_playing = False
+
         self.Menu.draw_loading_screen(0.40, "Loading sound effects...")
         pygame.event.pump()
         self.update_sfx_volume()
@@ -407,6 +421,11 @@ class Game:
                                 self.objects["keycard"].append(PickupObject("objects/keycard", enemy.pos.x, enemy.pos.y))
                                 self.final_boss = None
                                 self.bilal.say("Je hebt het gedaan! Zorg dat je nu zo snel mogelijk buiten staat!")
+                                if self.boss_music_playing:
+                                    self.boss_music_playing = False
+                                    if self.boss_music:
+                                        self.boss_music.stop()
+                                    self._play_music()
                             else:
                                 if random.random() < HEALTH_CHANCE:
                                     self.objects["health"].append(PickupObject("objects/health", enemy.pos.x, enemy.pos.y))
@@ -430,6 +449,12 @@ class Game:
                         if enemy.type == "enemies/final_boss":
                             self.final_boss_spotted = True
                             self.bilal.trigger("boss_warning")
+                            if self.boss_music and not self.boss_music_playing:
+                                self.boss_music_playing = True
+                                self.main_music_loop.stop()
+                                if self.main_music_intro:
+                                    self.main_music_intro.stop()
+                                self.boss_music.play(loops=-1)
             elif obj == "ammo":
                 for item in list(self.objects["ammo"]):
                     dist, SCREEN_x, angle, is_hit = item.get_render_data_fast(
@@ -528,6 +553,13 @@ class Game:
                 )
                 if dist is not None:
                     sprites.append((dist, screen_x, rp))
+            # Namen door muren renderen voor alle remote players binnen bereik
+            for rp in self.remote_players:
+                if rp is None or not rp.name:
+                    continue
+                dist, screen_x = rp.get_screen_pos(player_pos, player_angle)[:2]
+                if 0 < dist < 1500:
+                    rp.render_name_through_walls(dist, screen_x)
 
         # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
@@ -860,6 +892,10 @@ class Game:
         # 5. World state
         new_level = state.get("level", M.map_level)
         if new_level != M.map_level:
+            if self.boss_music_playing:
+                self.boss_music_playing = False
+                if self.boss_music:
+                    self.boss_music.stop()
             M.map_level = new_level
             M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[new_level])
             self.map = M.MAP

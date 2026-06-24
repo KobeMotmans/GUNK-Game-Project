@@ -98,7 +98,7 @@ class ServerIO(threading.Thread):
     def _save_skin_manifest(self):
         os.makedirs("server_skins", exist_ok=True)
         with open("server_skins/manifest.json", "w") as f:
-            json.dump({"next_id": self._next_skin_id, "skins": self.skin_manifest}, f)
+            json.dump({"next_id": self._next_skin_id, "skins": self.skin_manifest}, f, indent=2)
 
     def _handle_skin_upload_udp(self, packet, addr):
         name = packet.get("name", "Unnamed")
