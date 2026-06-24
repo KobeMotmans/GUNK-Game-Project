@@ -93,7 +93,7 @@ ATTACK_DIST = 43
 PATHFIND_INTERVAL = 20
 
 # Wapen instellingen
-WEAPON_OFFSET_X = 0.04  # 4% van schermbreedte
+WEAPON_OFFSET_X = 0.0  # gecentreerd
 
 #Object instellingen
 HEALTH_CHANCE = 0.20

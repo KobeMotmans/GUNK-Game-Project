@@ -606,8 +606,8 @@ class Menu:
                 pts = [(cx, cy - 3), (cx + 5, cy + 4), (cx + 12, cy - 6)]
                 pygame.draw.lines(_cfg.SCREEN, theme.color("lobby.ready_check", (0, 220, 0)), False, pts, 3)
 
-        self._draw_button_custom(events, theme.string("lobby.disconnect", "DISCONNECT"), _cfg.WIDTH//2 - int(_cfg.WIDTH * 0.04),
-            _cfg.HEIGHT - int(_cfg.HEIGHT * theme.pos("lobby.disconnect_btn_y", 0.07)), int(_cfg.WIDTH * 0.08), int(_cfg.HEIGHT * 0.03), dc)
+        self._draw_button_custom(events, theme.string("lobby.disconnect", "DISCONNECT"), _cfg.WIDTH//2 - int(_cfg.WIDTH * 0.07),
+            _cfg.HEIGHT - int(_cfg.HEIGHT * theme.pos("lobby.disconnect_btn_y", 0.07)), int(_cfg.WIDTH * 0.14), int(_cfg.HEIGHT * 0.055), dc)
 
     def _select_skin(self, GAME, skin_id):
         GAME.skin_id = skin_id
