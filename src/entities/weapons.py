@@ -12,7 +12,7 @@ from ..core.theme import theme
 from ..assets.texture_cache import get as get_cached_texture
 
 class Gun:
-    def __init__(self, damage, recoil_speed, shoot_speed, ammo_weight, guntype, default_sound, auto=False):
+    def __init__(self, damage, recoil_speed, shoot_speed, ammo_weight, guntype, default_sound, auto=False, weapon_offset_x=WEAPON_OFFSET_X):
         self.damage = damage
         self.recoil_speed = recoil_speed
         self.weapon_state = 0
@@ -22,6 +22,7 @@ class Gun:
         self.auto = auto
         self.guntype = guntype
         self.default_sound = default_sound
+        self.weapon_offset_x = weapon_offset_x
 
         self.played_sound = False
 
@@ -63,8 +64,8 @@ class Gun:
                     if enemy.is_los:
                         if enemy.is_hit(ray_pos):
                             if apply_damage:
-                                enemy.take_dmg(self.damage)
-                            return i, (enemy.pos.x, enemy.pos.y)
+                                enemy.take_dmg(self.damage, hit_pos=(ray_pos.x, ray_pos.y))
+                            return i, (ray_pos.x, ray_pos.y)
                 else:
                     continue
         return None
@@ -82,7 +83,7 @@ class Gun:
 
     def draw(self):
         """Teken het wapen op scherm volgens huidige staat"""
-        x_pos = (cfg.WIDTH - self.weapon_rect[2]) // 2 + cfg.WIDTH * WEAPON_OFFSET_X
+        x_pos = (cfg.WIDTH - self.weapon_rect[2]) // 2 + cfg.WIDTH * self.weapon_offset_x
         y_pos = cfg.HEIGHT - self.weapon_rect[3]
         if self.weapon_state == 0:
             cfg.SCREEN.blit(self.gun_rest, (x_pos, y_pos))
@@ -95,7 +96,7 @@ class Gun:
 
 class Pistol(Gun):
     def __init__(self, damage=2, recoil_speed=10, shoot_speed=10, ammo_weight=2):
-        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol", "pistol.ogg")
+        super().__init__(damage, recoil_speed, shoot_speed, ammo_weight, "pistol", "pistol.ogg", weapon_offset_x=0.0)
 
 class Rifle(Gun):
     def __init__(self, damage=6, recoil_speed=60, shoot_speed=15, ammo_weight=5):

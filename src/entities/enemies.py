@@ -26,6 +26,8 @@ class Enemy(EnemyAI, RenderObject):
         self.target = None
         self._full_path = []
         self._path_timer = 0
+        self.hit_timer = 0
+        self.last_hit_world = None
 
     def draw_health_bar(self, sprite_h, draw_x, draw_y):
         health_ratio = max(0, self.health / self.max_health)
@@ -104,8 +106,21 @@ class Enemy(EnemyAI, RenderObject):
     def is_hit(self, pos):
         return (self.pos - pos).norm() < self.size
 
-    def take_dmg(self, dmg):
+    def take_dmg(self, dmg, hit_pos=None):
         self.health -= dmg
+        self.hit_timer = 6
+        if hit_pos:
+            self.last_hit_world = Vector(hit_pos[0], hit_pos[1])
+
+    def render_fast(self, dist, screen_x):
+        super().render_fast(dist, screen_x)
+        if self.hit_timer > 0:
+            sprite_h = SPRITE_SIZE * PROJ_DIST / dist
+            draw_x = screen_x - sprite_h / 2
+            draw_y = cfg.HEIGHT / 2 - sprite_h / 2
+            overlay = self._cached_scale.copy()
+            overlay.fill((255, 60, 60), special_flags=pygame.BLEND_RGB_MULT)
+            cfg.SCREEN.blit(overlay, (draw_x, draw_y))
 
 
 class NormalEnemy(Enemy):

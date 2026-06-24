@@ -7,10 +7,11 @@ import random
 import time
 import os
 import json
+from math import atan2, cos, sin, tan, pi, hypot
 
 from src.core import config as cfg
-from src.core.config import (START_AMMO, MAP_PATH, START_ANGLES, HEALTH_CHANCE, MAX_LEVEL,
-                    set_resolution, ELEVATOR_WAIT_DIST, START_HEALTH)
+from src.core.config import (START_AMMO, MAP_PATH, START_ANGLES, HEALTH_CHANCE, MAX_LEVEL, MAX_DEPTH,
+                    set_resolution, ELEVATOR_WAIT_DIST, START_HEALTH, TILE_SIZE, PROJ_DIST)
 from src.core.paths import resolve_asset, load_font, init_packs
 from src.core.theme import theme
 from src.core.raycaster import dda
@@ -64,6 +65,7 @@ class Game:
         self.music_volume = 0.5
         self.curr_flash = ""
         self.flash_time = 0
+        self.ammo_rays = []
         self.possible_enemies = [NormalEnemy, FastEnemy, TankEnemy]
         self.final_boss = None
         self.final_boss_spotted = False
@@ -333,6 +335,7 @@ class Game:
                                     self.global_ammo -= self.current_gun.ammo_weight
                                 self._ammo_delta -= self.current_gun.ammo_weight
                                 hit = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]), apply_damage=True)
+                                self._store_ammo_ray(hit)
                                 if hit:
                                     idx, pos = hit
                                     self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
@@ -377,6 +380,7 @@ class Game:
                             self.global_ammo -= self.current_gun.ammo_weight
                         self._ammo_delta -= self.current_gun.ammo_weight
                         hit = self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), apply_damage=True)
+                        self._store_ammo_ray(hit)
                         if hit:
                             idx, pos = hit
                             self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
@@ -384,6 +388,16 @@ class Game:
         # === Client: send position + state to server (rate-limited) ===
         if self.network_client:
             self._send_client_state()
+
+    def _store_ammo_ray(self, hit):
+        dx = cos(self.player.angle)
+        dy = sin(self.player.angle)
+        if hit:
+            _, pos = hit
+            end = Vector(pos[0], pos[1])
+        else:
+            end = self.player.pos + Vector(dx * MAX_DEPTH, dy * MAX_DEPTH)
+        self.ammo_rays.append({"start": Vector(self.player.pos.x, self.player.pos.y), "end": end, "timer": 6, "is_hit": hit is not None})
 
     def update(self):
         self.current_gun.update()
@@ -413,6 +427,8 @@ class Game:
         for obj in self.objects.keys():
             if obj == "enemies":
                 for enemy in list(self.objects[obj]):
+                    if enemy.hit_timer > 0:
+                        enemy.hit_timer -= 1
                     if enemy.health <= 0:
                         if not self.multiplayer:
                             self.player.score += 1
@@ -587,6 +603,45 @@ class Game:
                 cfg.SCREEN.blit(cfg.AMMO_FLASH, (0, 0))
             elif self.curr_flash == "health":
                 cfg.SCREEN.blit(cfg.HEALTH_FLASH, (0, 0))
+
+        # Draw ammo rays
+        for ray in list(self.ammo_rays):
+            ray["timer"] -= 1
+            delta = ray["end"] - self.player.pos
+            dist = delta.norm()
+            if dist > 1:
+                rel_angle = atan2(delta.y, delta.x) - self.player.angle
+                while rel_angle > pi: rel_angle -= 2 * pi
+                while rel_angle < -pi: rel_angle += 2 * pi
+                if abs(rel_angle) <= pi / 4 and dist <= MAX_DEPTH:
+                    screen_x = cfg.WIDTH / 2 + tan(rel_angle) * PROJ_DIST
+                    start_y = cfg.HEIGHT - 280
+                    end_y = cfg.HEIGHT / 2
+                    alpha = int(255 * (ray["timer"] / 6))
+                    color = (180, 180, 180)
+                    pygame.draw.line(cfg.SCREEN, color,
+                                     (cfg.WIDTH / 2, start_y),
+                                     (screen_x, end_y), max(1, int(3 * ray["timer"] / 6)))
+            if ray["timer"] <= 0:
+                self.ammo_rays.remove(ray)
+
+        # Hit dots op exacte raakpositie voor enemies (los van ammo ray timer)
+        for enemy in list(self.objects.get("enemies", [])):
+            if enemy.hit_timer > 0 and enemy.last_hit_world is not None:
+                dx = enemy.last_hit_world.x - player_pos.x
+                dy = enemy.last_hit_world.y - player_pos.y
+                d = hypot(dx, dy)
+                if d > 1:
+                    rel_angle = atan2(dy, dx) - player_angle
+                    while rel_angle > pi: rel_angle -= 2 * pi
+                    while rel_angle < -pi: rel_angle += 2 * pi
+                    if abs(rel_angle) <= pi / 4 and d <= MAX_DEPTH:
+                        hit_sx = cfg.WIDTH / 2 + tan(rel_angle) * PROJ_DIST
+                        ray_num = int((hit_sx / cfg.WIDTH) * cfg.NUM_RAYS)
+                        if 0 <= ray_num < cfg.NUM_RAYS and d < wall_distances[ray_num]:
+                            pygame.draw.circle(cfg.SCREEN, (255, 200, 100),
+                                               (int(hit_sx), int(cfg.HEIGHT / 2)), 4)
+
         # 5. Wapen laatst
         self.current_gun.draw()
 
