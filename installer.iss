@@ -2,7 +2,7 @@
 ; Compile: ISCC installer.iss
 
 #define MyAppName "GUNK"
-#define MyAppVersion "1.0.6"
+#define MyAppVersion "1.0.7"
 #define MyAppPublisher "ShelfHead"
 #define MyAppURL "https://github.com/KobeMotmans/GUNK-Game-Project"
 #define MyAppExeName "GUNK.exe"
