@@ -6,7 +6,10 @@ GUNK.zip
 /dist/
 /build/
 /Output/
-*.spec
+# Let op: hier stond eerder '*.spec'. Daardoor stond game.spec niet in de repo en
+# bouwde iedereen op een eigen, ongeziene spec. Juist daardoor bleef een fout
+# in de opbouw ongemerkt. game.spec is handgeschreven en drijft de hele build,
+# dus die moet wél mee.
 /tools/
 /.opencode
 gunk.log

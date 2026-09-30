@@ -55,10 +55,55 @@ if (Test-Path $internalAssets) {
 }
 
 # Cleanup tcl timezone data (in _internal)
-$tclTzdata = Join-Path (Join-Path (Join-Path $gunkDir "_internal") "tcl") "tzdata"
+# Let op: sinds PyInstaller 6 heet de map _tcl_data en niet meer tcl.
+# Met de oude naam vond Test-Path niets en werd er stilletjes niets gewist.
+$tclTzdata = Join-Path (Join-Path (Join-Path $gunkDir "_internal") "_tcl_data") "tzdata"
 if (Test-Path $tclTzdata) {
     Remove-Item -Path $tclTzdata -Recurse -Force
     Write-Host "[BUILD] TCL tzdata verwijderd" -ForegroundColor Yellow
+} else {
+    Write-Host "[BUILD] LET OP: geen tzdata-map gevonden op $tclTzdata" -ForegroundColor Red
+}
+
+# Opschonen van _internal. Alles hieronder is los geverifieerd: de exe is na
+# elke stap gestart en bleef op 'pygame window' met een geslaagde preload.
+# Staat er ooit iets tussen dat de game wél nodig heeft, dan breekt de exe pas
+# bij het spelen. Vandaar de luide logregels per verwijdering.
+$internalDir = Join-Path $gunkDir "_internal"
+$removedKB = 0
+
+# a) PyInstaller zet de SDL/freetype-DLL's zowel in _internal als in
+#    _internal\pygame. De Windows-lader zoekt in de exemap, dus de kopie in de
+#    pygame-map is ballast. 10 bestanden, ~2,1 MB.
+$pygameDlls = Get-ChildItem (Join-Path $internalDir "pygame") -Filter *.dll -ErrorAction SilentlyContinue
+if ($pygameDlls) {
+    $kb = [math]::Round(($pygameDlls | Measure-Object Length -Sum).Sum / 1KB)
+    foreach ($f in $pygameDlls) { Remove-Item -LiteralPath $f.FullName -Force }
+    $removedKB += $kb
+    Write-Host "[BUILD] $kb KB dubbele pygame-DLL's verwijderd" -ForegroundColor Yellow
+}
+
+# b) Pillow laadt _avif pas als er een AVIF-bestand voorkomt. Het spel is
+#    overal PNG en OGG, dus dit is nooit nodig. ~1,8 MB.
+$avif = Get-ChildItem $internalDir -Recurse -Filter "*avif*" -ErrorAction SilentlyContinue
+if ($avif) {
+    $kb = [math]::Round(($avif | Measure-Object Length -Sum).Sum / 1KB)
+    foreach ($f in $avif) { Remove-Item -LiteralPath $f.FullName -Force }
+    $removedKB += $kb
+    Write-Host "[BUILD] $kb KB ongebruikte AVIF-ondersteuning verwijderd" -ForegroundColor Yellow
+}
+
+# c) OpenSSL. Het spel doet geen TLS en gebruikt alleen UDP-sockets, dus
+#    libcrypto/libssl worden nergens geladen. ~1,3 MB.
+$crypto = @("libcrypto-1_1.dll", "libssl-1_1.dll") | ForEach-Object { Join-Path $internalDir $_ } | Where-Object { Test-Path $_ }
+if ($crypto) {
+    $kb = 0
+    foreach ($f in $crypto) { $kb += [math]::Round((Get-Item $f).Length / 1KB); Remove-Item -LiteralPath $f -Force }
+    $removedKB += $kb
+    Write-Host "[BUILD] $kb KB ongebruikte OpenSSL-DLL's verwijderd" -ForegroundColor Yellow
+}
+if ($removedKB -gt 0) {
+    Write-Host "[BUILD] _internal opgeschoond: samen $removedKB KB" -ForegroundColor Green
 }
 
 # ── 5. Inno Setup installer ──────────────────────────────────

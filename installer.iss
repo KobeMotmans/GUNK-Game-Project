@@ -2,7 +2,7 @@
 ; Compile: ISCC installer.iss
 
 #define MyAppName "GUNK"
-#define MyAppVersion "1.0.7"
+#define MyAppVersion "1.0.8"
 #define MyAppPublisher "ShelfHead"
 #define MyAppURL "https://github.com/KobeMotmans/GUNK-Game-Project"
 #define MyAppExeName "GUNK.exe"
@@ -44,7 +44,25 @@ Source: "dist\GUNK\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\GUNK\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName}"
 
 [InstallDelete]
-Type: filesandordirs; Name: "{app}\*"; Check: IsCleanInstall
+; Verwijder oude _internal folder (mocht die van een oudere build bestaan)
+Type: filesandordirs; Name: "{app}\_internal"
+; Python packages
+Type: filesandordirs; Name: "{app}\PIL"
+Type: filesandordirs; Name: "{app}\pygame"
+Type: filesandordirs; Name: "{app}\tcl"
+Type: filesandordirs; Name: "{app}\tcl8"
+Type: filesandordirs; Name: "{app}\tk"
+; Game assets
+Type: filesandordirs; Name: "{app}\assets"
+; Exe, libs en Python native modules
+Type: files; Name: "{app}\GUNK.exe"
+Type: files; Name: "{app}\base_library.zip"
+Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\*.pyd"
+; Icon
+Type: files; Name: "{app}\icon.ico"
+
+; settings.json, pack_config.json en cache\* worden NIET verwijderd — die blijven behouden
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
@@ -60,26 +78,3 @@ Filename: "{sys}\attrib.exe"; Parameters: "+h ""{app}\_internal"""; Flags: runhi
 
 [UninstallRun]
 Filename: "{sys}\attrib.exe"; Parameters: "-h ""{app}\_internal"""; Flags: runhidden
-
-[Code]
-var
-  CleanInstallCheckbox: TNewCheckBox;
-
-function IsCleanInstall: Boolean;
-begin
-  Result := CleanInstallCheckbox.Checked;
-end;
-
-procedure InitializeWizard;
-begin
-  CleanInstallCheckbox := TNewCheckBox.Create(WizardForm.SelectTasksPage);
-  CleanInstallCheckbox.Parent := WizardForm.SelectTasksPage;
-  CleanInstallCheckbox.Caption := 'Schone installatie (verwijder eerst alle bestaande bestanden)';
-  CleanInstallCheckbox.Checked := False;
-  CleanInstallCheckbox.Width := WizardForm.SelectTasksPage.ClientWidth - 50;
-  CleanInstallCheckbox.Height := 24;
-  CleanInstallCheckbox.Left := WizardForm.TasksList.Left;
-
-  WizardForm.TasksList.Height := WizardForm.TasksList.Height - 40;
-  CleanInstallCheckbox.Top := WizardForm.TasksList.Top + WizardForm.TasksList.Height + 8;
-end;
