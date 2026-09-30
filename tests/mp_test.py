@@ -45,7 +45,7 @@ from src.core.config import (MAX_PLAYERS, ELEVATOR_WAIT_DIST,   # noqa: E402
                              ELEVATOR_WAIT_FRAMES, ELEVATOR_STUCK_FRAMES,
                              TILE_SIZE, MAX_LEVEL, MAP_PATH)  # noqa: E402
 from src.core.map_loader import M                         # noqa: E402
-from math import hypot  # noqa: E402
+from math import hypot, pi  # noqa: E402
 
 TEMP_DIR = tempfile.gettempdir()
 
@@ -1758,6 +1758,201 @@ def adres_mapping_kan_zichzelf_herhalen():
         PM.natpmp_map_udp = original
 
 
+# ── minimap ────────────────────────────────────────────────────
+#
+# De minimap hoort te ontdekken in plaats van alles te tonen. Dat is drie
+# regels waarvan de kracht zit in wat níet zichtbaar is, dus de kaartjes hieronder
+# zijn klein en met opzet leesbaar: alles wat de speler ziet staat als `+` of `o`
+# (onthouden) en alles wat hij niet ziet laat de test stuklopen.
+#
+# Er zit geen pygame in dit stuk: de zichtberekening staat los van de tekening
+# in src/core/minimap.py, zodat hier geen scherm voor nodig is.
+
+from src.core.minimap import (Minimap, UIT as MM_UIT, GEZIEN as MM_GEZIEN,  # noqa: E402
+                              VOLLEDIG as MM_VOLLEDIG)
+
+
+def mm_kaart(rijen):
+    """'#' is een muur, '.' is vloer."""
+    return [[1 if c == "#" else 0 for c in rij] for rij in rijen]
+
+
+def mm_pos(tx, ty):
+    """Het midden van tegel (tx, ty), in wereldpixels."""
+    return (tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE
+
+
+# Dicht bij elkaar: (1,1) is de speler, (2,1) de muur recht voor zijn neus en
+# (3,1) de vloer daarachter. De muur moet zichtbaar zijn en de vloer erachter
+# niet, anders staat de hele kaart in één klap open.
+MM_MUUR = mm_kaart([
+    "#####",
+    "#.#.#",
+    "#####",
+])
+
+# Een gang die om de hoek loopt. Rij 1 is de gang recht vooruit, rij 3 ligt
+# achter de speler, en (3,3) ligt wél in de kijkhoek maar achter een muur.
+MM_GANG = mm_kaart([
+    "#####",
+    "#...#",
+    "##.##",
+    "#...#",
+    "#####",
+])
+
+
+@test
+def minimap_ziet_niet_door_muren():
+    fog = Minimap()
+    fog.update(MM_MUUR, 5, 3, *mm_pos(1, 1), 0.0, MM_GEZIEN)
+    check(fog.is_zichtbaar(*mm_pos(2, 1)),
+          "de muur recht voor de speler is niet zichtbaar; dan is er geen muur getekend")
+    check(not fog.is_zichtbaar(*mm_pos(3, 1)),
+          "de vloer achter die muur is wél zichtbaar: de kaart lekt door de muur")
+    check(not fog.is_gezien(*mm_pos(3, 1)),
+          "en die tegel wordt ook onthouden, dus hij blijft alsnog op de kaart staan")
+
+
+# Een open tegel die aan alle kanten door muren omringd is. Daar zit de
+# speler in het echte spel nooit, maar het is de enige vorm waarin het
+# verschil tussen "de eigen tegel is gezaaid" en "de eigen tegel is onderweg
+# teruggevonden" echt zichtbaar wordt: met maar één open buur komt de speler
+# als buur van die buur gewoon terug.
+MM_PLAATSJE = mm_kaart([
+    "#####",
+    "#.#.#",
+    "#.#.#",
+    "#####",
+])
+
+
+@test
+def minimap_ziet_altijd_de_tegel_waar_je_op_staat():
+    fog = Minimap()
+    fog.update(MM_PLAATSJE, 5, 5, *mm_pos(2, 2), 0.0, MM_GEZIEN)
+    check(fog.is_zichtbaar(*mm_pos(2, 2)),
+          "de tegel waar de speler op staat is niet zichtbaar, dus de kaart "
+          "tekent een gat onder zijn eigen voeten")
+
+
+@test
+def minimap_ziet_om_de_hoek_mar_niet_achter_je_rug():
+    fog = Minimap()
+    fog.update(MM_GANG, 5, 5, *mm_pos(1, 1), 0.0, MM_GEZIEN)
+    check(fog.is_zichtbaar(*mm_pos(2, 1)) and fog.is_zichtbaar(*mm_pos(3, 1)),
+          "de gang recht vooruit is niet zichtbaar, dus de rest van de test zuigt")
+    check(fog.is_zichtbaar(*mm_pos(2, 2)),
+          "de flood-fill stopt op de eerste muur en ziet de hoek niet om, dus de "
+          "kaart is veel te blind")
+    check(not fog.is_zichtbaar(*mm_pos(1, 3)),
+          "achter de rug van de speler is zichtbaar, maar dit is een raycaster")
+    check(not fog.is_zichtbaar(*mm_pos(3, 3)),
+          "die tegel ligt in de kijkhoek en toch achter een muur, dus de hoek "
+          "werkt niet als er een muur tussen zit")
+    check(fog.is_zichtbaar(*mm_pos(1, 1)),
+          "de tegel waar de speler op staat is niet zichtbaar, dus de kaart "
+          "tekent een gat onder zijn eigen voeten")
+
+
+@test
+def minimap_onthoudt_tegels_die_je_al_gezien_hebt():
+    fog = Minimap()
+    fog.update(MM_GANG, 5, 5, *mm_pos(1, 1), 0.0, MM_GEZIEN)
+    check(fog.is_zichtbaar(*mm_pos(2, 1)), "sanity: die tegel moet zichtbaar zijn")
+    fog.update(MM_GANG, 5, 5, *mm_pos(1, 1), pi, MM_GEZIEN)
+    check(not fog.is_zichtbaar(*mm_pos(2, 1)),
+          "teken je om, dan blijft het zicht staan: je kijkt immers de andere kant op")
+    check(fog.is_gezien(*mm_pos(2, 1)),
+          "een gezien tegel wordt vergeten zodra je je omdraait, dus de kaart "
+          "verdwijnt terwijl je er nog loopt")
+
+
+@test
+def minimap_vergeet_alles_bij_een_nieuw_level():
+    # De eerste level is een open kamertje: vanuit de hoek zie je het helemaal.
+    # Het volgende level is even groot maar heeft een muur in het midden, dus
+    # vanaf dezelfde plek zie je veel minder. Precies daarom is te controleren
+    # of er iets is overgeërfd: was het volgende level identiek, dan zou dat
+    # ononderscheidbaar zijn van "opnieuw alles gezien".
+    kamer = mm_kaart([
+        "#####",
+        "#...#",
+        "#...#",
+        "#...#",
+        "#####",
+    ])
+    fog = Minimap()
+    fog.update(kamer, 5, 5, *mm_pos(1, 1), 0.0, MM_GEZIEN)
+    eerste = set(fog.gezien)
+    check(len(eerste) > 1, "sanity: er is meer dan één tegel onthouden")
+
+    # Zelfde positie, zelfde kijkrichting, zelfde kaart: dat is de tweede frame,
+    # en die mag niets vergeten. Zou dit resetten, dan is de kaart na een
+    # seconde leeg en ziet de speler er nooit iets van.
+    fog.update(kamer, 5, 5, *mm_pos(1, 1), 0.0, MM_GEZIEN)
+    check(fog.gezien == eerste,
+          "dezelfde kaart opnieuw aanbieden vergeet de onthouden tegels, dus de "
+          "kaart is na een frame al weer leeg")
+
+    # Een nieuw level: zelfde afmetingen, andere lijst, want png_to_list_fast
+    # maakt er bij elke level een nieuwe aan. De muur in het midden zorgt dat
+    # er vanaf dezelfde hoek nu minder te zien is dan er onthouden is.
+    fog.update(MM_GANG, 5, 5, *mm_pos(1, 1), 0.0, MM_GEZIEN)
+    check(fog.zichtbaar < eerste,
+          "sanity: het volgende level ziet minder dan het vorige onthouden had, "
+          "dus er valt hier echt iets te verliezen")
+    check(fog.gezien == fog.zichtbaar,
+          "een nieuw level begint met de kaart van het vorige er al uit onthouden")
+
+
+@test
+def minimap_groeit_met_waar_je_hebt_geloopen():
+    # Een gang van 22 tegels, ruim driemaal het zichtbereik van 7. Eén blik is
+    # dus nadrukkelijk niet genoeg om hem te kennen.
+    gang = mm_kaart([
+        "#" * 24,
+        "#" + "." * 22 + "#",
+        "#" * 24,
+    ])
+    fog = Minimap()
+    fog.update(gang, 24, 3, *mm_pos(1, 1), 0.0, MM_GEZIEN)
+    check(not fog.is_zichtbaar(*mm_pos(22, 1)),
+          "de speler ziet het eind van een 22 tegels lange gang in één blik, dus "
+          "het zichtbereik wordt niet toegepast")
+    oost = set(fog.zichtbaar)
+    fog.update(gang, 24, 3, *mm_pos(22, 1), pi, MM_GEZIEN)
+    check(fog.gezien > oost,
+          "de kaart groeit niet mee met waar je loopt, dus verkennen levert "
+          "niets op: je blijft hetzelfde stukje gang zien")
+
+
+@test
+def minimap_cheatstand_onthoudt_niets():
+    fog = Minimap()
+    fog.update(MM_GANG, 5, 5, *mm_pos(1, 1), 0.0, MM_GEZIEN)
+    vooraf = set(fog.gezien)
+    fog.update(MM_GANG, 5, 5, *mm_pos(1, 1), 0.0, MM_VOLLEDIG)
+    check(len(fog.zichtbaar) == 25, "de cheatstand toont niet de hele kaart")
+    check(fog.gezien == vooraf,
+          "de cheatstand onthoudt de hele kaart, dus terugschakelen naar 'alleen "
+          "gezien' kan niet meer: je heet dan alles te hebben gezien")
+    fog.update(MM_GANG, 5, 5, *mm_pos(1, 1), 0.0, MM_GEZIEN)
+    check(fog.gezien == vooraf,
+          "terugschakelen naar 'alleen gezien' geeft niet de ontdekte kaart terug")
+
+
+@test
+def minimap_uit_onthoudt_niets():
+    fog = Minimap()
+    for _ in range(3):
+        fog.update(MM_GANG, 5, 5, *mm_pos(1, 1), 0.0, MM_UIT)
+    check(not fog.gezien,
+          "met de kaart uit wordt er alsnog onthouden, dus aanzetten toont meteen "
+          "al je verkende gebied van een vorige sessie")
+    check(not fog.zichtbaar, "uitgezette kaart meldt toch wat er zichtbaar is")
+
+
 # ── UI tekenen ─────────────────────────────────────────────────
 #
 # De rest van de suite draait met GUNK_HEADLESS=1, waardoor config.SCREEN
@@ -1776,8 +1971,17 @@ sys.path.insert(0, ROOT)
 sys.argv = ["game.py"]
 
 import importlib.util
+import pygame
 from src.ui.Menu import Menu_inst, Tekstballon
 from src.network.protocol import encode_packet, decode_packet
+from src.core.map_loader import M
+from src.core.config import TILE_SIZE
+from src.core.minimap import Minimap, UIT as MINIMAP_UIT, GEZIEN as MINIMAP_GEZIEN, VOLLEDIG as MINIMAP_VOLLEDIG
+
+
+def check_ui(cond, msg):
+    if not cond:
+        raise AssertionError(msg)
 
 
 class FakeGame:
@@ -1914,6 +2118,120 @@ try:
     game._spectate_pid = 1
     menu.draw_UI([])
     game.spectating = False
+
+    # ── de minimap ───────────────────────────────────────────
+    #
+    # De standaard is uit, en dat is een eis: de kaart onthoudt alleen wat je
+    # echt hebt gezien, en dat is een manier van spelen, geen gratis voordeel.
+    # `_settings_path` wijken we uit naar een tijdelijk bestand, want anders leest
+    # de test de echte settings.json van de speler, en dan hangt de uitkomst af
+    # van wat die toevallig op die dag bevat.
+    import json, tempfile
+    tmp_settings = os.path.join(tempfile.gettempdir(), "gunk_minimap_settings.json")
+    if os.path.exists(tmp_settings):
+        os.unlink(tmp_settings)
+    game._settings_path = lambda: tmp_settings
+    with open(tmp_settings, "w") as f:
+        json.dump({"sfx_volume": 0.3}, f)          # bewust zonder minimap-sleutel
+    game._load_settings()
+    check_ui(game.minimap_mode == MINIMAP_UIT,
+             "zonder instelling start de minimap niet uit")
+    game.minimap = Minimap()
+    menu.draw_minimap(game)                          # uit: tekent niets
+    check_ui(not game.minimap.gezien,
+             "een uitgezette minimap onthoudt alsnog wat de speler heeft gezien")
+
+    # Uitgezet wordt er helemaal niets getekend. De eerste stap van het tekenen
+    # is het opbouwen van de tegellagen, dus blijft die cache leeg, dan is er ook
+    # niets op het scherm gezet.
+    #
+    # Niet het scherm zelf vergelijken: met de dummy videodriver is de inhoud
+    # van het schermbuffer niet betrouwbaar, en zo'n vergelijking gaat dan
+    # willekeurig rood zonder dat er iets stuk is.
+    menu._minimap_vergeet()
+    menu.draw_minimap(game)
+    check_ui(menu._mm_kaart is None,
+             "met de minimap uit worden de tegellagen toch opgebouwd, dus er is "
+             "alsnog iets getekend")
+
+    # De drie standen tekenen, en de knop schakelt ze in de juiste volgorde.
+    for stand in (MINIMAP_UIT, MINIMAP_GEZIEN, MINIMAP_VOLLEDIG):
+        game.minimap_mode = stand
+        menu.draw_minimap(game)
+    game.minimap_mode = MINIMAP_UIT
+    for _i in range(3):
+        game.cycle_minimap()
+        check_ui(game.minimap_mode in (MINIMAP_GEZIEN, MINIMAP_VOLLEDIG, MINIMAP_UIT),
+                 f"cycle_minimap gaf een onbekende stand: {game.minimap_mode}")
+    check_ui(game.minimap_mode == MINIMAP_UIT,
+             "drie keer doorschakelen komt niet terug op uit")
+
+    # Een levelwissel terwijl de minimap aanstaat: de getekende lagen horen op
+    # de nieuwe kaart, niet op de kaart van daarvoor.
+    game.minimap_mode = MINIMAP_GEZIEN
+    menu.draw_minimap(game)
+    game.level_up()
+    menu.draw_minimap(game)
+    check_ui(menu._mm_kaart is M.MAP,
+             "na een levelwissel tekent de minimap nog de vorige kaart")
+
+    # Het scherm zelf, met de knop die de stand toont.
+    game.state = "settings"
+    game._settings_return = "menu"
+    menu.draw_settings([], game)
+
+    # En nu in de pixels kijken. "Tekent zonder fout" zegt niets over wát er
+    # getekend wordt, dus hier staan we de tegellagen tegenover de tegels die
+    # de tracker kent. Zonder de omgeving erbij te zetten, want die tekent ook
+    # over de kaart heen.
+    game.minimap = Minimap()
+    game.minimap_mode = MINIMAP_GEZIEN
+    game.remote_players = []
+    game.objects = {"enemies": [], "exit": None, "keycard": [], "ammo": [], "health": []}
+    open_tegels = [(x, y) for y in range(M.height) for x in range(M.width)
+                   if M.MAP[y][x] != 1]
+    for i, (x, y) in enumerate(open_tegels[::7]):
+        game.player.pos.x = (x + 0.5) * TILE_SIZE
+        game.player.pos.y = (y + 0.5) * TILE_SIZE
+        game.player.angle = i * 0.7
+        menu.draw_minimap(game)
+
+    onthouden, _muur, _vloer = menu._minimap_lagen(game.minimap)
+    muur_gezien, vloer_gezien = None, None
+    for y in range(M.height):
+        for x in range(M.width):
+            kleur = onthouden.get_at((x, y))
+            if (x, y) in game.minimap.gezien:
+                check_ui(kleur.a == 255,
+                         f"tegel ({x},{y}) is onthouden maar staat niet op de kaart")
+                if M.MAP[y][x] == 1:
+                    muur_gezien = kleur
+                else:
+                    vloer_gezien = kleur
+            else:
+                check_ui(kleur.a == 0,
+                         f"tegel ({x},{y}) is nooit gezien maar staat alsnog op de kaart")
+    check_ui(muur_gezien is not None and vloer_gezien is not None,
+             "sanity: er is geen muur én geen vloer onthouden, dus hierboven valt "
+             "niets te toetsen")
+    check_ui(muur_gezien != vloer_gezien,
+             "muren en vloeren hebben dezelfde kleur, dus je ziet niet meer wat een "
+             "muur is en wat een gang")
+
+    # De stand overleeft een herstart, en een onzinwaarde geeft geen crash maar
+    # terugval op uit.
+    for stand in (MINIMAP_GEZIEN, MINIMAP_VOLLEDIG, MINIMAP_UIT):
+        game.minimap_mode = stand
+        game.save_settings()
+        game.minimap_mode = -1
+        game._load_settings()
+        check_ui(game.minimap_mode == stand, f"stand {stand} overleeft save/load niet")
+    with open(tmp_settings, "w") as f:
+        json.dump({"minimap": "onzin"}, f)
+    game._load_settings()
+    check_ui(game.minimap_mode == MINIMAP_UIT,
+             "een onbekende stand in settings.json geeft geen terugval op uit")
+    os.unlink(tmp_settings)
 except Exception:
     traceback.print_exc()
     sys.exit(1)

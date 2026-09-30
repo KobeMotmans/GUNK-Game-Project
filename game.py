@@ -22,6 +22,7 @@ from src.entities.enemies import NormalEnemy, FastEnemy, TankEnemy, FinalBoss, F
 from src.entities.player import Player
 from src.ui.Menu import Menu_inst, Bilal
 from src.core.map_loader import M, png_to_list_fast
+from src.core.minimap import Minimap, UIT as MINIMAP_UIT, STANDEN as MINIMAP_STANDEN
 from src.entities.objects import PickupObject, PlayerSprite
 from src.assets.skin_manager import SkinManager
 from src.core.vector import Vector
@@ -147,9 +148,12 @@ class Game:
         self.elevator_pending = [0, 0]
         self.exit_pos = None
 
-        # Minimap
-        self.minimap_show_enemies = True
-        self.minimap_show_objects = True
+        # Minimap. Standaard uit, en de stand is in drie waarden: 0 = uit,
+        # 1 = alleen de tegels die ik heb gezien, 2 = alles (handig om een
+        # lastig level even te overleven). Zie src/core/minimap.py voor wat
+        # "gezien" precies inhoudt.
+        self.minimap = Minimap()
+        self.minimap_mode = MINIMAP_UIT
 
         self._settings_return = "menu"
         self._paused_frame = None
@@ -260,6 +264,7 @@ class Game:
             "music_volume": self.music_volume,
             "resolution": self.resolution,
             "tutorial": self.bilal.flags["general"],
+            "minimap": self.minimap_mode,
         }
         try:
             with open(self._settings_path(), "w") as f:
@@ -275,8 +280,23 @@ class Game:
             self.music_volume = data.get("music_volume", self.music_volume)
             self.resolution = data.get("resolution", self.resolution)
             self.bilal.flags["general"] = data.get("tutorial", self.bilal.flags["general"])
+            self.minimap_mode = self._minimap_stand(data.get("minimap", MINIMAP_UIT))
         except (FileNotFoundError, json.JSONDecodeError):
             pass
+
+    @staticmethod
+    def _minimap_stand(waarde):
+        """Een onbekende of kapotte stand is uit, niet een crash."""
+        return waarde if waarde in MINIMAP_STANDEN else MINIMAP_UIT
+
+    def cycle_minimap(self):
+        """Uit -> alleen gezien -> volledig -> uit.
+
+        Blijft hij uit, dan blijft er ook niets onthouden: de kaart bouwt zich
+        pas op vanaf het moment dat je hem aanzet.
+        """
+        self.minimap_mode = (self.minimap_mode + 1) % len(MINIMAP_STANDEN)
+        self.save_settings()
 
     def _load_sounds(self):
         if self.main_music_intro:
@@ -395,7 +415,7 @@ class Game:
                 self.running = False
 
             if event.type == pygame.VIDEORESIZE:
-                self.Menu._minimap_bg = None
+                self.Menu._minimap_vergeet()
                 cfg.resize_display(event.w, event.h)
 
             if self.state == "spectating":

@@ -9,6 +9,7 @@ from ..core.paths import list_packs, set_packs, save_active_packs, TEXTURE_PACKS
 from ..core.theme import theme
 from collections import deque
 from ..core.map_loader import M
+from ..core.minimap import UIT as MINIMAP_UIT, GEZIEN as MINIMAP_GEZIEN, VOLLEDIG as MINIMAP_VOLLEDIG
 from ..assets.skin_manager import SkinManager
 from ..network.network import NetworkClient
 from ..network.discovery import DiscoveryListener
@@ -45,6 +46,17 @@ def _font_px(key, base_px, ref="min"):
     Tekstballon) dezelfde maat nodig hebben zonder Menu te zijn.
     """
     return max(10, int(theme.scaled(key, base_px / REF_HEIGHT, ref)))
+
+
+# De drie standen van de minimap, in de volgorde waarin de knop ze doorloopt.
+# De teksten staan als (themasleutel, terugvaltekst) zodat een texture pack ze
+# kan vertalen; de kleuren geven aan welke stand actief is.
+MINIMAP_LABELS = (
+    ("settings.minimap_off", "MINIMAP: OFF"),
+    ("settings.minimap_seen", "MINIMAP: SEEN"),
+    ("settings.minimap_all", "MINIMAP: ALL"),
+)
+MINIMAP_KLEUREN = ((60, 60, 70), (40, 100, 160), (120, 90, 30))
 
 
 def _fit_width(surf, max_width):
@@ -88,6 +100,7 @@ class Menu:
         
         self.lift_time = ELEV_TIME
         self.loading_progress = 0
+        self._minimap_vergeet()
 
         # Multiplayer input fields + disk cache
         netcfg = NetworkClient.load_config()
@@ -1072,10 +1085,23 @@ class Menu:
             game=self.game, target_state="settings", function="tutorial")
         tuto_btn.draw_button(events)
 
+        # Minimap: drie standen, en de knop zegt welke. De kleur alleen kan
+        # niet, want er zijn er drie in plaats van twee.
+        minimap_stand = getattr(self.game, "minimap_mode", MINIMAP_UIT)
+        label_key, label_default = MINIMAP_LABELS[minimap_stand]
+        minimap_label = theme.string(label_key, label_default)
+        minimap_kleur = MINIMAP_KLEUREN[minimap_stand]
+        minimap_btn = Button(c - int(_cfg.WIDTH * 0.08), int(_cfg.HEIGHT * theme.pos("settings.minimap_btn_y", 0.66)),
+            int(_cfg.WIDTH * 0.16), int(_cfg.HEIGHT * 0.05), minimap_label, btn_font_px,
+            text_color="white", button_color=minimap_kleur,
+            hover_text_color="white", hover_button_color=tuple(min(255, c + 20) for c in minimap_kleur),
+            game=self.game, target_state="settings", function="minimap")
+        minimap_btn.draw_button(events)
+
         # Texture pack → pack selector
         self._draw_main_button(events,
             theme.string("settings.texture_pack", "TEXTURE PACKS >"),
-            int(_cfg.HEIGHT * theme.pos("settings.pack_btn_y", 0.66)),
+            int(_cfg.HEIGHT * theme.pos("settings.pack_btn_y", 0.73)),
             int(_cfg.WIDTH * 0.14),
             lambda: self._open_pack_select(GAME),
             font_size=28)
@@ -1577,117 +1603,196 @@ class Menu:
                 )
         return self.sfx_volume_slider
 
-    def _build_minimap_bg(self):
-        w, h = M.width, M.height
-        surf = pygame.Surface((w, h)).convert_alpha()
-        wall_c = tuple(theme.color("minimap.wall", (80, 80, 80)))
-        floor_c = tuple(theme.color("minimap.floor", (40, 40, 40)))
-        for y in range(h):
-            for x in range(w):
-                surf.set_at((x, y), wall_c if M.MAP[y][x] == 1 else floor_c)
+    # ── Minimap ──────────────────────────────────────────────
+    #
+    # De kaart toont de hele level, maar alleen de tegels die de speler heeft
+    # gezien. `game.minimap` (src/core/minimap.py) houdt bij welke dat zijn; de
+    # tekening hieronder doet niets dan die twee lagen kleuren en de speler,
+    # teamgenoten, vijanden en objects eroverheen zetten.
+    #
+    # De kaart bestaat uit twee oppervlakken van één pixel per tegel:
+    # `onthouden` is de tegels die je ooit hebt gezien, in donkere kleuren, en
+    # `helder` is élke tegel in de gewone kleuren. In de stand GEZIEN zetten we
+    # de helder-lagen over de zichtbare tegels heen; in de stand VOLLEDIG is
+    # dat de hele kaart en hebben we geen enkel per-tegel werk nodig.
+    #
+    # Dit is bewust één pixel per tegel in plaats van een rect per tegel per
+    # frame: een level van 40x40 is 1600 rects, en `pygame.transform.scale`
+    # doet het vergroten in C.
+
+    def _minimap_vergeet(self):
+        """Gooi de getekende lagen weg. Bij een nieuw level, thema of resize."""
+        self._mm_kaart = None
+        self._mm_onthouden = None
+        self._mm_helder = None
+        self._mm_versie = -1
+
+    def _minimap_laag(self, kleur_voor):
+        """Een oppervlak van M.width x M.height met één pixel per tegel.
+
+        `kleur_voor(x, y)` geeft de kleur van die tegel, of None om de tegel
+        transparant te laten.
+        """
+        surf = pygame.Surface((M.width, M.height), pygame.SRCALPHA)
+        for y in range(M.height):
+            for x in range(M.width):
+                kleur = kleur_voor(x, y)
+                if kleur is not None:
+                    surf.set_at((x, y), kleur)
         return surf
 
+    def _minimap_kleuren(self):
+        muur = tuple(theme.color("minimap.wall", (80, 80, 80)))
+        vloer = tuple(theme.color("minimap.floor", (40, 40, 40)))
+        # De onthouden tegels zijn flink donkerder dan de zichtbare, zodat je
+        # in één oogopslag ziet waar je nu bent en waar je al was.
+        muur_donker = tuple(theme.color("minimap.wall_donker", (48, 48, 48)))
+        vloer_donker = tuple(theme.color("minimap.floor_donker", (22, 22, 22)))
+        return muur, vloer, muur_donker, vloer_donker
+
+    def _minimap_lagen(self, fog):
+        """De onthouden tegellaag, plus de kleuren van de helder getekende laag.
+
+        De helder laag is elke tegel in de gewone kleuren en verandert alleen
+        bij een andere kaart. De onthouden laag heeft alleen de tegels die de
+        speler heeft gezien, in donkere kleuren. De twee kleuren gaan mee terug
+        omdat de tekening ze nodig heeft voor de tegels die nu zichtbaar zijn.
+        """
+        muur, vloer, muur_donker, vloer_donker = self._minimap_kleuren()
+        if self._mm_kaart is not M.MAP:
+            self._mm_kaart = M.MAP
+            self._mm_onthouden = None
+            self._mm_helder = self._minimap_laag(
+                lambda x, y: muur if M.MAP[y][x] == 1 else vloer)
+        # `versie` telt omhoog zodra de speler nieuwe tegels heeft ontdekt, en
+        # dat is het enige moment waarop de onthouden laag opnieuw getekend moet
+        # worden. Zonder die check zou elke frame 1600 set_at kosten.
+        if self._mm_onthouden is None or self._mm_versie != fog.versie:
+            self._mm_onthouden = self._minimap_laag(
+                lambda x, y: (muur_donker if M.MAP[y][x] == 1 else vloer_donker)
+                if (x, y) in fog.gezien else None)
+            self._mm_versie = fog.versie
+        return self._mm_onthouden, muur, vloer
+
     def draw_minimap(self, game):
-        if not hasattr(self, '_minimap_bg') or self._minimap_bg is None:
-            self._minimap_bg = self._build_minimap_bg()
+        stand = getattr(game, "minimap_mode", MINIMAP_UIT)
+        if stand == MINIMAP_UIT:
+            # Standaard uit. Niets tekenen en niets onthouden.
+            return
 
-        size = theme.scaled("minimap.size", 0.12, "min")
-        view_radius = theme.size("minimap.view_radius", 5)
-        half_w = view_radius * TILE_SIZE
+        fog = getattr(game, "minimap", None)
+        if fog is None:
+            return
         px, py = game.player.pos.x, game.player.pos.y
+        angle = game.player.angle
+        # De stand GEZIEN gebruikt de kijkhoek en het bereik uit het thema,
+        # maar niet de cheatstand: die zou de hele level onthouden.
+        if stand == MINIMAP_GEZIEN:
+            fog.zicht_tegels = theme.size("minimap.view_radius", 7)
+        fog.update(M.MAP, M.width, M.height, px, py, angle, stand)
 
-        def to_mm(wx, wy):
-            return ((wx - (px - half_w)) / (half_w * 2)) * size, \
-                   ((wy - (py - half_w)) / (half_w * 2)) * size
+        onthouden, muur, vloer = self._minimap_lagen(fog)
+
+        if stand == MINIMAP_VOLLEDIG:
+            # Alles is al helder getekend, dus er is niets per frame te doen.
+            laag = self._mm_helder
+        else:
+            # De onthouden laag is een kopie, en daarop zetten we de tegels neer
+            # die de speler nu zicht op heeft. Een tegel die je ziet staat dus
+            # helder, een tegel die je alleen kent donker.
+            laag = onthouden.copy()
+            for (tx, ty) in fog.zichtbaar:
+                laag.set_at((tx, ty), muur if M.MAP[ty][tx] == 1 else vloer)
+
+        # De hele level in een vierkant vakje, met de verhouding intact. De
+        # kaarten zijn niet vierkant (22 tot 40 tegels per kant), dus er blijft
+        # een rand staan waar niets in staat.
+        size = theme.scaled("minimap.size", 0.12, "min")
+        kaart_w, kaart_h = M.width, M.height
+        if kaart_w >= kaart_h:
+            doel_w = size
+            doel_h = max(1, int(size * kaart_h / kaart_w))
+        else:
+            doel_h = size
+            doel_w = max(1, int(size * kaart_w / kaart_h))
+        in_x = (size - doel_w) / 2
+        in_y = (size - doel_h) / 2
 
         mm = pygame.Surface((size, size), pygame.SRCALPHA)
         mm.fill(tuple(theme.color("minimap.bg", (0, 0, 0, 160))))
+        mm.blit(pygame.transform.scale(laag, (doel_w, doel_h)),
+                (int(in_x), int(in_y)))
 
-        map_w_px = M.width * TILE_SIZE
-        map_h_px = M.height * TILE_SIZE
-        vp_left = max(0, px - half_w)
-        vp_top = max(0, py - half_w)
-        vp_right = min(map_w_px, px + half_w)
-        vp_bottom = min(map_h_px, py + half_w)
+        def to_mm(wx, wy):
+            return (in_x + (wx / TILE_SIZE) / kaart_w * doel_w,
+                    in_y + (wy / TILE_SIZE) / kaart_h * doel_h)
 
-        t_left = int(vp_left // TILE_SIZE)
-        t_top = int(vp_top // TILE_SIZE)
-        t_right = int(math.ceil(vp_right / TILE_SIZE))
-        t_bottom = int(math.ceil(vp_bottom / TILE_SIZE))
+        def op_kaart(wx, wy):
+            mm_x, mm_y = to_mm(wx, wy)
+            return mm_x, mm_y, 0 <= mm_x <= size and 0 <= mm_y <= size
 
-        px_per_tile = size / (view_radius * 2)
-        wall_c = tuple(theme.color("minimap.wall", (80, 80, 80)))
-        floor_c = tuple(theme.color("minimap.floor", (40, 40, 40)))
-
-        for y in range(t_top, t_bottom):
-            for x in range(t_left, t_right):
-                tile_wx = x * TILE_SIZE + TILE_SIZE // 2
-                tile_wy = y * TILE_SIZE + TILE_SIZE // 2
-                mm_x, mm_y = to_mm(tile_wx, tile_wy)
-                color = wall_c if M.MAP[y][x] == 1 else floor_c
-                pygame.draw.rect(mm, color,
-                    (mm_x - px_per_tile * 0.5, mm_y - px_per_tile * 0.5,
-                     math.ceil(px_per_tile), math.ceil(px_per_tile)))
-
+        # ── de speler ──────────────────────────────────────────
+        # Driehoekje in de kijkrichting, in het midden van het vakje in plaats
+        # van op de eigen positie: dat is makkelijker te vinden dan een groen
+        # puntje tussen de muren.
         cx = cy = size / 2
-        angle = game.player.angle
         player_c = tuple(theme.color("minimap.player", (0, 255, 0)))
-        tri_size = max(4, int(size * 0.035))
-        tip = (cx + tri_size * 1.5 * math.cos(angle),
-               cy + tri_size * 1.5 * math.sin(angle))
-        bl = (cx + tri_size * 1.5 * math.cos(angle + 2.5),
-              cy + tri_size * 1.5 * math.sin(angle + 2.5))
-        br = (cx + tri_size * 1.5 * math.cos(angle - 2.5),
-              cy + tri_size * 1.5 * math.sin(angle - 2.5))
         outline_c = tuple(theme.color("minimap.player_outline", (0, 180, 0)))
+        tri = max(4, int(size * 0.035))
+        tip = (cx + tri * 1.5 * math.cos(angle), cy + tri * 1.5 * math.sin(angle))
+        bl = (cx + tri * 1.5 * math.cos(angle + 2.5), cy + tri * 1.5 * math.sin(angle + 2.5))
+        br = (cx + tri * 1.5 * math.cos(angle - 2.5), cy + tri * 1.5 * math.sin(angle - 2.5))
         pygame.draw.polygon(mm, outline_c, [tip, bl, br])
         pygame.draw.polygon(mm, player_c, [tip, bl, br])
 
+        # ── teamgenoten ────────────────────────────────────────
+        # Altijd zichtbaar, ook door muren heen: het zijn je eigen mensen en je
+        # moet ze kunnen terugvinden als je ze kwijt bent.
         ally_c = tuple(theme.color("minimap.ally", (0, 150, 255)))
         for rp in game.remote_players:
             if rp is None:
                 continue
-            dx = rp.pos.x - px
-            dy = rp.pos.y - py
-            dist = math.hypot(dx, dy)
-            if dist > half_w and dist > 0:
-                nx = dx / dist * (half_w - TILE_SIZE * 0.5)
-                ny = dy / dist * (half_w - TILE_SIZE * 0.5)
-                mm_x = cx + nx / half_w * (size / 2)
-                mm_y = cy + ny / half_w * (size / 2)
-            else:
-                mm_x, mm_y = to_mm(rp.pos.x, rp.pos.y)
-            mm_x = max(0, min(size, mm_x))
-            mm_y = max(0, min(size, mm_y))
+            mm_x, mm_y, op_kaart_xy = op_kaart(rp.pos.x, rp.pos.y)
+            if not op_kaart_xy:
+                continue
             pygame.draw.circle(mm, ally_c, (int(mm_x), int(mm_y)),
                 max(2, int(size * 0.025)))
 
-        if getattr(game, 'minimap_show_enemies', True):
-            enemy_c = tuple(theme.color("minimap.enemy", (255, 50, 50)))
-            for e in list(game.objects.get("enemies", [])):
-                if e.health > 0:
-                    mm_x, mm_y = to_mm(e.pos.x, e.pos.y)
-                    if 0 <= mm_x <= size and 0 <= mm_y <= size:
-                        pygame.draw.circle(mm, enemy_c, (int(mm_x), int(mm_y)),
-                            max(1, int(size * 0.015)))
+        # ── vijanden ───────────────────────────────────────────
+        # Alleen waar de speler nu echt zicht op heeft. Ze verdwijnen dus weer
+        # zodra je je omdraait, en dat is precies zoals het in de wereld gaat.
+        enemy_c = tuple(theme.color("minimap.enemy", (255, 50, 50)))
+        for e in list(game.objects.get("enemies", [])):
+            if e.health <= 0 or not fog.is_zichtbaar(e.pos.x, e.pos.y):
+                continue
+            mm_x, mm_y, op_kaart_xy = op_kaart(e.pos.x, e.pos.y)
+            if not op_kaart_xy:
+                continue
+            pygame.draw.circle(mm, enemy_c, (int(mm_x), int(mm_y)),
+                max(1, int(size * 0.015)))
 
-        if getattr(game, 'minimap_show_objects', True):
-            exit_obj = game.objects.get("exit")
-            if exit_obj is not None:
-                mm_x, mm_y = to_mm(exit_obj.pos.x, exit_obj.pos.y)
-                exit_c = tuple(theme.color("minimap.exit", (255, 255, 0)))
-                s = max(2, int(size * 0.025))
-                if 0 <= mm_x <= size and 0 <= mm_y <= size:
-                    pygame.draw.rect(mm, exit_c, (int(mm_x) - s // 2, int(mm_y) - s // 2, s, s))
-                else:
-                    dx = exit_obj.pos.x - px
-                    dy = exit_obj.pos.y - py
-                    a = math.atan2(dy, dx)
-                    r = size / 2 - s
-                    cx = cy = size / 2
-                    mm_x = cx + math.cos(a) * r
-                    mm_y = cy + math.sin(a) * r
-                    pygame.draw.circle(mm, exit_c, (int(mm_x), int(mm_y)), s)
+        # ── uitgang, keycard en pickups ─────────────────────────
+        # Pas als je ze gezien hebt. Anders weet de speler vanaf de eerste
+        # seconde waar alles op de kaart ligt en is verkennen zinloos.
+        s = max(2, int(size * 0.025))
+        for naam, kleur_key in (("exit", "minimap.exit"),
+                                ("keycard", "minimap.keycard"),
+                                ("ammo", "minimap.ammo"),
+                                ("health", "minimap.health")):
+            obj = game.objects.get(naam)
+            if obj is None:
+                continue
+            if not isinstance(obj, list):
+                obj = [obj]
+            kleur = tuple(theme.color(kleur_key, (255, 255, 255)))
+            for o in obj:
+                if o is None or not fog.is_gezien(o.pos.x, o.pos.y):
+                    continue
+                mm_x, mm_y, op_kaart_xy = op_kaart(o.pos.x, o.pos.y)
+                if not op_kaart_xy:
+                    continue
+                pygame.draw.rect(mm, kleur,
+                                 (int(mm_x) - s // 2, int(mm_y) - s // 2, s, s))
 
         border = theme.size("minimap.border", 2)
         if border > 0:
@@ -1753,6 +1858,8 @@ class Button:
                     elif self.function == "tutorial":
                         self.GAME.bilal.flags["general"] = not self.GAME.bilal.flags["general"]
                         self.GAME.save_settings()
+                    elif self.function == "minimap":
+                        self.GAME.cycle_minimap()
                     if self.target_state == "reset":
                         self.GAME.reset_game()
                     elif self.target_state == "Stop":
