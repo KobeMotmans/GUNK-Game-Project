@@ -1976,6 +1976,8 @@ from src.ui.Menu import Menu_inst, Tekstballon
 from src.network.protocol import encode_packet, decode_packet
 from src.core.map_loader import M
 from src.core.config import TILE_SIZE
+from src.core import config as _cfg
+from src.core.theme import theme
 from src.core.minimap import Minimap, UIT as MINIMAP_UIT, GEZIEN as MINIMAP_GEZIEN, VOLLEDIG as MINIMAP_VOLLEDIG
 
 
@@ -2153,6 +2155,75 @@ try:
     check_ui(menu._mm_kaart is None,
              "met de minimap uit worden de tegellagen toch opgebouwd, dus er is "
              "alsnog iets getekend")
+
+    # Het pijltje van de speler moet op de plek staan waar de speler ook staat.
+    # Dat is van alle markers de enige die ooit in het midden van het vakje stond,
+    # en dat viel alleen met een blik op het scherm op. We tekenen daarom op een
+    # eigen oppervlak in plaats van het scherm, en kijken waar het pijltje
+    # terechtkomt ten opzichte van de tegel waar de speler op staat.
+    game.minimap = Minimap()
+    game.minimap_mode = MINIMAP_VOLLEDIG
+    game.remote_players = []
+    game.objects = {"enemies": [], "exit": None, "keycard": [], "ammo": [], "health": []}
+    # Een tegel die open is, middenin het level, zodat het pijltje niet tegen de
+    # rand aan komt te liggen.
+    open_midden = [(x, y) for y in range(M.height) for x in range(M.width)
+                   if M.MAP[y][x] != 1 and 2 <= x < M.width - 2 and 2 <= y < M.height - 2]
+    check_ui(bool(open_midden), "geen open tegel met ruimte eromheen gevonden")
+    tx, ty = open_midden[0]
+    game.player.pos.x = (tx + 0.5) * TILE_SIZE
+    game.player.pos.y = (ty + 0.5) * TILE_SIZE
+    game.player.angle = 0.0                       # naar rechts, dus de punt wijst +x
+
+    echt_scherm = _cfg.SCREEN
+    try:
+        _cfg.SCREEN = pygame.Surface((_cfg.WIDTH, _cfg.HEIGHT))
+        menu.draw_minimap(game)
+        plaatje = _cfg.SCREEN
+    finally:
+        _cfg.SCREEN = echt_scherm
+
+    # Waar hoort het pijltje te staan? Zelfde omrekening als in draw_minimap:
+    # de kaart is vierkant met de verhouding erin, dus met zwarte rand erbovenop.
+    mm_size = theme.scaled("minimap.size", 0.12, "min")
+    kaart_w, kaart_h = M.width, M.height
+    if kaart_w >= kaart_h:
+        doel_w = mm_size
+        doel_h = max(1, int(mm_size * kaart_h / kaart_w))
+    else:
+        doel_h = mm_size
+        doel_w = max(1, int(mm_size * kaart_w / kaart_h))
+    in_x = (mm_size - doel_w) / 2
+    in_y = (mm_size - doel_h) / 2
+    screen_x = int(_cfg.WIDTH * theme.pos("minimap.x", 0.78))
+    screen_y = int(_cfg.HEIGHT * theme.pos("minimap.y", 0.02))
+
+    def op_scherm(px, py):
+        """Waar een tegel van de kaart op het scherm terechtkomt."""
+        mx = in_x + (px / TILE_SIZE) / kaart_w * doel_w
+        my = in_y + (py / TILE_SIZE) / kaart_h * doel_h
+        return int(screen_x + mx), int(screen_y + my)
+
+    speler_scherm = op_scherm(game.player.pos.x, game.player.pos.y)
+    # Het midden van het vakje: waar het pijltje vroeger onterecht stond.
+    midden_scherm = (int(screen_x + mm_size / 2), int(screen_y + mm_size / 2))
+
+    speler_kleur = tuple(theme.color("minimap.player", (0, 255, 0)))
+    # De punt steekt een paar pixels voor de speler uit, dus kijk in een klein
+    # raamwerk om de tegel heen in plaats van op één pixel.
+    raam = 3
+    groen_bij_speler = any(
+        plaatje.get_at((speler_scherm[0] + dx, speler_scherm[1] + dy))[:3] == speler_kleur
+        for dy in range(-raam, raam + 1) for dx in range(0, raam + 2))
+    check_ui(groen_bij_speler,
+             f"het pijltje van de speler staat niet op de tegel waar hij staat "
+             f"({tx},{ty}), dus de kaart zegt op de verkeerde plek dat hij is")
+    groen_midden = any(
+        plaatje.get_at((midden_scherm[0] + dx, midden_scherm[1] + dy))[:3] == speler_kleur
+        for dy in range(-raam, raam + 1) for dx in range(-raam, raam + 1))
+    check_ui(not groen_midden,
+             "het pijltje van de speler staat in het midden van het vakje in "
+             "plaats van op zijn eigen positie")
 
     # De drie standen tekenen, en de knop schakelt ze in de juiste volgorde.
     for stand in (MINIMAP_UIT, MINIMAP_GEZIEN, MINIMAP_VOLLEDIG):

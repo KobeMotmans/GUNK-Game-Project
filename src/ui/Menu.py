@@ -1723,6 +1723,8 @@ class Menu:
         mm.blit(pygame.transform.scale(laag, (doel_w, doel_h)),
                 (int(in_x), int(in_y)))
 
+        # Wereldpositie -> pixel op het kaartje. Alle markers gaan hierdoorheen,
+        # zodat ze op dezelfde plek staan als de tegel die ze beschrijven.
         def to_mm(wx, wy):
             return (in_x + (wx / TILE_SIZE) / kaart_w * doel_w,
                     in_y + (wy / TILE_SIZE) / kaart_h * doel_h)
@@ -1732,18 +1734,27 @@ class Menu:
             return mm_x, mm_y, 0 <= mm_x <= size and 0 <= mm_y <= size
 
         # ── de speler ──────────────────────────────────────────
-        # Driehoekje in de kijkrichting, in het midden van het vakje in plaats
-        # van op de eigen positie: dat is makkelijker te vinden dan een groen
-        # puntje tussen de muren.
-        cx = cy = size / 2
+        # Driehoekje in de kijkrichting, op de eigen positie. Nu de kaart de
+        # hele level toont moet dat ook echt de plek zijn waar hij staat: een
+        # pijltje in het midden zou zeggen "hier ben ik" terwijl de speler
+        # ergens anders op de kaart staat.
         player_c = tuple(theme.color("minimap.player", (0, 255, 0)))
         outline_c = tuple(theme.color("minimap.player_outline", (0, 180, 0)))
         tri = max(4, int(size * 0.035))
-        tip = (cx + tri * 1.5 * math.cos(angle), cy + tri * 1.5 * math.sin(angle))
-        bl = (cx + tri * 1.5 * math.cos(angle + 2.5), cy + tri * 1.5 * math.sin(angle + 2.5))
-        br = (cx + tri * 1.5 * math.cos(angle - 2.5), cy + tri * 1.5 * math.sin(angle - 2.5))
-        pygame.draw.polygon(mm, outline_c, [tip, bl, br])
-        pygame.draw.polygon(mm, player_c, [tip, bl, br])
+        cx, cy = to_mm(px, py)
+        # De speler staat normaal altijd op de kaart, maar niet het moment dat
+        # de level net is gewisseld of de speler net is teruggezet na de lift.
+        # Dan zou het pijltje in de rand zweven, dus dan tekenen we het niet.
+        if 0 <= cx <= size and 0 <= cy <= size:
+            # Eerst een grotere donkere driehoek, dan de puntige erop: zo blijft
+            # het pijltje zichtbaar ook als de tegel eronder bijna dezelfde
+            # kleur heeft.
+            for schaal, kleur in ((1.9, outline_c), (1.4, player_c)):
+                r = tri * schaal
+                tip = (cx + r * math.cos(angle), cy + r * math.sin(angle))
+                bl = (cx + r * math.cos(angle + 2.5), cy + r * math.sin(angle + 2.5))
+                br = (cx + r * math.cos(angle - 2.5), cy + r * math.sin(angle - 2.5))
+                pygame.draw.polygon(mm, kleur, [tip, bl, br])
 
         # ── teamgenoten ────────────────────────────────────────
         # Altijd zichtbaar, ook door muren heen: het zijn je eigen mensen en je

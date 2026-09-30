@@ -76,13 +76,48 @@ De tekentest (`ui_lobby_joinscherm_en_hud_tekenen_zonder_fout`) doet hetzelfde
 met de tekening en de instelling, en kijkt bovendien in de pixels: de onthouden
 laag bevat precies de tegels uit `fog.gezien`, muren en vloeren hebben
 verschillende kleuren, en met de kaart uit worden de lagen niet eens
-opgebouwd. Let op: daar het scherm zelf mee vergelijken werkt niet, de inhoud
-van het schermbuffer is met de dummy videodriver niet betrouwbaar.
+opgebouwd. Let op: het echte schermbuffer niet vergelijken, de inhoud daarvan
+is met de dummy videodriver niet betrouwbaar. De test zet daarom zelf een
+eigen oppervlak onder `_cfg.SCREEN`, tekent daarop en leest de pixels daar
+weer uit.
+
+### Het pijltje van de speler
+Het groene driehoekje stond een tijdje in het **midden** van het vakje, met een
+commenta dat het daar moest: "makkelijker te vinden dan een groen puntje tussen
+de muren". Dat klopt als de kaart een raampje om de speler is, maar niet meer
+nu hij de hele level toont. Dan zegt een pijltje in het midden "hier ben ik"
+terwijl de speler ergens anders op de kaart staat, en dat is misleidend zodra
+je de kaart echt gebruikt om te navigeren.
+
+Het gaat nu door dezelfde `to_mm` als alle andere markers, dus het staat op de
+tegel waar de speler staat. De tekentest rekent die positie zelf na en kijkt of
+er daar groen staat, en ook of er midden in het vakje géén groen staat — die
+laatste assertie is belangrijk, want anders zou een pijltje dat halfweg
+gepositioneerd is zomaar door de test heen glijden.
+
+Twee dingen kwamen daaruit:
+- een `return` in de tak "speler valt buiten de kaart" bleek de héle kaart te
+  overslaan, want het oppervlak wordt pas op het laatste op het scherm
+  gezet. Het is nu een voorwaarde om een blok heen;
+- het pijltje kreeg een donkere rand eronder, anders valt het weg op een tegel
+  die al bijna dezelfde kleur heeft.
+
+### Valkuil bij het testen van tekening
+Een mutatierunner die een bronbestand herschrijft kan zichzelf afschieten.
+`open(pad, "w")` wordt in Python geëvalueerd vóór de `.replace()` die erin
+moet staan, dus zodra die replace barst, staat het bestand al leeg. Terugzetten
+in een `finally` helpt dan niet meer, want die staat pas ná de regel die het
+bestand leegmaakte. De volgorde moet dus zijn: eerst de nieuwe inhoud in een
+variabele zetten, dan pas het bestand openen.
+
+`src/ui/Menu.py` was daardoor een keer 0 bytes en moest terug uit de commit.
+Daarom is de fix op het pijltje meteen apart gecommit en niet pas aan het
+einde.
 
 ### Nog niet gedaan
 - De levelnaam staat niet op de kaart. Met vijf levels is dat handig om te weten
   waar je bent, maar het is een extra regel tekst die in het vakje moet passen.
 - De minimap is niet zichtbaar in het meekijken-scherm (`spectating` tekent
   hem wel, maar dan met de positie van je eigen dode speler).
-- Geen muisaanwijzer op de kaart. Nu zit de speler als driehoekje in het midden
-  van het vakje, niet op zijn tegel, dus je moet hem zoeken.
+- Geen muisaanwijzer op de kaart.
+
