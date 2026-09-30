@@ -1,0 +1,21 @@
+# Dependencies van het spel zelf.
+# Alles wat hier niet bij staat is onderdeel van de standaardbibliotheek
+# van Python 3.10 (tkinter, socket, json, struct, ...).
+#
+# Alleen voor het draaien van het spel. De build (PyInstaller, Inno Setup)
+# heeft eigen tooling en leeft in build.ps1, game.spec en installer.iss.
+#
+#   python -m pip install -r requirements.txt
+#
+# Getest op Python 3.10.11 met:
+#   pygame 2.6.1  (SDL 2.28.4)
+#   numpy  2.2.6
+#   pillow 12.1.1
+#
+# De exacte versies staan er met `==` zodat iedereen hetzelfde draait. Wil je
+# liever de nieuwste versie, plak dan `pygame`, `numpy` en `pillow` zonder
+# versienummer, of draai `pip install -U -r requirements.txt`.
+
+pygame==2.6.1
+numpy==2.2.6
+pillow==12.1.1

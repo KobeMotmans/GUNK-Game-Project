@@ -1113,6 +1113,10 @@ class Game:
         packet = {
             "seq": self._pos_seq,
             "pos": (self.player.pos.x, self.player.pos.y),
+            # De server negeert de positie als dit nummer niet klopt met wat
+            # hij zegt. Zo kan een pakket dat onderweg was toen de lift
+            # vertrok niet de nieuwe spawn wegschrijven. Zie process_input.
+            "level": M.map_level,
             "health_delta": self._health_delta,
             "ammo_delta": self._ammo_delta,
             "enemy_damage": self._enemy_damage,
@@ -1270,6 +1274,11 @@ class Game:
 
         # 5. World state
         new_level = state.get("level", M.map_level)
+        # Een levelnummer buiten de kaarten zou MAP_PATH[index] laten
+        # klappen. Negeren is beter dan een IndexError in het midden van het
+        # spel: de speler blijft gewoon op de kaart die hij al had.
+        if not (0 <= new_level < len(MAP_PATH)):
+            new_level = M.map_level
         if new_level != M.map_level:
             if self.boss_music_playing:
                 self.boss_music_playing = False

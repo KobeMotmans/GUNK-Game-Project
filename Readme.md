@@ -29,6 +29,22 @@ Kobe Motmans, Andreas Meuwissen en, Ruben Verreth IR3-1
 |____|_  /____/|___  /\___  >___|  /    \___/  \___  >__|   |__|    \___  >__| |___|  /                  
  ```
 
+## Installeren
+
+Het spel draait op **Python 3.10** en heeft drie dependencies: pygame, numpy en
+Pillow. Die staan in `requirements.txt`. Zet ze in een eigen virtuele
+omgeving zodat je systeem-Python schoon blijft:
+
+```
+py -3.10 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe game.py
+```
+
+De volledige uitleg, inclusief de valkuilen (`python` kan een verkeerde
+versie zijn, `Activate.ps1` kan geblokkeerd zijn door het
+uitvoeringsbeleid), staat in **[SETUP.md](SETUP.md)**.
+
 ## Multiplayer
 
 ### Server starten

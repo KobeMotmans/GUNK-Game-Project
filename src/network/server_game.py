@@ -11,7 +11,7 @@ from ..core.map_loader import M, will_collide as _will_collide
 from ..core.config import (AGGRO_DIST, ATTACK_DIST, TILE_SIZE, PATHFIND_INTERVAL,
                     START_HEALTH, HEALTH_REGEN,
                     START_AMMO, AMMO_CAP, AMMO_PICKUP_AMOUNT, HEALTH_CHANCE, MAP_PATH,
-                    START_ANGLES, ELEVATOR_WAIT_DIST,
+                    START_ANGLES, ELEVATOR_WAIT_DIST, MAX_LEVEL,
                     ELEVATOR_WAIT_FRAMES, ELEVATOR_STUCK_FRAMES)
 from ..core.logger import log as _log
 from ..entities.enemy_ai import EnemyAI
@@ -87,6 +87,10 @@ class ServerGame:
         self.elevator_missing = []
         self._ammo_dropped = set()
         self._stuck_timer = 0
+        # Telter voor weggegooide posities van een client die nog op de
+        # vorige level zit. Normaal is dit een handvol per overgang; een
+        # groeiend getal betekent dat een client niet meer bijkomt.
+        self._stale_pos_rejects = 0
 
         # Lobby options (shared vs per-player resources)
         self.shared_health = True
@@ -290,7 +294,21 @@ class ServerGame:
         p = self.players[pid]
 
         if "pos" in data:
-            p["pos"] = Vector(data["pos"][0], data["pos"][1])
+            # De speler is client-authoritative, dus de server neemt de
+            # positie over. Maar tijdens een lift-overgang gaat er een pakket
+            # onderweg dat nog de positie van de VORIGE level draagt. Die
+            # kan op de nieuwe kaart midden in een muur staan, en de client
+            # teleporteert dan naar dat punt zodra hij de nieuwe level ziet.
+            #
+            # Dus: vertrouw de positie alleen als de client op dezelfde level
+            # zit als wij. Een pakket dat uit de oude level komt draagt
+            # per definitie het oude levelnummer, dus dat is geen gok op
+            # timing maar een check die altijd klopt. Oude clients die geen
+            # level meesturen blijven gewoon werken.
+            if "level" not in data or data["level"] == self.level:
+                p["pos"] = Vector(data["pos"][0], data["pos"][1])
+            else:
+                self._stale_pos_rejects += 1
         if "health_delta" in data:
             delta = data["health_delta"]
             if self.shared_health:
@@ -446,10 +464,24 @@ class ServerGame:
         return (near, len(active))
 
     def _level_up(self):
-        self.level += 1
-        if self.level >= 5:
+        # Het levelnummer gaat NIET verder dan de laatste kaart. Vroeger stond
+        # hier een hardcoded 5 en telde de server door tot 5, terwijl de
+        # client dan MAP_PATH[5] probeerde te laden. MAP_PATH heeft vijf
+        # kaarten, dus dat is een IndexError. De client zou dan ook blijven
+        # hangen op level 4 terwijl de server op 5 staat, en de
+        # level-controle in process_input zou zijn posities blijven weigeren.
+        # Ontsnappen melden we apart via self.escaped.
+        if self.level >= MAX_LEVEL:
             self.escaped = True
+            # De vlaggen moeten ook hier weg, anders blijft tick() elke frame
+            # _level_up aanroepen en blijft de lift bij de client dicht.
+            self.elevator_ready = True
+            self.elevator_transition = False
+            self.elevator_waiting = False
+            self.elevator_wait_timer = 0
+            self._transition_timeout = 0
             return
+        self.level += 1
         self._setup_level()
         for pdata in self.players.values():
             pdata["door_closed"] = False

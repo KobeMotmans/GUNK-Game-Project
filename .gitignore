@@ -14,3 +14,10 @@ GUNK.zip
 /.opencode
 gunk.log
 settings.json
+
+# De virtuele Python-omgeving waarin de dependencies uit requirements.txt
+# staan. Per machine verschillend en helemaal opnieuw op te bouwen, dus
+# hoort niet in de repository. Zie SETUP.md.
+.venv/
+venv/
+env/

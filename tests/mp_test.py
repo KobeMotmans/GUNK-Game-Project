@@ -41,7 +41,9 @@ from src.network.protocol import encode_packet, decode_packet  # noqa: E402
 from src.network.server_game import ServerGame                # noqa: E402
 from src.network.network import NetworkClient                  # noqa: E402
 from src.core.config import (MAX_PLAYERS, ELEVATOR_WAIT_DIST,   # noqa: E402
-                             ELEVATOR_WAIT_FRAMES, ELEVATOR_STUCK_FRAMES)
+                             ELEVATOR_WAIT_FRAMES, ELEVATOR_STUCK_FRAMES,
+                             TILE_SIZE, MAX_LEVEL, MAP_PATH)  # noqa: E402
+from src.core.map_loader import M                         # noqa: E402
 from math import hypot  # noqa: E402
 
 TEMP_DIR = tempfile.gettempdir()
@@ -399,8 +401,122 @@ def elevator_overgang_kan_geen_softlock_maken():
     check(sg.level == 3, f"level 3 niet gehaald (staande op {sg.level})")
 
 
-# ── netwerk-tests ──────────────────────────────────────────────
+def _staat_in_muur(pos):
+    """Staat dit punt op de nu geladen kaart tegen een muur?
 
+    Let op: M is de kaart die de server nu heeft geladen, dus dit slaat op
+    het level waar de speler NA de overgang zou zitten.
+    """
+    tx, ty = int(pos[0] // TILE_SIZE), int(pos[1] // TILE_SIZE)
+    breed, hoog = len(M.MAP[0]), len(M.MAP)
+    if tx < 0 or ty < 0 or tx >= breed or ty >= hoog:
+        return "buiten de kaart"
+    return "muur" if M.MAP[ty][tx] == 1 else "open"
+
+
+def _rijdt_lift_tot_overgang(sg, seqs=None, ticks=None):
+    """Zet alle spelers op de uitgang en rijd totdat het level verandert.
+
+    Vergelijkt met het level waarmee je begon, anders stopt hij meteen:
+    de helper wordt ook gebruikt als het level al 1 is.
+    """
+    if ticks is None:
+        ticks = ELEVATOR_WAIT_FRAMES + 300
+    if seqs is None:
+        seqs = {}
+    begin_level = sg.level
+    for _ in range(ticks):
+        seqs = drive_lift(sg, len(sg.players), [True] * len(sg.players),
+                          [(ON_TILE, 0)] * len(sg.players), 1, seqs)
+        if sg.level != begin_level or sg.escaped:
+            break
+    return seqs
+
+
+@test
+def lift_spawnt_niet_in_een_muur():
+    """Een vertraagd clientpakket mag de nieuwe spawn niet wegschrijven.
+
+    De speler is client-authoritative, dus de server neemt elke positie over.
+    Tijdens de overgang gaat er een pakket onderweg dat nog de positie van de
+    OUDE level draagt. Op de nieuwe kaart kan dat punt midden in een muur
+    staan, en de client teleporteert er dan naartoe zodra hij de nieuwe level
+    ziet. Dat was een echte bug: je startte de volgende level in een muur.
+    """
+    sg = make_lift_game(1)
+    oude_pos = (sg.exit_pos.x, sg.exit_pos.y)
+    seqs = _rijdt_lift_tot_overgang(sg)
+    check(sg.level == 1, f"level 1 niet gehaald (staande op {sg.level})")
+
+    spawn = M.SPAWNS["player"]
+    check(_staat_in_muur(spawn) == "open",
+          "de spawn van de nieuwe level staat zelf in een muur, "
+          "deze test kan dan niets bewijzen")
+
+    # Het pakket dat al onderweg was: de client stond nog op level 0.
+    seqs[0] = seqs.get(0, 0) + 1
+    sg.process_input(0, {"seq": seqs[0], "pos": oude_pos, "state": "game",
+                         "level": 0})
+
+    p = sg.players[0]
+    check(_staat_in_muur((p["pos"].x, p["pos"].y)) == "open",
+          f"speler staat in een muur op level {sg.level}: "
+          f"({p['pos'].x:.0f}, {p['pos'].y:.0f})")
+
+    state = sg.get_state()
+    verstuurd = state["players"][0]["pos"]
+    check(_staat_in_muur(verstuurd) == "open",
+          f"de server verstuurt een muurpositie door: {verstuurd}")
+    check(list(verstuurd) == [spawn[0], spawn[1]],
+          f"verstuurde positie {verstuurd} is niet de spawn {spawn}")
+
+
+@test
+def lift_posities_komen_weer_goed_na_de_overgang():
+    """De weigering mag niet permanent zijn: na de overgang telt de client
+    weer mee, anders zou de speler bevroren zijn op zijn nieuwe level."""
+    sg = make_lift_game(1)
+    seqs = _rijdt_lift_tot_overgang(sg)
+    seqs[0] = seqs.get(0, 0) + 1
+    sg.process_input(0, {"seq": seqs[0], "pos": (10.0, 20.0), "state": "game",
+                         "level": 1})
+    p = sg.players[0]
+    check(abs(p["pos"].x - 10.0) < 0.01 and abs(p["pos"].y - 20.0) < 0.01,
+          f"een pakket van de nieuwe level werd niet doorgelaten: "
+          f"({p['pos'].x:.0f}, {p['pos'].y:.0f})")
+
+
+@test
+def lift_escape_stuurt_geen_onbestaande_level():
+    """Na de laatste level mag het levelnummer niet verder dan MAP_PATH.
+
+    Vroeger telde de server door tot 5 terwijl er maar vijf kaarten zijn. De
+    client probeerde dan MAP_PATH[5] te laden, en bleef op 4 hangen terwijl de
+    server op 5 stond.
+    """
+    sg = make_lift_game(1)
+    seqs = {}
+    for verwacht in range(1, MAX_LEVEL + 1):
+        sg.enemies = []  # elke level laadt zijn eigen enemies er weer bij
+        seqs = _rijdt_lift_tot_overgang(sg, seqs)
+        check(sg.level == verwacht,
+              f"level {verwacht} niet gehaald (staande op {sg.level})")
+
+    # Eén keer nog: nu pas is de laatste level bereikt en moet escape komen.
+    sg.enemies = []
+    _rijdt_lift_tot_overgang(sg, seqs)
+
+    check(sg.escaped is True, "escape werd niet gemeld na de laatste level")
+    check(sg.elevator_transition is False,
+          "elevator_transition bleef staan na escape")
+    check(sg.level < len(MAP_PATH),
+          f"level {sg.level} bestaat niet in MAP_PATH ({len(MAP_PATH)} kaarten)")
+    state = sg.get_state()
+    check(0 <= state["level"] < len(MAP_PATH),
+          f"de state stuurt level {state['level']}, geen geldige kaart")
+
+
+# ── netwerk-tests ──────────────────────────────────────────────
 @test
 def lobby_zes_spelers_pas_en_nummer_zeven_krijgt_server_full():
     with LocalServer() as srv:
