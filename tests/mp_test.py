@@ -1300,7 +1300,7 @@ sys.path.insert(0, ROOT)
 sys.argv = ["game.py"]
 
 import importlib.util
-from src.ui.Menu import Menu_inst
+from src.ui.Menu import Menu_inst, Tekstballon
 from src.network.protocol import encode_packet, decode_packet
 
 
@@ -1401,6 +1401,25 @@ try:
     for pending in ([3, 6], [0, 0], [6, 6]):
         game.elevator_pending = pending
         game.render()
+
+    # De tutorial-ballon. Dit is de route die crashte zodra de tutorial aan
+    # stond: Tekstballon is geen Menu en riep daarom self._font_px aan, wat
+    # daar niet bestaat. Game.__init__ zet al vijf welkomstregels in de
+    # wachtrij, dus een update() maakt er een zichtbaar.
+    game.bilal.update()
+    game.bilal.draw()
+
+    # Dezelfde route via interrupt, en via een lange regel zodat het omvullen
+    # en de breedte-instelling ook echt getekend worden.
+    game.bilal.interrupt("Onderbreking", 30)
+    game.bilal.draw()
+    game.bilal.clear()
+    game.bilal.say("Een heel lange testregel voor het omvullen " * 8, 30)
+    game.bilal.update()
+    game.bilal.draw()
+
+    # En de ballon rechtstreeks, want dat is de klasse die het deed klappen.
+    Tekstballon("kort", 100, 10, game).draw()
 
     # Game-overscherm zonder en met de MEEKIJKEN-knop, plus de HUD-banner
     # van het meekijken zelf.

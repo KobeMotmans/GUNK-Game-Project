@@ -34,6 +34,19 @@ def _scale_px(base_px, ref="min"):
     return int(min(_cfg.WIDTH, _cfg.HEIGHT) * fractie)
 
 
+def _font_px(key, base_px, ref="min"):
+    """Fontmaat die met de resolutie meegroeit.
+
+    De key gaat naar het thema, dus een pack kan hem overriden. Let op:
+    gebruik GEEN bestaande themasleutel, want theme.scaled leest de waarde als
+    fractie en `sizes.input.height = 30` zou dan 30x1080 pixels betekenen.
+
+    Module-niveau en niet als methode, omdat klassen buiten Menu (zoals
+    Tekstballon) dezelfde maat nodig hebben zonder Menu te zijn.
+    """
+    return max(10, int(theme.scaled(key, base_px / REF_HEIGHT, ref)))
+
+
 def _fit_width(surf, max_width):
     """Schalen als een regel te breed is om in beeld te passen.
 
@@ -137,14 +150,7 @@ class Menu:
         return _scale_px(base_px, ref)
 
     def _font_px(self, key, base_px, ref="min"):
-        """Fontmaat die met de resolutie meegroeit.
-
-        De key gaat naar het thema, dus een pack kan hem overriden. Let op:
-        gebruik GEEN bestaande themasleutel, want theme.scaled leest de
-        waarde als fractie en `sizes.input.height = 30` zou dan 30x1080
-        pixels betekenen.
-        """
-        return max(10, int(theme.scaled(key, base_px / REF_HEIGHT, ref)))
+        return _font_px(key, base_px, ref)
 
     def _gap_px(self, base_px, ref="min"):
         """Ruimte tussen twee regels, die ook meeschuift met de resolutie."""
@@ -1829,7 +1835,9 @@ class Tekstballon:
         self.x_pos = x_pos
         self.max_width = max_width
         self.padding = padding
-        self.font = load_font(self._font_px("ui.font.speech", 20))
+        # Let op: module-niveau _font_px, niet self._font_px. Tekstballon is
+        # geen Menu, dus die methode bestaat hier niet.
+        self.font = load_font(_font_px("ui.font.speech", 20))
     @staticmethod
     def wrap_text(text, font, max_width):
         words = text.split(" ")
