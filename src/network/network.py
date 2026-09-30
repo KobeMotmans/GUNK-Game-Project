@@ -41,6 +41,19 @@ SKIN_UPLOAD_TIMEOUT = 10.0
 SKIN_UPLOAD_BURST = 16
 SKIN_UPLOAD_PAUSE = 0.002
 
+# Zelfde idee voor het downloaden, maar de klapper is hier de server en de
+# ontvangstbuffer die volloopt die van de client. Een skin van een paar
+# honderd kB is ruim zevenhonderd stukken; zonder pauze gaan die er in één
+# keer uit en blijft een groot deel in de kast van het netwerk hangen.
+#
+# Hoeveel stukken per burst is nu vooral een kwestie van snelheid, want de
+# client vraagt zelf een ruime ontvangstbuffer aan en vult de gaten die
+# overblijven ook zelf aan. De pauze duurt op Windows 15 ms ongeacht wat je
+# vraagt, dus elke burst kost tijd: 64 stukken is 78 KB per burst en een
+# flinke skin in een paar tientallen milliseconden.
+SKIN_DOWNLOAD_BURST = 64
+SKIN_DOWNLOAD_PAUSE = 0.001
+
 
 def _save_surface_as_png(img):
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmpf:
@@ -276,7 +289,19 @@ class ServerIO(threading.Thread):
                 if raw is not None:
                     CHUNK = 1200
                     total = (len(raw) + CHUNK - 1) // CHUNK
-                    for i in range(total):
+                    # De client mag zeggen welke stukken hij nog mist. UDP
+                    # gooit er willekeurig weg, dus na de eerste ronde blijft
+                    # er altijd een gat over. Alleen dat gat opnieuw sturen is
+                    # het verschil tussen één keer de skin en elke keer de
+                    # hele skin opnieuw. Ontbreekt de lijst, dan sturen we
+                    # gewoon alles, zodat een oudere client nog werkt.
+                    gevraagd = packet.get("chunks")
+                    if isinstance(gevraagd, (list, tuple)):
+                        rij = [i for i in gevraagd
+                               if isinstance(i, int) and 0 <= i < total]
+                    else:
+                        rij = range(total)
+                    for n, i in enumerate(rij):
                         chunk = raw[i*CHUNK:(i+1)*CHUNK]
                         try:
                             self.udp_socket.sendto(encode_packet(
@@ -284,6 +309,12 @@ class ServerIO(threading.Thread):
                             ), addr)
                         except OSError:
                             pass
+                        # Met een pauze ertussen, anders stuurt de klapper
+                        # alle stukken in een keer en loopt de ontvangstbuffer
+                        # van de client over. Precies dezelfde reden als bij
+                        # het uploaden, zie SKIN_UPLOAD_PAUSE hierboven.
+                        if n % SKIN_DOWNLOAD_BURST == SKIN_DOWNLOAD_BURST - 1:
+                            time.sleep(SKIN_DOWNLOAD_PAUSE)
                 else:
                     resp = {"type": "skin_data", "skin_id": req_skin_id, "data": None}
                     self.udp_socket.sendto(encode_packet(resp), addr)

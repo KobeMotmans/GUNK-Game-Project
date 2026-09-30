@@ -37,7 +37,8 @@ sys.path.insert(0, ROOT)
 import pygame  # noqa: E402
 import numpy  # noqa: E402  (komt met pygame mee, gebruikt om ruis te maken)
 
-from src.network.protocol import encode_packet, decode_packet  # noqa: E402
+from src.network.protocol import (encode_packet, decode_packet,      # noqa: E402
+                                  PACKET_TYPE_TO_ID)
 from src.network.server_game import ServerGame                # noqa: E402
 from src.network.network import NetworkClient                  # noqa: E402
 from src.core.config import (MAX_PLAYERS, ELEVATOR_WAIT_DIST,   # noqa: E402
@@ -516,6 +517,64 @@ def lift_escape_stuurt_geen_onbestaande_level():
           f"de state stuurt level {state['level']}, geen geldige kaart")
 
 
+@test
+def lift_host_teleporteert_naar_de_spawn():
+    """Een host die zelf server is, moet ook echt verplaatst worden.
+
+    Dit is de variant die `lift_spawnt_niet_in_een_muur` niet ving. Bij
+    zelfhosten draait de server in een draadje in hetzelfde proces en deelt
+    hij de module-singleton M. De server zet M.map_level alvast op de nieuwe
+    level in _setup_level. Hing de teleport van de client aan
+    `new_level != M.map_level`, dan sloeg hij die bij de host over en bleef
+    die op zijn oude positie staan, terwijl een externe client (eigen proces,
+    eigen M) wél verplaatst werd. Die oude positie kan midden in een muur op
+    de nieuwe kaart staan.
+
+    We draaien de server hier dus in-proces, precies zoals bij zelfhosten.
+    """
+    from src.core.map_loader import M as SHARED_M
+
+    sg = make_lift_game(1)
+    oude_pos = (sg.exit_pos.x, sg.exit_pos.y)
+    begin_level = sg.level
+    _rijdt_lift_tot_overgang(sg)
+    check(sg.level != begin_level, "de lift ging niet over")
+
+    # Dit is de hele truc: de server heeft M.map_level al bijgewerkt, precies
+    # zoals in het echte spel omdat ze hetzelfde proces delen. Daardoor is de
+    # conditie waar het oude code-blok op hing NIET meer waar, en dat is
+    # precies de bug.
+    check(SHARED_M.map_level == sg.level,
+          "de server werkte M.map_level niet bij, dan testen we hier niets")
+
+    state = sg.get_state()
+    new_level = state["level"]
+
+    # De oude teleport deed dit, en is nu onwaar, dus hij sloeg over:
+    check(not (new_level != SHARED_M.map_level),
+          "M.map_level loopt niet vooruit; de oude code zou hier wél werken "
+          "en de test zou niets bewijzen")
+
+    # De nieuwe teleport vergelijkt met wat de client zelf geladen heeft, en
+    # die klopt hier nog niet, dus hij gaat wél door.
+    check(new_level != begin_level,
+          "de client denkt dat hij dit level al geladen heeft")
+
+    pdata = next(p for p in state["players"] if p.get("id") == 0)
+    bestelde_pos = tuple(pdata["pos"])
+    check(_staat_in_muur(bestelde_pos) == "open",
+          f"de server stuurt een muurpositie: {bestelde_pos}")
+
+    # En de positie die de host daadwerkelijk zou krijgen is de spawn van de
+    # nieuwe level, niet de oude positie uit de vorige level.
+    spawn = SHARED_M.SPAWNS["player"]
+    check(list(bestelde_pos) == [spawn[0], spawn[1]],
+          f"host komt op {bestelde_pos} in plaats van de spawn {spawn}")
+    check(_staat_in_muur(oude_pos) != "open",
+          "de oude uitgangspositie is open op de nieuwe kaart, "
+          "dan zou de bug niet zichtbaar zijn")
+
+
 # ── netwerk-tests ──────────────────────────────────────────────
 @test
 def lobby_zes_spelers_pas_en_nummer_zeven_krijgt_server_full():
@@ -963,6 +1022,423 @@ def net_skin_upload_van_een_echte_png():
                     client.disconnect()
                 except Exception:
                     pass
+
+
+class ChunkDropper:
+    """Staat tussen de server en het netwerk en maakt een gat in de rij.
+
+    UDP gooit willekeurig pakketten weg, dus een overdracht van honderden
+    stukken komt nooit in een keer volledig aan. Dit maart dat
+    reproduceerbaar: een paar vaste stukken vallen weg, één keer, en daarna
+    is de verbinding weer in orde. Alleen de stukken van de skin die we
+    toetsen worden aangeraakt, zodat al het andere verkeer gewoon doorgaat.
+    """
+
+    def __init__(self, real, skin_id, drop_indices=()):
+        self._real = real
+        self._skin_id = skin_id
+        # Eenmalig: na het weggooien is de overdracht weer heel.
+        self._drop = set(drop_indices)
+        self.dropped = 0
+        self.sent = []          # de stuknummers die zijn doorgelaten
+
+    def sendto(self, data, addr=None):
+        try:
+            pkt = decode_packet(data)
+        except Exception:
+            pkt = {}
+        index = pkt.get("chunk")
+        if (pkt.get("type") == "skin_chunk"
+                and pkt.get("skin_id") == self._skin_id):
+            if index in self._drop:
+                self._drop.discard(index)
+                self.dropped += 1
+                return len(data)
+            self.sent.append(index)
+        return self._real.sendto(data, addr)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+class tel_skin_verzoeken:
+    """Legt de skin_request-pakketten vast die de client op de lijn zet.
+
+    De vraag is niet alleen "komt de skin aan", maar ook "stuurt de client
+    bij een gat alleen dát gat opnieuw op, of toch de hele rij". Dat is het
+    verschil tussen één keer de skin over de lijn en elke poging de hele
+    skin opnieuw.
+
+    Alleen de verzoeken voor `skin_id` worden geteld: een achtergrond
+    downloader uit een andere test stuurt anders zijn eigen verzoeken
+    tussendoor.
+    """
+
+    def __init__(self, skin_id):
+        self.skin_id = skin_id
+
+    def __enter__(self):
+        self.verzoeken = []          # None = "geef me de hele rij"
+        self._orig = socket.socket.sendto
+
+        def sendto(sock, data, *args):
+            try:
+                pkt = decode_packet(data)
+            except Exception:
+                pkt = {}
+            if (pkt.get("type") == "skin_request"
+                    and pkt.get("skin_id") == self.skin_id):
+                self.verzoeken.append(pkt.get("chunks"))
+            return self._orig(sock, data, *args)
+
+        socket.socket.sendto = sendto
+        return self
+
+    def __exit__(self, *exc):
+        socket.socket.sendto = self._orig
+
+
+class temp_skin_cache:
+    """Zet de skin-cache van SkinManager op een tijdelijke map.
+
+    Zonder dit zou de test de echte skins van de speler overschrijven.
+    """
+
+    def __enter__(self):
+        import src.assets.skin_manager as sm
+        self._sm = sm
+        self._orig = sm._get_cache_dir
+        self.dir = os.path.join(TEMP_DIR, "gunk_test_skins")
+        os.makedirs(self.dir, exist_ok=True)
+        for name in os.listdir(self.dir):
+            os.unlink(os.path.join(self.dir, name))
+        sm._get_cache_dir = lambda: self.dir
+        sm.SkinManager._cache.clear()
+        return self
+
+    def __exit__(self, *exc):
+        self._sm._get_cache_dir = self._orig
+        self._sm.SkinManager._cache.clear()
+        for name in os.listdir(self.dir):
+            try:
+                os.unlink(os.path.join(self.dir, name))
+            except OSError:
+                pass
+
+
+@test
+def skin_download_vraagt_alleen_de_gaten_op():
+    """Een skin van een paar honderd kB komt in honderden UDP-stukken.
+
+    Omdat UDP pakketten willekeurig weggooit, ontstaat er altijd een gat in
+    de rij. Wie de hele rij opnieuw opvraagt, stuurt bij elke poging de
+    volledige skin opnieuw over de lijn, en bij honderden stukken komt
+    daar nooit een moment waarop alles toevallig binnenkomt. De ontvanger
+    moet dus alleen de stukken opnieuw vragen die hij echt mist.
+    """
+    import src.assets.skin_manager as sm
+
+    with keep_player_files():
+        with LocalServer() as srv:
+            # Echt ruis: een gladde kleur geeft een piepklein PNG en dan
+            # bewijst de test niets.
+            rng = random.Random(20260930)
+            noise = bytes(rng.randrange(256) for _ in range(512 * 512 * 3))
+            surface = pygame.Surface((512, 512))
+            pygame.surfarray.blit_array(
+                surface,
+                numpy.frombuffer(noise, dtype=numpy.uint8).reshape(512, 512, 3))
+            stored = os.path.join(SKIN_DIR, "skin_999.png")
+            pygame.image.save(surface, stored)
+            with open(stored, "rb") as f:
+                original = f.read()
+            srv.skin_manifest = [{"id": 999, "name": "gat",
+                                  "uploader": "test"}]
+            n_chunks = -(-len(original) // 1200)
+            check(n_chunks > 100,
+                  f"de testskin is maar {n_chunks} stukken en bewijst niets")
+
+            # Vijf stukken uit het midden vallen weg, één keer.
+            gaten = [n_chunks // 3 + k for k in range(5)]
+            proxy = ChunkDropper(srv.udp_socket, 999, gaten)
+            srv.udp_socket = proxy
+
+            with temp_skin_cache() as cache:
+                sm.SkinManager.set_server_addr(("127.0.0.1", srv.port))
+                with tel_skin_verzoeken(999) as gezien:
+                    ok = sm.SkinManager.download_skin(999)
+
+                check(ok, f"download mislukte terwijl de verbinding "
+                          f"{proxy.dropped} stukken liet vallen")
+                check(proxy.dropped == len(gaten),
+                      f"er vielen {proxy.dropped} van de {len(gaten)} "
+                      f"gekozen stukken weg")
+
+                got_path = os.path.join(cache.dir, "skin_999.png")
+                check(os.path.exists(got_path),
+                      "de download slaagde maar schreef de skin niet weg")
+                with open(got_path, "rb") as f:
+                    got = f.read()
+                check(len(got) == len(original),
+                      f"ontvangen {len(got)} bytes, origineel {len(original)}")
+                check(got == original, "de ontvangen skin is niet bytegelijk")
+
+                # De kern van de fix. Zonder gatenlijst stuurt de server de
+                # hele rij, en dat is bij deze hoeveelheid data een manier om
+                # nooit klaar te komen: bij elke poging komen er nieuwe
+                # gaten bij.
+                check(len(gezien.verzoeken) >= 2,
+                      f"er kwamen maar {len(gezien.verzoeken)} verzoeken; "
+                      f"dan viel er niets weg en de test bewijst niets")
+                check(gezien.verzoeken[0] is None,
+                      "het eerste verzoek moet om de hele rij vragen")
+                hele_rijen = [v for v in gezien.verzoeken[1:] if v is None]
+                check(not hele_rijen,
+                      f"de client vroeg na een gat {len(hele_rijen)} keer de "
+                      f"hele rij opnieuw op in plaats van alleen de gaten")
+                gaten = [v for v in gezien.verzoeken[1:] if v]
+                check(gaten, "na een gat werd er niets opnieuw opgevraagd")
+                check(max(len(v) for v in gaten) * 5 < n_chunks,
+                      f"de client vroeg {max(len(v) for v in gaten)} stukken "
+                      f"opnieuw op voor een rij van {n_chunks}")
+
+
+@test
+def skins_komen_via_de_achtergronddownload_binnen():
+    """De klacht van een echte speler: er staan skins in de lijst, maar je
+    ziet ze niet. De hele lijst moet dus op de achtergrond binnenkomen,
+    over een verbinding die af en toe een pakketje laat vallen.
+
+    Deze test waakt over het hele pad: manifest -> achtergronddraadje ->
+    bestand op schijf -> bruikbare afbeelding. De verspilling die ontstaat
+    wanneer de client de hele rij opnieuw opvraagt vangt hij níet, want op
+    localhost komt de tweede ronde gewoon aan. Daarvoor zijn er twee
+    gerichte tests die het gedrag meeten in plaats van het gevolg.
+    """
+    import src.assets.skin_manager as sm
+
+    with keep_player_files():
+        with LocalServer() as srv:
+            # Echte skins uit de repo, dus geen opgepotte testdata.
+            srv.skin_manifest = [{"id": 106, "name": "A", "uploader": "t"},
+                                 {"id": 107, "name": "B", "uploader": "t"}]
+            for sid in (106, 107):
+                check(os.path.exists(os.path.join(SKIN_DIR, f"skin_{sid}.png")),
+                      f"skin {sid} ontbreekt in de repo, test kan niet draaien")
+            proxy = ChunkDropper(srv.udp_socket, 106, [3, 11])
+            srv.udp_socket = proxy
+
+            with temp_skin_cache() as cache:
+                # Een achtergronddraadje van een eerdere test kan nog
+                # bezig zijn; die pakken de skins ook mee, en daar is niets
+                # mis mee. We wachten daarom niet op 'klaar' maar op de
+                # bestanden zelf.
+                client = NetworkClient()
+                try:
+                    check(client.connect("127.0.0.1", srv.port, "skiper"),
+                          "connect lukte niet")
+                    wanted = [os.path.join(cache.dir, f"skin_{s}.png")
+                              for s in (106, 107)]
+                    deadline = time.time() + 30.0
+                    while time.time() < deadline:
+                        if all(os.path.exists(p) for p in wanted):
+                            break
+                        time.sleep(0.05)
+                finally:
+                    try:
+                        client.disconnect()
+                    except Exception:
+                        pass
+
+                check(proxy.dropped == 2,
+                      f"de verbinding liet {proxy.dropped} van de 2 "
+                      f"gekozen stukken vallen")
+                for sid, pad in zip((106, 107), wanted):
+                    check(os.path.exists(pad),
+                          f"skin {sid} staat in de lijst maar is niet opgehaald")
+                    try:
+                        breed, hoog = pygame.image.load(pad).get_size()
+                    except pygame.error as e:
+                        check(False, f"skin {sid} is geen bruikbare afbeelding: {e}")
+                    check(breed > 0 and hoog > 0,
+                          f"skin {sid} heeft maat {breed}x{hoog}")
+
+
+@test
+def skin_server_stuurt_alleen_de_gevraagde_stukken():
+    """Vraagt de client om drie stukken, dan stuurt de server drie stukken.
+
+    Dit is de andere helft van het gatenvullen: de client vraagt alleen wat
+    hij mist, dus als de server daar gehoorloos de hele rij voor terugstuurt
+    ligt bij elke kleine packetverlies de volledige skin over de lijn.
+    """
+    with keep_player_files():
+        with LocalServer() as srv:
+            rng = random.Random(20260930)
+            noise = bytes(rng.randrange(256) for _ in range(512 * 512 * 3))
+            surface = pygame.Surface((512, 512))
+            pygame.surfarray.blit_array(
+                surface,
+                numpy.frombuffer(noise, dtype=numpy.uint8).reshape(512, 512, 3))
+            stored = os.path.join(SKIN_DIR, "skin_999.png")
+            pygame.image.save(surface, stored)
+            srv.skin_manifest = [{"id": 999, "name": "drie stukken",
+                                  "uploader": "test"}]
+            n_chunks = -(-os.path.getsize(stored) // 1200)
+            check(n_chunks > 100,
+                  f"de testskin is maar {n_chunks} stukken en bewijst niets")
+
+            proxy = ChunkDropper(srv.udp_socket, 999, ())
+            srv.udp_socket = proxy
+
+            gevraagd = [3, 17, n_chunks - 1]
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(2.0)
+            ontvangen = []
+            try:
+                sock.sendto(encode_packet({"type": "skin_request",
+                                           "skin_id": 999,
+                                           "chunks": gevraagd}),
+                            ("127.0.0.1", srv.port))
+                deadline = time.time() + 2.0
+                while time.time() < deadline and len(ontvangen) < len(gevraagd):
+                    data, _ = sock.recvfrom(65536)
+                    pkt = decode_packet(data)
+                    if (pkt.get("type") == "skin_chunk"
+                            and pkt.get("skin_id") == 999):
+                        ontvangen.append(pkt["chunk"])
+            finally:
+                sock.close()
+
+            check(sorted(ontvangen) == sorted(gevraagd),
+                  f"gevraagd {gevraagd}, gekregen {sorted(ontvangen)}")
+            # Zonder de fix stuurt de server de hele rij. De klant stopt met
+            # lezen zodra hij zijn drie stukken heeft, dus het exacte aantal
+            # wanneer de server zijn socket dichtgooit is onvoorspelbaar. Wat
+            # wel vastligt: het zijn er veel meer dan drie.
+            check(len(proxy.sent) <= 4 * len(gevraagd),
+                  f"de server stuurde {len(proxy.sent)} stukken voor een "
+                  f"verzoek om {len(gevraagd)}; hij stuurt de hele rij mee")
+
+
+@test
+def protocol_kent_elke_sleutel_die_de_code_gebruikt():
+    """Elke sleutel die een pakket in gaat moet in KEY_TO_ID staan.
+
+    Een onbekende sleutel wordt door encode_packet als 255 geschreven, en
+    dat is precies de TERMINATOR. De decoder stopt daar dan stilzwijgend
+    midden in het pakket: het veld valt weg, net als alles wat erop volgt,
+    zonder ook maar een foutmelding. Dat is stilzwijgend dataverlies op
+    iedere plek waar iemand een veld toevoegt en vergeet het aan te melden.
+    """
+    import ast
+
+    from src.network.protocol import KEY_TO_ID
+    onbekend = {}
+    doorzocht = 0
+    overslaan = (".git", ".venv", "venv", "build", "dist", "__pycache__",
+                 ".vscode", "node_modules")
+    for dirpad, dirnamen, namen in os.walk(ROOT):
+        dirnamen[:] = [d for d in dirnamen if d not in overslaan]
+        for naam in namen:
+            if not naam.endswith(".py"):
+                continue
+            pad = os.path.join(dirpad, naam)
+            rel = os.path.relpath(pad, ROOT)
+            try:
+                with open(pad, "rb") as f:
+                    boom = ast.parse(f.read(), filename=pad)
+            except (OSError, SyntaxError, ValueError):
+                continue
+            doorzocht += 1
+            for knoop in ast.walk(boom):
+                if not isinstance(knoop, ast.Dict):
+                    continue
+                sleutels = [k.value for k in knoop.keys
+                            if isinstance(k, ast.Constant)
+                            and isinstance(k.value, str)]
+                # Alleen echte pakketten: een dict met een "type" dat in
+                # PACKET_TYPE_TO_ID staat. Anders pakken we ook gewone
+                # woordenlijstjes zoals {"type": "ammo", ...} mee.
+                if "type" not in sleutels:
+                    continue
+                type_waarde = knoop.values[sleutels.index("type")]
+                if not (isinstance(type_waarde, ast.Constant)
+                        and type_waarde.value in PACKET_TYPE_TO_ID):
+                    continue
+                for s in sleutels:
+                    if s != "type" and s not in KEY_TO_ID:
+                        onbekend.setdefault(s, set()).add(rel)
+
+    check(doorzocht > 10,
+          f"er werden maar {doorzocht} bestanden doorzocht, "
+          f"dan bewijst deze test niets")
+    check(not onbekend,
+          "deze sleutels worden verstuurd maar staan niet in KEY_TO_ID, "
+          f"waardoor het hele pakket bij de decoder wordt afgekapt: "
+          + "; ".join(f"{s!r} in {', '.join(sorted(w))}"
+                      for s, w in sorted(onbekend.items())))
+
+    # Een geregistreerde sleutel helpt niets als haar nummer 255 is: dat is
+    # de TERMINATOR, dus de decoder stopt er alsnog midden in het pakket.
+    botsers = sorted(s for s, nummer in KEY_TO_ID.items() if nummer >= 255)
+    check(not botsers,
+          f"deze sleutels hebben nummer 255 of hoger en werken daardoor "
+          f"niet: {botsers}")
+
+
+@test
+def skin_cache_valt_terug_op_een_bruikbare_plek():
+    """Een cachemap waar niet in geschreven kan worden mag het verbinden
+    niet blokkeren.
+
+    De klap komt via has_skin_locally in start_background_download terecht,
+    en vandaar in NetworkClient.connect. Een speler die het spel bij
+    voorbeeld uit een map zonder schrijfrechten start zou dan niet eens meer
+    inloggen, alleen omdat er geen plek is om skins te bewaren.
+    """
+    import src.assets.skin_manager as sm
+
+    # ── De voorkeursplek is onbruikbaar ──────────────────────────
+    # Een gewoon bestand als bovenliggende map: elke map erbovenop maken
+    # klapt met NotADirectoryError, precies zoals een schrijfverboden plek.
+    blokkade = os.path.join(TEMP_DIR, "gunk_test_geen_map")
+    with open(blokkade, "wb") as f:
+        f.write(b"x")
+
+    origineel = sm.appdata_path
+    sm.appdata_path = lambda rel: os.path.join(blokkade, rel)
+    try:
+        pad = sm._get_cache_dir()
+        check(os.path.isdir(pad), f"geen bruikbare cachemap gevonden: {pad}")
+        check(not pad.startswith(blokkade),
+              f"de cachemap ligt nog steeds op de onbruikbare plek: {pad}")
+        check(os.access(pad, os.W_OK),
+              f"de gevonden cachemap is niet beschrijfbaar: {pad}")
+    finally:
+        sm.appdata_path = origineel
+        try:
+            os.unlink(blokkade)
+        except OSError:
+            pass
+
+    # ── En als er helemaal geen schrijfplek is ────────────────────
+    # has_skin_locally draait midden in NetworkClient.connect. Een
+    # schrijfplek die niets oplevert mag daar niet het verbinden
+    # blokkeren, dus de vraag moet gewoon "nee" zijn.
+    originele_keuze = sm._get_cache_dir
+
+    def klapt_Altijd():
+        raise OSError("geen schrijfplek")
+
+    sm._get_cache_dir = klapt_Altijd
+    try:
+        sm.SkinManager._manifest = [{"id": 106, "name": "A", "uploader": "t"}]
+        check(sm.SkinManager.has_skin_locally(106) is False,
+              "zonder schrijfplek moet een skin als niet-bestaand tellen")
+    finally:
+        sm._get_cache_dir = originele_keuze
+        sm.SkinManager._manifest = []
 
 
 # ── adres/autopoort-mapping ────────────────────────────────────

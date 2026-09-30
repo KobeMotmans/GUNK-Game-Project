@@ -18,6 +18,10 @@ KEY_TO_ID = {
     "host_pid": 53, "lobby_options": 54, "shared_health": 55, "shared_ammo": 56,
     "option_key": 57, "option_value": 58,
     "max_players": 59, "elevator_pending": 60, "missing": 61,
+    # Welke stukken van een skin de client nog mist. Zonder deze sleutel
+    # zou de encoder 255 schrijven, en dat is de TERMINATOR: de decoder
+    # stopt dan midden in het pakket.
+    "chunks": 62,
 }
 
 ID_TO_KEY = {v: k for k, v in KEY_TO_ID.items()}

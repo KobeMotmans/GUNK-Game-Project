@@ -166,6 +166,12 @@ class Game:
         self._enemy_damage = []
         self._remove_pickup = []
 
+        # Het levelnummer dat de client zelf daadwerkelijk geladen heeft.
+        # Bewust een eigen teller en géén M.map_level: bij zelfhosten deelt
+        # de server M met de client en loopt M.map_level vooruit. Zie de
+        # teleport in apply_state.
+        self._client_loaded_level = None
+
         self._load_settings()
         self.update_sfx_volume()
         if self.main_music_intro:
@@ -847,6 +853,9 @@ class Game:
         M.map_level = level
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[level])
         M.start_angle = START_ANGLES[M.map_level]
+        # Hier laadt de client zelf een level. Onze eigen teller moet mee,
+        # anders denkt apply_state dat level 0 nog nooit geladen is.
+        self._client_loaded_level = level
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[level])
         preload_textures(self._get_all_texture_paths())
         pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
@@ -1288,12 +1297,8 @@ class Game:
             M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[new_level])
             self.map = M.MAP
             M.start_angle = START_ANGLES[new_level]
-            for pdata in players_data:
-                if pdata.get("id") == self.player_id:
-                    self.player.pos = Vector(pdata["pos"][0], pdata["pos"][1])
-                    self.player.angle = pdata.get("angle", M.start_angle)
-                    pygame.mouse.get_rel()
-                    break
+            # NIET hier de speler neerzetten. De hele levelovergang komt in
+            # een eigen blok hieronder, dat niet op M.map_level steunt.
             if M.map_level == 1:
                 if self.minigun not in self.unlocked_guns:
                     self.unlocked_guns.append(self.minigun)
@@ -1314,6 +1319,28 @@ class Game:
             self.keycard_acquired = False
             self.projectiles = []
             self.exit_pos = None
+
+        # Het overzetten op de nieuwe level, los van de vergelijking hierboven.
+        #
+        # Waarom los: bij zelfhosten draait de server in een draadje in het
+        #zelfde proces en deelt hij de module-singleton M. De server zet
+        # M.map_level alvast in _setup_level, dus als je de teleport aan
+        # `new_level != M.map_level` hing, oversloeg hij die bij een host
+        # terwijl hij bij een externe client wel ging. Resultaat: de host
+        # bleef op zijn oude positie, wat op de nieuwe kaart in een muur
+        # kan staan. Daarom lezen we het levelnummer uit het pakket zelf en
+        # vergelijken we dat met wat wij het laatst daadwerkelijk geladen
+        # hebben. Dat kan de server niet vooruitlopen.
+        for pdata in players_data:
+            if pdata.get("id") != self.player_id:
+                continue
+            if new_level == self._client_loaded_level:
+                break
+            self._client_loaded_level = new_level
+            self.player.pos = Vector(pdata["pos"][0], pdata["pos"][1])
+            self.player.angle = pdata.get("angle", M.start_angle)
+            pygame.mouse.get_rel()
+            break
         self.state = state.get("state", self.state)
         self.escaped = state.get("escaped", self.escaped)
         self.elevator_waiting = state.get("elevator_waiting", self.elevator_waiting)
