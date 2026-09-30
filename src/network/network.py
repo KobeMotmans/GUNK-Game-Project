@@ -17,6 +17,30 @@ import pygame
 from .protocol import encode_packet, decode_packet
 from ..core.logger import log as _log
 
+# Maximale grootte van één UDP-datagram naar de client. Ruim onder de
+# 1500-byte MTU blijven zodat de router niets hoeft te fragmenteren: één
+# verloren fragment zou anders het hele state-frame kosten.
+STATE_CHUNK_SIZE = 1200
+
+# Wat er om de payload heen zit als het frame in stukken gaat: het type-byte,
+# drie keys, de tags en de lengtes. Afgerond, zodat de envelop nooit het
+# limiet doorduwt.
+_STATE_CHUNK_OVERHEAD = 32
+_STATE_CHUNK_PAYLOAD = STATE_CHUNK_SIZE - _STATE_CHUNK_OVERHEAD
+
+# Hoe lang de client stukken van een gebroken state-pakket bewaart voordat
+# hij ze weggooit. Bij een nieuw frame begint de telling sowieso opnieuw.
+STATE_CHUNK_TIMEOUT = 2.0
+
+# Skin-uploads: max grootte en hoe lang onvolledige uploads worden bewaard.
+SKIN_MAX_SIZE = 5 * 1024 * 1024
+SKIN_UPLOAD_TIMEOUT = 10.0
+
+# Stukken per burst en de pauze ertussen. Zonder pauze stuurt de klapper alle
+# stukken in een keer en loopt de ontvangstbuffer van de server over.
+SKIN_UPLOAD_BURST = 16
+SKIN_UPLOAD_PAUSE = 0.002
+
 
 def _save_surface_as_png(img):
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmpf:
@@ -34,16 +58,21 @@ def _save_surface_as_png(img):
 
 class ServerIO(threading.Thread):
     """Headless server: all-UDP game data I/O + state relay"""
-    def __init__(self, port, max_players=4):
+    def __init__(self, port, max_players=None):
         super().__init__(daemon=True)
+        from ..core.config import MAX_PLAYERS
         self.port = port
-        self.max_players = max_players
+        self.max_players = MAX_PLAYERS if max_players is None else max_players
         self.running = True
 
         # UDP for all communication (handshake + game data)
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 262144)
+        # Een skin-upload komt binnen als honderden datagrams in een korte
+        # burst. Zonder ruime ontvangstbuffer gooit de kernel er daarvan weg
+        # voordat de server ze bij een tick allemaal heeft gelezen.
+        self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8 * 1024 * 1024)
         self.udp_socket.setblocking(False)
         self.udp_socket.bind(('0.0.0.0', port))
         self._state_tick = 0
@@ -80,6 +109,7 @@ class ServerIO(threading.Thread):
         # Server-side skin management
         self.skin_manifest = []
         self._next_skin_id = 100
+        self._upload_chunks = {}
         self._load_skin_manifest()
 
     # ── Server-side skin management ─────────────────────────────
@@ -104,11 +134,43 @@ class ServerIO(threading.Thread):
         name = packet.get("name", "Unnamed")
         uploader = packet.get("uploader", "Unknown")
         raw = packet.get("data")
-        if not isinstance(raw, (bytes, bytearray)):
+        total = packet.get("total")
+
+        if total:
+            # Een heel PNG past niet in één UDP-datagram, dus uploads komen in
+            # stukken binnen. Onderdelen worden per afzender bewaard tot elke
+            # index 0..total-1 binnen is. Bewust niet-destructief: de client
+            # stuurt de hele rij nog eens zodra er iets ontbreekt, dus een
+            # half uitgelezen buffer weggooien zou elke poging ruïneren.
+            if not isinstance(raw, (bytes, bytearray)):
+                return
+            index = packet.get("chunk", 0)
+            entry = self._upload_chunks.get(addr)
+            stale = (entry is None or entry["total"] != total
+                     or time.time() - entry["time"] > SKIN_UPLOAD_TIMEOUT)
+            if stale:
+                entry = {"chunks": {}, "total": total, "name": name,
+                         "uploader": uploader, "time": time.time()}
+                self._upload_chunks[addr] = entry
+            entry["time"] = time.time()
+            entry["name"] = name
+            entry["uploader"] = uploader
+            # Een herhaald stuk met dezelfde index overschrijft zichzelf, dus
+            # een tweede poging bouwt gewoon verder.
+            entry["chunks"][index] = bytes(raw)
+            if len(entry["chunks"]) != total:
+                return  # wacht nog op stukken
+            try:
+                raw = b"".join(entry["chunks"][i] for i in range(total))
+            except KeyError:
+                return  # gat in de rij: wacht tot de client de rij herhaalt
+            self._upload_chunks.pop(addr, None)
+
+        if not isinstance(raw, (bytes, bytearray)) or not raw:
             resp = {"type": "skin_upload_ack", "skin_id": -1, "success": False, "error": "Geen data"}
             self.udp_socket.sendto(encode_packet(resp), addr)
             return
-        if len(raw) > 5 * 1024 * 1024:
+        if len(raw) > SKIN_MAX_SIZE:
             resp = {"type": "skin_upload_ack", "skin_id": -1, "success": False, "error": "Bestand te groot"}
             self.udp_socket.sendto(encode_packet(resp), addr)
             return
@@ -235,6 +297,7 @@ class ServerIO(threading.Thread):
                 name = pending.get("name", f"Player {pid}")
                 skin_id = pending.get("skin_id", 0)
                 should_broadcast = False
+                is_full = False
                 game_already_started = self.server_game.initialized
                 with self.clients_lock:
                     for c_addr, c_pid, _ in self.clients:
@@ -253,6 +316,20 @@ class ServerIO(threading.Thread):
                                     self.server_game.players[pid]["pos"] = spawn
                                     self.server_game.players[pid]["state"] = "game"
                                     self.server_game.players[pid]["ready"] = True
+                        else:
+                            # Niet stilzwijgend negeren: anders wacht de
+                            # speler 30 seconden tot "verbinding verloren".
+                            is_full = True
+                if is_full:
+                    try:
+                        self.udp_socket.sendto(encode_packet(
+                            {"type": "server_full", "max_players": self.max_players}
+                        ), addr)
+                    except OSError:
+                        pass
+                    self._pending_connect.pop(packet.get("token", ""), None)
+                    self.last_seen.pop(pid, None)
+                    continue
                 if should_broadcast:
                     self._broadcast_lobby()
                 self.last_seen[pid] = time.time()
@@ -266,6 +343,13 @@ class ServerIO(threading.Thread):
                 self.inputs[pid] = data
 
             elif ptype == "start_game":
+                # Alleen de host mag de groep in beweging zetten. Zonder deze
+                # knop wacht iedereen tot ALLE spelers READY zijn.
+                with self.clients_lock:
+                    is_client = any(c_pid == pid for _, c_pid, _ in self.clients)
+                if not is_client or pid != self.host_pid:
+                    _log(f"start_game genegeerd voor pid {pid} (host is {self.host_pid})")
+                    continue
                 if self.server_game.initialized:
                     game_start_packet = encode_packet({
                         "type": "game_start",
@@ -277,6 +361,7 @@ class ServerIO(threading.Thread):
                         except OSError:
                             pass
                 else:
+                    self.countdown = 0
                     self.server_game.set_shared_options(self.lobby_options)
                     self.server_game.init_world()
                     game_start_packet = encode_packet({"type": "game_start", "level": 0})
@@ -403,9 +488,27 @@ class ServerIO(threading.Thread):
         state["lobby_options"] = self.lobby_options
         data = encode_packet(state)
         with self.clients_lock:
-            for c_addr, _, _ in self.clients:
+            targets = [c_addr for c_addr, _, _ in self.clients]
+        if not targets:
+            return
+        if len(data) <= STATE_CHUNK_SIZE:
+            for addr in targets:
                 try:
-                    self.udp_socket.sendto(data, c_addr)
+                    self.udp_socket.sendto(data, addr)
+                except OSError:
+                    pass
+            return
+        # Groter dan het limiet: opsplitsen, anders fragmenteert UDP en kost
+        # één verloren fragment meteen het hele frame. Gebeurt vanaf ~5 spelers
+        # op de grotere levels.
+        total = (len(data) + _STATE_CHUNK_PAYLOAD - 1) // _STATE_CHUNK_PAYLOAD
+        for i in range(total):
+            part = data[i * _STATE_CHUNK_PAYLOAD:(i + 1) * _STATE_CHUNK_PAYLOAD]
+            pkt = encode_packet({"type": "state_chunk", "chunk": i,
+                                 "total": total, "data": part})
+            for addr in targets:
+                try:
+                    self.udp_socket.sendto(pkt, addr)
                 except OSError:
                     pass
 
@@ -428,6 +531,10 @@ class ServerIO(threading.Thread):
 
     def _cleanup_stale(self):
         now = time.time()
+        # Half afgeleverde skin-uploads laten we niet eeuwig staan.
+        for addr, entry in list(self._upload_chunks.items()):
+            if now - entry["time"] > SKIN_UPLOAD_TIMEOUT:
+                del self._upload_chunks[addr]
         for token, info in list(self._pending_connect.items()):
             if now - info["time"] > 15:
                 del self._pending_connect[token]
@@ -527,6 +634,8 @@ class NetworkClient:
         self.player_id = -1
         self.connected = False
         self.skin_id = 0
+        self._state_chunks = {}
+        self._state_chunks_at = 0.0
 
     def connect(self, host, port, name, skin_id=0):
         self.skin_id = skin_id
@@ -607,6 +716,62 @@ class NetworkClient:
         except Exception:
             return None
 
+    def drain(self, max_packets=64):
+        """Lees ALLE packets die klaarstaan, in aankomstvolgorde.
+
+        Eén packet per frame lezen laat de queue groeien zodra de framerate
+        even zakt; de client loopt dan steeds verder achter en ziet steeds
+        oudere posities. Onvolledige state-chunks worden apart bewaard en pas
+        teruggegeven als het hele frame compleet is.
+        """
+        out = []
+        for _ in range(max_packets):
+            try:
+                data, _ = self.udp_socket.recvfrom(65536)
+            except (BlockingIOError, socket.timeout):
+                break
+            except Exception:
+                break
+            try:
+                packet = decode_packet(data)
+            except Exception:
+                continue
+            if not packet:
+                continue
+            if packet.get("type") == "state_chunk":
+                merged = self._merge_state_chunk(packet)
+                if merged is None:
+                    continue
+                packet = merged
+            out.append(packet)
+        return out
+
+    def _merge_state_chunk(self, packet):
+        """Zet de stukken van een frame weer samen. None als er meer komt."""
+        now = time.time()
+        if now - self._state_chunks_at > STATE_CHUNK_TIMEOUT:
+            self._state_chunks.clear()
+        self._state_chunks_at = now
+        index = packet.get("chunk", 0)
+        total = packet.get("total", 1)
+        if index == 0:
+            # Beginning van een nieuw frame: een restje van het vorige weggooien.
+            self._state_chunks.clear()
+        self._state_chunks[index] = packet.get("data") or b""
+        if len(self._state_chunks) < total:
+            return None
+        buf = bytearray()
+        for i in range(total):
+            part = self._state_chunks.pop(i, None)
+            if part is None:
+                return None
+            buf.extend(part)
+        self._state_chunks.clear()
+        try:
+            return decode_packet(bytes(buf))
+        except Exception:
+            return None
+
     def _save_as_png(self, img):
         return _save_surface_as_png(img)
 
@@ -622,8 +787,8 @@ class NetworkClient:
             raw = self._save_as_png(img)
         except pygame.error:
             return (False, "Kon afbeelding niet comprimeren")
-        MAX_SIZE = 1024 * 1024
-        if len(raw) > MAX_SIZE:
+        MAX_SIZE = SKIN_MAX_SIZE
+        if len(raw) > 1024 * 1024:
             w, h = img.get_size()
             scale = 512 / max(w, h)
             new_w, new_h = int(w * scale), int(h * scale)
@@ -635,25 +800,46 @@ class NetworkClient:
                 raw = self._save_as_png(img)
             except pygame.error:
                 return (False, "Kon afbeelding niet comprimeren")
-            if len(raw) > 5 * 1024 * 1024:
-                return (False, "Bestand te groot (max 5MB)")
+        if len(raw) > MAX_SIZE:
+            return (False, "Bestand te groot (max 5MB)")
+
+        # Een heel PNG past niet in één UDP-datagram, dus in stukken versturen.
+        chunk_size = _STATE_CHUNK_PAYLOAD
+        total = (len(raw) + chunk_size - 1) // chunk_size
+
+        def _chunks():
+            for i in range(total):
+                yield encode_packet({
+                    "type": "skin_upload", "name": name, "uploader": uploader,
+                    "chunk": i, "total": total,
+                    "data": raw[i * chunk_size:(i + 1) * chunk_size],
+                })
+
         try:
-            req = {"type": "skin_upload", "name": name, "uploader": uploader, "data": raw}
-            self.udp_socket.sendto(encode_packet(req), self.server_addr)
-            self.udp_socket.settimeout(10.0)
+            self.udp_socket.settimeout(0.5)
             for _ in range(20):
-                try:
-                    data, addr = self.udp_socket.recvfrom(65536)
+                # Met een pauze ertussen, anders stuurt de klapper alle
+                # stukken in een keer en loopt de ontvangstbuffer van de
+                # server over voordat hij ze heeft gelezen.
+                for i, pkt in enumerate(_chunks()):
+                    self.udp_socket.sendto(pkt, self.server_addr)
+                    if i % SKIN_UPLOAD_BURST == SKIN_UPLOAD_BURST - 1:
+                        time.sleep(SKIN_UPLOAD_PAUSE)
+                # Elke round sturen we de hele rij opnieuw: UDP gooit
+                # willekeurige stukken weg en we weten niet welke.
+                deadline = time.time() + 0.5
+                while time.time() < deadline:
+                    try:
+                        data, _ = self.udp_socket.recvfrom(65536)
+                    except socket.timeout:
+                        break
                     resp = decode_packet(data)
-                    if resp.get("type") == "skin_upload_ack":
+                    if resp and resp.get("type") == "skin_upload_ack":
                         self.udp_socket.setblocking(False)
                         if resp.get("success"):
                             sid = resp.get("skin_id", -1)
                             return (True, f"Skin #{sid} geupload!", sid)
-                        else:
-                            return (False, resp.get("error", "Upload mislukt"))
-                except socket.timeout:
-                    self.udp_socket.sendto(encode_packet(req), self.server_addr)
+                        return (False, resp.get("error", "Upload mislukt"))
         except OSError as e:
             return (False, f"Netwerkfout: {str(e)[:50]}")
         finally:

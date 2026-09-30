@@ -5,6 +5,12 @@ from ..assets.texture_cache import clear as clear_texture_cache
 
 
 def _project_root():
+    # Bij een verpakte game wijst __file__ naar de map _internal, terwijl de
+    # assets na het bouwen in de map van de exe staan (zie build.ps1). Daarom
+    # hier hetzelfde adres gebruiken als asset_path(), anders vindt de pack-
+    # mapping (__builtin__.json) het bestand niet en blijft het thema leeg.
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 

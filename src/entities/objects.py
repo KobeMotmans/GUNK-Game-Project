@@ -165,7 +165,7 @@ class PlayerSprite(RenderObject):
         super().render_fast(dist, screen_x)
         if dist > 0:
             sprite_h = SPRITE_SIZE * PROJ_DIST / dist
-            name_size = max(10, int(sprite_h / 4))
+            name_size = min(60, max(10, int(sprite_h / 4)))
             try:
                 font = load_numeric_font(name_size)
             except:
@@ -191,7 +191,7 @@ class PlayerSprite(RenderObject):
         if dist <= 0:
             return
         sprite_h = SPRITE_SIZE * PROJ_DIST / dist
-        name_size = max(10, int(sprite_h / 4))
+        name_size = min(60, max(10, round(int(sprite_h / 4) / 5) * 5))
         try:
             font = load_numeric_font(name_size)
         except:

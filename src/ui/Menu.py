@@ -11,6 +11,42 @@ from collections import deque
 from ..core.map_loader import M
 from ..assets.skin_manager import SkinManager
 from ..network.network import NetworkClient
+from ..network.discovery import DiscoveryListener
+
+# ── schalen met de resolutie ──────────────────────────────────
+#
+# De posities in dit bestand zijn fracties van WIDTH/HEIGHT, maar de
+# fontgrotes stonden als losse pixels (16, 22, 36). Op 1920x1080 past dat
+# toevallig precies; bij 1024x768 of 800x600 blijven de letters even groot
+# terwijl de kaders krimpen, en dan loopt de tekst over elkaar heen of uit
+# beeld. `base_px` is de maat op 1080p, dus op een Full HD-scherm verandert
+# er niets aan het uiterlijk.
+REF_HEIGHT = 1080.0
+
+
+def _scale_px(base_px, ref="min"):
+    """Reken een maat op 1080p om naar de huidige resolutie."""
+    fractie = base_px / REF_HEIGHT
+    if ref == "width":
+        return int(_cfg.WIDTH * fractie)
+    if ref == "height":
+        return int(_cfg.HEIGHT * fractie)
+    return int(min(_cfg.WIDTH, _cfg.HEIGHT) * fractie)
+
+
+def _fit_width(surf, max_width):
+    """Schalen als een regel te breed is om in beeld te passen.
+
+    Een lange onveranderde string loopt anders aan beide kanten uit beeld,
+    en dat is precies wat je op een smal scherm ziet gebeuren. Schalen is
+    beter dan afkappen: de speler mist dan geen woorden.
+    """
+    if surf.get_width() <= max_width:
+        return surf
+    factor = max_width / surf.get_width()
+    return pygame.transform.smoothscale(
+        surf, (max(1, int(surf.get_width() * factor)), surf.get_height()))
+
 
 def _draw_arrow(screen, rect, direction, color):
     cx = rect.x + rect.w // 2
@@ -43,9 +79,12 @@ class Menu:
         # Multiplayer input fields + disk cache
         netcfg = NetworkClient.load_config()
         self.mp_name_input = netcfg.get("last_name", "")
-        self.mp_host_port = "5555"
+        self.mp_host_port = str(DEFAULT_PORT)
         self.mp_join_ip = netcfg.get("last_ip", "127.0.0.1")
-        self.mp_join_port = netcfg.get("last_port", "5555")
+        # De opgeslagen poort is letterlijk wat de speler vorige keer typte.
+        # Gaat de server op de standaardpoort verder, dan moet dat hier
+        # automatisch meebewegen anders joint iedere verse installatie op 25565.
+        self.mp_join_port = netcfg.get("last_port", "") or str(DEFAULT_PORT)
         self.mp_skin_id = netcfg.get("last_skin_id", 0)
         self.input_focus = None
         self.lobby_status = ""
@@ -88,6 +127,32 @@ class Menu:
         else:
             _cfg.SCREEN.fill(self.bg_color)
 
+    # ── schalen met de resolutie ──────────────────────────────────
+    #
+    # De rekenregels staan module-breed bovenaan dit bestand, zodat Button
+    # en Menu dezelfde maat gebruiken. `base_px` is de maat op 1080p.
+    REF_HEIGHT = REF_HEIGHT
+
+    def _scale(self, base_px, ref="min"):
+        return _scale_px(base_px, ref)
+
+    def _font_px(self, key, base_px, ref="min"):
+        """Fontmaat die met de resolutie meegroeit.
+
+        De key gaat naar het thema, dus een pack kan hem overriden. Let op:
+        gebruik GEEN bestaande themasleutel, want theme.scaled leest de
+        waarde als fractie en `sizes.input.height = 30` zou dan 30x1080
+        pixels betekenen.
+        """
+        return max(10, int(theme.scaled(key, base_px / REF_HEIGHT, ref)))
+
+    def _gap_px(self, base_px, ref="min"):
+        """Ruimte tussen twee regels, die ook meeschuift met de resolutie."""
+        return max(3, self._scale(base_px, ref))
+
+    def _fit_width(self, surf, max_width):
+        return _fit_width(surf, max_width)
+
     def draw_loading_screen(self, progress=None, label=None):
         self._fill_bg()
         loading_font = load_font(theme.size("loading.text_font", int(_cfg.HEIGHT * 0.1)), bold=True)
@@ -113,13 +178,21 @@ class Menu:
             self.loading_progress += 0.2
 
         if label:
-            label_font = load_font(theme.size("loading.label_font", 16))
-            label_surf = label_font.render(label, True, theme.color("text.subtitle", (150, 150, 150)))
-            _cfg.SCREEN.blit(label_surf, (_cfg.WIDTH // 2 - label_surf.get_width() // 2, bar_y + bar_height + 6))
+            label_font = load_font(self._font_px("ui.font.loading_label", 16))
+            label_surf = self._fit_width(label_font.render(label, True, theme.color("text.subtitle", (150, 150, 150))),
+                                         int(_cfg.WIDTH * 0.8))
+            _cfg.SCREEN.blit(label_surf, (_cfg.WIDTH // 2 - label_surf.get_width() // 2,
+                                         bar_y + bar_height + self._gap_px(6)))
 
         pygame.display.flip()
 
     def _draw_main_button(self, events, text, y_pos, w, action=None, h=None, font_size=None, x=None):
+        """Een knop uit het hoofdmenu.
+
+        `font_size` is de maat op 1080p; hier schalen we hem om, zodat de
+        aanroepers geen resolutie hoeven te kennen. 'MULTIPLAYER' paste
+        anders niet eens in zijn eigen knop op een kleiner scherm.
+        """
         if x is None:
             x = _cfg.WIDTH//2 - w//2
         if h is None:
@@ -131,9 +204,9 @@ class Menu:
         pygame.draw.rect(_cfg.SCREEN, theme.color("button.hover_bg", (100, 100, 100)) if hover else theme.color("button.bg", (70, 70, 70)), rect, border_radius=br)
         if hover:
             pygame.draw.rect(_cfg.SCREEN, theme.color("button.border", (180, 180, 180)), rect, 2, border_radius=br)
-        font = load_font(font_size)
+        font = load_font(self._font_px("ui.font.main_button", font_size or 28))
         tc = theme.color("button.hover_text", 'white') if hover else theme.color("button.text", 'white')
-        surf = font.render(text, True, tc)
+        surf = self._fit_width(font.render(text, True, tc), w - 12)
         _cfg.SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y_pos + h//2 - surf.get_height()//2))
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -161,24 +234,30 @@ class Menu:
 
     def _draw_text_input(self, events, label, current_text, x, y, width, height=None, field_id=None, numeric=False):
         """Draw a text input field. Returns the (possibly updated) text."""
+        text_px = self._font_px("input.text_font_px", 22)
         if height is None:
-            height = theme.size("input.height", 30)
+            # Een vast aantal pixels blijft op een smallere resolutie te hoog
+            # voor de letter, dus de hoogte volgt de font.
+            height = max(20, int(text_px * 1.4))
         mouse = pygame.mouse.get_pos()
         rect = pygame.Rect(x, y, width, height)
 
-        label_font = load_font(theme.size("input.label_font", 22))
+        label_font = load_font(self._font_px("input.label_font_px", 22))
         label_surf = label_font.render(label, True, theme.color("text.title", 'white'))
-        _cfg.SCREEN.blit(label_surf, (x, y - theme.size("input.label_offset", 25)))
+        if label_surf.get_width():
+            _cfg.SCREEN.blit(label_surf, (x, y - label_surf.get_height() - self._gap_px(3)))
 
         focused = self.input_focus == field_id
         bg_color = theme.color("input.focus_bg", (60, 60, 80)) if focused else theme.color("input.bg", (40, 40, 40))
         pygame.draw.rect(_cfg.SCREEN, bg_color, rect, border_radius=4)
         pygame.draw.rect(_cfg.SCREEN, theme.color("input.focus_border", (180, 180, 255)) if focused else theme.color("input.border", (100, 100, 100)), rect, 2, border_radius=4)
 
-        font = load_numeric_font(theme.size("input.text_font", 22))
+        font = load_numeric_font(text_px)
         display_text = current_text + ("|" if focused else "")
         text_surf = font.render(display_text, True, theme.color("text.title", 'white'))
-        _cfg.SCREEN.blit(text_surf, (x + theme.size("input.text_inset_x", 6), y + (height - text_surf.get_height()) // 2))
+        # Een lang adres of een lange zoekterm moet niet over de rand heen.
+        text_surf = self._fit_width(text_surf, width - self._gap_px(10))
+        _cfg.SCREEN.blit(text_surf, (x + self._gap_px(6), y + (height - text_surf.get_height()) // 2))
 
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -222,9 +301,12 @@ class Menu:
         pygame.draw.rect(_cfg.SCREEN, bg, rect, border_radius=br)
         if hover:
             pygame.draw.rect(_cfg.SCREEN, theme.color("button.border", (180, 180, 180)), rect, 2, border_radius=br)
-        font = load_font(theme.size("button.custom_font", 28))
+        font = load_font(self._font_px("mp.font.button", 28))
         tc = theme.color("button.hover_text", 'white') if hover else theme.color("button.text", 'white')
         surf = font.render(text, True, tc)
+        # Blijft de tekst breder dan de knop, dan schalen we hem mee. Anders
+        # stak 'HOST SERVER' op een smallere resolutie over de buurknop heen.
+        surf = self._fit_width(surf, w - 12)
         _cfg.SCREEN.blit(surf, (x + w//2 - surf.get_width()//2, y + h//2 - surf.get_height()//2))
         for ev in events:
             if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
@@ -237,42 +319,256 @@ class Menu:
         self.game = GAME
         self._fill_bg()
 
-        join_font = load_font(36)
+        # Eén luisteraar voor het leven van het spel: die blijft op de
+        # ontdekkingspoort zitten zodat de lijst meteen gevuld is zodra je
+        # hier binnenkomt.
+        if getattr(GAME, "discovery_listener", None) is None:
+            GAME.discovery_listener = DiscoveryListener()
+            GAME.discovery_listener.start()
+
+        join_font = load_font(self._font_px("mp.font.title", 36))
         join_label = join_font.render(theme.string("multiplayer.title", "JOIN SERVER"), True, theme.color("text.title", 'white'))
         _cfg.SCREEN.blit(join_label, (_cfg.WIDTH//2 - join_label.get_width()//2, int(_cfg.HEIGHT * theme.pos("mp.title_y", 0.04))))
 
-        info_text = theme.string("multiplayer.info", "Start de server apart: python run_server.py")
-        info = load_font(16).render(info_text, True, theme.color("text.info", (150, 150, 150)))
-        _cfg.SCREEN.blit(info, (_cfg.WIDTH//2 - info.get_width()//2, int(_cfg.HEIGHT * theme.pos("menu.title_y", 0.08))))
+        # De host draait run_server.py in een eigen venster; dat venster
+        # drukt het adres af waarmee je hier moet verbinden. Zeg dat zo
+        # duidelijk mogelijk, anders zoekt iedereen het IP-veld.
+        info_lines = [
+            theme.string("multiplayer.info", "Host: start python run_server.py in een eigen venster"),
+            theme.string("multiplayer.info_hint",
+                         "Typ hieronder het adres dat dat venster afdrukt (LAN werkt alleen op hetzelfde netwerk)"),
+        ]
+        info_font_px = self._font_px("mp.font.info", 16)
+        info_y = int(_cfg.HEIGHT * theme.pos("menu.title_y", 0.08))
+        for line in info_lines:
+            info = load_font(info_font_px).render(line, True, theme.color("text.info", (150, 150, 150)))
+            # Te breed voor het scherm? Dan kleiner, anders loopt de regel
+            # aan beide kanten uit beeld (op 800x600 was dat 870 op 800 px).
+            info = self._fit_width(info, _cfg.WIDTH * 0.94)
+            _cfg.SCREEN.blit(info, (_cfg.WIDTH//2 - info.get_width()//2, info_y))
+            info_y += info.get_height() + self._gap_px(4)
 
-        name_label = load_font(22).render(theme.string("multiplayer.name_label", "JOUW NAAM"), True, theme.color("text.subtitle", (200, 200, 200)))
+        label_font_px = self._font_px("mp.font.label", 22)
+        name_label = load_font(label_font_px).render(theme.string("multiplayer.name_label", "JOUW NAAM"), True, theme.color("text.subtitle", (200, 200, 200)))
         _cfg.SCREEN.blit(name_label, (_cfg.WIDTH//2 - name_label.get_width()//2, int(_cfg.HEIGHT * theme.pos("mp.name_label_y", 0.13))))
         self.mp_name_input = self._draw_text_input(events, "", self.mp_name_input, _cfg.WIDTH//2 - int(_cfg.WIDTH * 0.09), int(_cfg.HEIGHT * theme.pos("mp.name_input_y", 0.16)), int(_cfg.WIDTH * 0.18), field_id="mp_name")
 
-        ip_label = load_font(20).render(theme.string("multiplayer.ip_label", "SERVER IP"), True, theme.color("text.subtitle", (200, 200, 200)))
+        small_label_px = self._font_px("mp.font.small_label", 20)
+        ip_label = load_font(small_label_px).render(theme.string("multiplayer.ip_label", "SERVER IP"), True, theme.color("text.subtitle", (200, 200, 200)))
         _cfg.SCREEN.blit(ip_label, (_cfg.WIDTH//2 - ip_label.get_width()//2, int(_cfg.HEIGHT * theme.pos("mp.ip_label_y", 0.22))))
         self.mp_join_ip = self._draw_text_input(events, "", self.mp_join_ip, _cfg.WIDTH//2 - int(_cfg.WIDTH * 0.09), int(_cfg.HEIGHT * theme.pos("mp.ip_input_y", 0.25)), int(_cfg.WIDTH * 0.18), field_id="mp_join_ip")
 
-        port_label = load_font(20).render(theme.string("multiplayer.port_label", "POORT"), True, theme.color("text.subtitle", (200, 200, 200)))
+        port_label = load_font(small_label_px).render(theme.string("multiplayer.port_label", "POORT"), True, theme.color("text.subtitle", (200, 200, 200)))
         _cfg.SCREEN.blit(port_label, (_cfg.WIDTH//2 - port_label.get_width()//2, int(_cfg.HEIGHT * theme.pos("mp.port_label_y", 0.31))))
         self.mp_join_port = self._draw_text_input(events, "", self.mp_join_port, _cfg.WIDTH//2 - int(_cfg.WIDTH * 0.09), int(_cfg.HEIGHT * theme.pos("mp.port_input_y", 0.34)), int(_cfg.WIDTH * 0.18), field_id="mp_join_port", numeric=True)
 
-        def do_connect():
+        def join(ip, port):
             name = self.mp_name_input.strip() or theme.string("multiplayer.default_name", "Player")
+            GAME._do_connect(ip, port, name)
+
+        def do_connect():
             ip = self.mp_join_ip.strip() or "127.0.0.1"
             try:
                 port = int(self.mp_join_port) if self.mp_join_port else DEFAULT_PORT
             except ValueError:
                 port = DEFAULT_PORT
-            GAME._do_connect(ip, port, name)
-        self._draw_button_custom(events, theme.string("multiplayer.join", "JOIN GAME"), _cfg.WIDTH//2 - int(_cfg.WIDTH * 0.06), int(_cfg.HEIGHT * theme.pos("mp.join_btn_y", 0.40)), int(_cfg.WIDTH * 0.12), int(_cfg.HEIGHT * 0.05), do_connect)
+            join(ip, port)
+
+        # Twee knoppen naast elkaar: meespelen of zelf hosten. Zelf hosten
+        # hoeft geen tweede venster en geen commando's, want de server
+        # draait in dit proces mee.
+        btn_w = int(_cfg.WIDTH * 0.12)
+        btn_h = int(_cfg.HEIGHT * 0.05)
+        gap = int(_cfg.WIDTH * 0.02)
+        join_x = (_cfg.WIDTH - (2 * btn_w + gap)) // 2
+        btn_y = int(_cfg.HEIGHT * theme.pos("mp.join_btn_y", 0.40))
+
+        def do_host():
+            try:
+                port = int(self.mp_join_port) if self.mp_join_port else DEFAULT_PORT
+            except ValueError:
+                port = DEFAULT_PORT
+            name = self.mp_name_input.strip() or theme.string("multiplayer.default_name", "Player")
+            self.mp_status = theme.string("multiplayer.hosting", "Server gestart, verbinden...")
+            GAME._do_host(port, name)
+
+        self._draw_button_custom(events, theme.string("multiplayer.join", "JOIN GAME"),
+                                 join_x, btn_y, btn_w, btn_h, do_connect)
+        self._draw_button_custom(events, theme.string("multiplayer.host", "HOST SERVER"),
+                                 join_x + btn_w + gap, btn_y, btn_w, btn_h, do_host)
+
+        # ── Servers die zich op het eigen netwerk hebben gemeld ──
+        self._draw_lan_servers(events, GAME, int(_cfg.HEIGHT * 0.52), join)
 
         if self.mp_status:
             color = theme.color("text.success", (0, 200, 0)) if "gelukt" in self.mp_status else theme.color("text.fail", (200, 0, 0))
-            status = load_font(22).render(self.mp_status, True, color)
+            status = load_font(self._font_px("mp.font.status", 22)).render(self.mp_status, True, color)
             _cfg.SCREEN.blit(status, (_cfg.WIDTH//2 - status.get_width()//2, int(_cfg.HEIGHT * theme.pos("mp.status_y", 0.48))))
 
         self._draw_button_custom(events, theme.string("button.back", "BACK"), _cfg.WIDTH//2 - int(_cfg.WIDTH * 0.04), _cfg.HEIGHT - int(_cfg.HEIGHT * theme.pos("menu.title_y", 0.08)), int(_cfg.WIDTH * 0.08), int(_cfg.HEIGHT * 0.04), lambda: setattr(GAME, 'state', 'menu'))
+
+    def _draw_lan_servers(self, events, GAME, top_y, join):
+        """Toont de servers die zich op het LAN hebben aangemeld.
+
+        Broadcast werkt alleen binnen één netwerk: een campus-WLAN houdt
+        verkeer tussen laptops tegen, en dan blijft deze lijst leeg. Dat is
+        geen fout, dus we zeggen het eerlijk in plaats van te doen alsof er
+        iets zoekt.
+        """
+        title = theme.string("multiplayer.lan_title", "SERVERS IN JOUW NETWERK")
+        title_surf = load_font(self._font_px("mp.font.lan_title", 18)).render(title, True, theme.color("text.subtitle", (200, 200, 200)))
+        _cfg.SCREEN.blit(title_surf, (_cfg.WIDTH//2 - title_surf.get_width()//2, top_y))
+
+        listener = getattr(GAME, "discovery_listener", None)
+        servers = listener.list_servers() if listener else []
+        if not servers:
+            hint = theme.string("multiplayer.lan_empty",
+                                "Nog niets gevonden (werkt niet op campus-wifi, wel thuis)")
+            hint_surf = load_font(self._font_px("mp.font.lan_hint", 15)).render(hint, True, theme.color("text.info", (150, 150, 150)))
+            _cfg.SCREEN.blit(hint_surf, (_cfg.WIDTH//2 - hint_surf.get_width()//2,
+                                        top_y + title_surf.get_height() + self._gap_px(12)))
+            return
+
+        row_h = int(_cfg.HEIGHT * 0.04)
+        row_w = int(_cfg.WIDTH * 0.34)
+        row_x = _cfg.WIDTH//2 - row_w//2
+        # Dezelfde afstand als de lege-tijd regel hierboven, zodat de eerste
+        # server op dezelfde regel begint als die hint.
+        eerste_y = top_y + title_surf.get_height() + self._gap_px(12)
+        for index, server in enumerate(servers[:5]):
+            y = eerste_y + index * row_h
+            # Een server die geen limiet meestuurt mag niet het hele
+            # tekenscherm slaan, dus komt er een vraagteken in beeld.
+            max_players = server["max_players"]
+            label = "%s   %d/%s" % (server["ip"], server["players"],
+                                     max_players if max_players else "?")
+            self._draw_button_custom(
+                events, label, row_x, y, row_w, row_h - self._gap_px(6),
+                lambda s=server: join(s["ip"], s["port"]))
+
+    def _draw_host_address(self, GAME, events=()):
+        """Toont de gasten het adres waarop ze kunnen verbinden.
+
+        Zonder dit moet iemand die niet op je netwerk zitten eerst vragen
+        wat je IP is, en dat is precies het punt waar multiplayer online
+        vastloopt.
+
+        Een klik op een regel zet hem op het klembord. Je kunt tekst op een
+        scherm nu eenmaal niet selecteren met de muis, dus zonder dit moet
+        iemand het adres overtypen en dat is precies de fout die het
+        internetadres onbruikbaar maakt.
+        """
+        if getattr(GAME, "hosted_server", None) is None:
+            return
+        info = getattr(GAME, "hosted_address", None)
+        lines = []
+        if info is None:
+            lines.append((theme.string("lobby.host_searching", "Bezig met je adres opzoeken..."),
+                          theme.color("text.info", (150, 150, 150))))
+        else:
+            if info.get("lan_ip"):
+                lines.append((theme.string("lobby.host_lan", "LAN: {ip}:{port}").format(
+                    ip=info["lan_ip"], port=GAME.hosted_port or DEFAULT_PORT),
+                    (140, 230, 140)))
+            if info.get("public_ip"):
+                key, default = ("lobby.host_internet", "Internet: {ip}:{port}") \
+                    if info.get("mapped") else \
+                    ("lobby.host_internet_nomap", "Internet: {ip}:{port}  (poort nog niet open)")
+                lines.append((theme.string(key, default).format(
+                    ip=info["public_ip"], port=info.get("external_port", DEFAULT_PORT)),
+                    (150, 200, 255) if info.get("mapped") else (255, 180, 80)))
+        y = getattr(self, "_lobby_title_bottom", None)
+        if y is None:
+            y = int(_cfg.HEIGHT * 0.145)
+        else:
+            y += self._gap_px(8)
+        rects = []
+        kopieer = []
+        addr_px = self._font_px("lobby.font.addr", 17)
+        for text, color in lines:
+            surf = load_font(addr_px).render(text, True, color)
+            # De internetregel is met '(poort nog niet open)' de langste van
+            # de twee en liep op een smal scherm dwars door de LAN-regel heen.
+            surf = self._fit_width(surf, _cfg.WIDTH * 0.90)
+            x = _cfg.WIDTH // 2 - surf.get_width() // 2
+            _cfg.SCREEN.blit(surf, (x, y))
+            rects.append((pygame.Rect(x - 6, y - 3, surf.get_width() + 12,
+                                      surf.get_height() + 6), text))
+            y += surf.get_height() + self._gap_px(4)
+
+        self._host_addr_rects = rects
+        self._host_addr_bottom = y
+
+        for ev in events:
+            if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                for rect, tekst in rects:
+                    if rect.collidepoint(pygame.mouse.get_pos()):
+                        self._copy_to_clipboard(tekst)
+                        kopieer.append((tekst, 0))
+
+        for tekst, _ in kopieer:
+            self._flash_text(tekst)
+
+    def _flash_text(self, tekst):
+        """Laat kort zien dat er gekopieerd is.
+
+        Een verborgen klembordklik geeft geen enkel bewijs, dus zonder
+        zichtbare bevestiging weet de host niet of het werkte.
+
+        De doos staat vlak onder de adresregels. _draw_host_address stuurt
+        het beginadres mee zodat dit hier niet opnieuw berekend hoeft te
+        worden en er geen twee maten voor dezelfde regel in de code komen.
+        """
+        self._copy_flash = (tekst, pygame.time.get_ticks())
+        if getattr(self, "_copy_flash_rect", None) is not None:
+            return
+        top = getattr(self, "_host_addr_bottom",
+                      int(_cfg.HEIGHT * 0.145))
+        surf = load_font(self._font_px("lobby.font.addr", 17)).render(tekst, True, (140, 230, 140))
+        rect = pygame.Rect(0, 0, surf.get_width() + 20, surf.get_height() + 10)
+        rect.center = (_cfg.WIDTH // 2, top + 18)
+        self._copy_flash_rect = rect
+        self._copy_flash_surface = surf
+
+    def _draw_copy_flash(self):
+        """Teken de bevestiging weg, en ruim hem op als hij te oud is."""
+        flash = getattr(self, "_copy_flash", None)
+        rect = getattr(self, "_copy_flash_rect", None)
+        surf = getattr(self, "_copy_flash_surface", None)
+        if not flash or rect is None or surf is None:
+            return
+        if pygame.time.get_ticks() - flash[1] > 1500:
+            self._copy_flash = None
+            self._copy_flash_rect = None
+            self._copy_flash_surface = None
+            return
+        pygame.draw.rect(_cfg.SCREEN, (0, 0, 0), rect, border_radius=4)
+        _cfg.SCREEN.blit(surf, (rect.x + 10, rect.y + 5))
+
+    def _copy_to_clipboard(self, tekst):
+        """Zet tekst op het klembord.
+
+        pygame heeft geen klembord, dus we lenen die van tkinter. Dat is
+        al een verplichte import voor het uploadvenster van skins, dus dit
+        voegt geen nieuwe afhankelijkheid toe aan de verpakte build.
+        """
+        root = None
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            root.clipboard_clear()
+            root.clipboard_append(tekst)
+            # Zonder dit wist het klembord de inhoud weer zodra dit
+            # venster sluit, en viel de kopieeractie stil.
+            root.update()
+        except Exception:
+            pass
+        finally:
+            if root is not None:
+                try:
+                    root.destroy()
+                except Exception:
+                    pass
 
     def draw_waiting_lobby(self, events, GAME):
         self.game = GAME
@@ -282,23 +578,42 @@ class Menu:
             self._skin_thumbnails.pop(sid, None)
         SkinManager.clear_completed_downloads()
 
-        title = load_font(50).render(theme.string("lobby.title", "LOBBY"), True, theme.color("text.title", 'white'))
-        _cfg.SCREEN.blit(title, (_cfg.WIDTH//2 - title.get_width()//2, int(_cfg.HEIGHT * theme.pos("menu.title_y", 0.08))))
+        title = load_font(self._font_px("lobby.font.title", 50)).render(theme.string("lobby.title", "LOBBY"), True, theme.color("text.title", 'white'))
+        title_y = int(_cfg.HEIGHT * theme.pos("menu.title_y", 0.08))
+        _cfg.SCREEN.blit(title, (_cfg.WIDTH//2 - title.get_width()//2, title_y))
+        # Het gasten-adres staat als kop onder de titel, en niet op de hoogte
+        # van de kolommen: anders liep die lange internetregel dwars door het
+        # 'KIEZEN' van de rechterkolom.
+        self._lobby_title_bottom = title_y + title.get_height()
 
         if SkinManager.is_downloading():
             prog = SkinManager.get_download_progress()
             dl_label = "%s %d/%d" % (theme.string("lobby.downloading", "Skins downloaden..."), prog["done"], prog["total"])
-            dl_text = load_font(16).render(dl_label, True, theme.color("text.info", (150, 150, 150)))
-            _cfg.SCREEN.blit(dl_text, (_cfg.WIDTH//2 - dl_text.get_width()//2, int(_cfg.HEIGHT * theme.pos("menu.title_y", 0.08)) + 30))
+            dl_text = load_font(self._font_px("lobby.font.dl", 16)).render(dl_label, True, theme.color("text.info", (150, 150, 150)))
+            _cfg.SCREEN.blit(dl_text, (_cfg.WIDTH//2 - dl_text.get_width()//2, self._lobby_title_bottom + self._gap_px(6)))
 
         mouse = pygame.mouse.get_pos()
+
+        # ── Host: laat zien hoe de gasten hier moeten komen ──────────
+        self._draw_host_address(GAME, events)
+
+        # De kolommen beginnen pas onder het adresblok, zodat niets elkaar
+        # kan overlappen ongeacht hoe breed de regel met het IP-adres is.
+        kolom_top = max(int(_cfg.HEIGHT * theme.pos("lobby.left_start_y", 0.15)),
+                        getattr(self, "_host_addr_bottom", 0) + self._gap_px(14))
 
         # ── Left column: player list ──────────────────────────────
         left_x = int(_cfg.WIDTH * 0.04)
         left_cx = int(_cfg.WIDTH * 0.20)
-        y_left = int(_cfg.HEIGHT * theme.pos("lobby.left_start_y", 0.15))
+        y_left = kolom_top
         players = self.client_list if self.client_list else []
-        thumb_size = theme.size("lobby.thumb_size", 36)
+        thumb_size = theme.size("lobby.thumb_size", self._scale(36))
+        name_px = self._font_px("lobby.font.name", 26)
+        ready_px = self._font_px("lobby.font.ready", 16)
+        text_x = left_x + thumb_size + self._gap_px(10)
+        # Kolombreedte voor de tekst, zodat een lange naam niet in de
+        # rechterkolom met de skins loopt.
+        col_w = int(_cfg.WIDTH * 0.30)
         all_ready = True
         for pd in players:
             pid = pd["pid"] if isinstance(pd, dict) else pd[1]
@@ -311,30 +626,46 @@ class Menu:
             color = theme.color("player.highlight", (0, 200, 255)) if pid == GAME.player_id else theme.color("text.title", (255, 255, 255))
             if skin_id not in self._skin_thumbnails or self._skin_thumbnails[skin_id].get_width() != thumb_size:
                 self._skin_thumbnails[skin_id] = SkinManager.create_thumbnail(skin_id, (thumb_size, thumb_size))
-            _cfg.SCREEN.blit(self._skin_thumbnails[skin_id], (left_x, y_left - 4))
+            _cfg.SCREEN.blit(self._skin_thumbnails[skin_id], (left_x, y_left))
             ready_text = theme.string("lobby.ready", "READY") if ready else theme.string("lobby.not_ready", "NOT READY")
             ready_color = theme.color("lobby.ready", (0, 200, 0)) if ready else theme.color("lobby.not_ready", (200, 80, 80))
-            ready_surf = load_font(16).render(ready_text, True, ready_color)
+            ready_surf = load_font(ready_px).render(ready_text, True, ready_color)
             label = f"[P{pid}] {name}"
             if is_host:
                 label += " (HOST)"
                 color = (255, 220, 0)  # gold for host
-            p_text = load_numeric_font(26).render(label, True, color)
-            _cfg.SCREEN.blit(p_text, (left_x + thumb_size + 10, y_left))
-            _cfg.SCREEN.blit(ready_surf, (left_x + thumb_size + 10, y_left + 28))
-            y_left += theme.size("lobby.player_row_gap", int(_cfg.HEIGHT * 0.055))
+            p_text = load_numeric_font(name_px).render(label, True, color)
+            p_text = self._fit_width(p_text, col_w)
+            _cfg.SCREEN.blit(p_text, (text_x, y_left))
+            # De READY-regel begint ná de hoogte van de naam, niet op een
+            # vaste 28 pixels: bij een kleinere font paste de naam er anders
+            # bovenop.
+            _cfg.SCREEN.blit(ready_surf, (text_x, y_left + p_text.get_height() + self._gap_px(4)))
+            y_left += max(thumb_size, p_text.get_height() + ready_surf.get_height()
+                          ) + self._gap_px(16)
         if not players:
             all_ready = False
-            wait = load_font(22).render(theme.string("lobby.waiting", "Wachten op spelers..."), True, theme.color("text.info", (150, 150, 150)))
+            wait = load_font(self._font_px("lobby.font.waiting", 22)).render(theme.string("lobby.waiting", "Wachten op spelers..."), True, theme.color("text.info", (150, 150, 150)))
+            wait = self._fit_width(wait, col_w)
             _cfg.SCREEN.blit(wait, (left_cx - wait.get_width()//2, y_left))
+        elif not all_ready:
+            # Zeg wie er nog op READY UP moet zitten, anders wacht de host
+            # op een groep die allang klaar is zonder dat iemand op Start kan.
+            n_pending = sum(1 for pd in players
+                            if not (pd.get("ready", False) if isinstance(pd, dict) else False))
+            pending_surf = load_font(self._font_px("lobby.font.pending", 20)).render(
+                theme.string("lobby.waiting_ready", "Wachten op {n} speler(s) op READY").format(n=n_pending),
+                True, theme.color("text.info", (150, 150, 150)))
+            pending_surf = self._fit_width(pending_surf, col_w)
+            _cfg.SCREEN.blit(pending_surf, (left_x, y_left))
 
         # ── Right column: skin selector ───────────────────────────
         right_cx = int(_cfg.WIDTH * 0.66)
-        y_right = int(_cfg.HEIGHT * theme.pos("lobby.right_start_y", 0.15))
+        y_right = kolom_top
 
-        sel_label = load_font(22).render(theme.string("lobby.skin_choose", "KIEZEN"), True, theme.color("text.subtitle", (200, 200, 200)))
+        sel_label = load_font(self._font_px("lobby.font.skin_choose", 22)).render(theme.string("lobby.skin_choose", "KIEZEN"), True, theme.color("text.subtitle", (200, 200, 200)))
         _cfg.SCREEN.blit(sel_label, (right_cx - sel_label.get_width()//2, y_right))
-        y_right += 28
+        y_right += sel_label.get_height() + self._gap_px(10)
 
         avail = SkinManager.get_available_skins()
         builtin = [s for s in avail if s.get("type") == "builtin"]
@@ -356,62 +687,75 @@ class Menu:
             _cfg.SCREEN.blit(self._skin_thumbnails[sid], (x, y_right))
             border_color = theme.color("skin.selected", (0, 200, 255)) if sid == GAME.skin_id else theme.color("skin.border", (60, 60, 60))
             pygame.draw.rect(_cfg.SCREEN, border_color, rect, 3, border_radius=4)
-            name_font = load_numeric_font(13)
-            name_surf = name_font.render(info.get("name", f"S{sid}"), True, theme.color("text.info", (150, 150, 150)))
-            _cfg.SCREEN.blit(name_surf, (x + t_size_b//2 - name_surf.get_width()//2, y_right + t_size_b + 2))
-        y_right += t_size_b + 28
+            name_surf = load_numeric_font(self._font_px("lobby.font.builtin_name", 13)).render(info.get("name", f"S{sid}"), True, theme.color("text.info", (150, 150, 150)))
+            # De naam mag niet breder zijn dan het vakje erboven, anders
+            # liepen zes namen over elkaar heen op een smal scherm.
+            name_surf = self._fit_width(name_surf, int((t_size_b + gap_b) * 0.95))
+            _cfg.SCREEN.blit(name_surf, (x + t_size_b//2 - name_surf.get_width()//2, y_right + t_size_b + self._gap_px(2)))
+        y_right += t_size_b + self._gap_px(28)
 
         # ── Upload section (always visible) ─────────────────────────
-        upload_font = load_font(16)
+        upload_font = load_font(self._font_px("lobby.font.upload", 16))
         upload_label = upload_font.render(theme.string("lobby.new_skin", "NIEUWE SKIN"), True, theme.color("text.subtitle", (200, 200, 200)))
         _cfg.SCREEN.blit(upload_label, (right_cx - upload_label.get_width()//2, y_right))
-        y_right += 22
+        y_right += upload_label.get_height() + self._gap_px(10)
         pending_path = getattr(self, '_pending_upload_path', None)
         name_w = int(_cfg.WIDTH * 0.08)
         btn_w = int(_cfg.WIDTH * 0.08)
         name_x = right_cx - name_w - int(_cfg.WIDTH * 0.02)
+        # De hoogte van de velden en knoppen volgt de font, anders blijft
+        # een vaste 26 pixels te laag zodra de font schaalt.
+        row_h = max(18, int(upload_font.get_height() + self._gap_px(8)))
         if pending_path:
+            # De bestandsnaam krijgt een eigen regel. Eerst stond hij
+            # boven het veld getekend, precies op de hoogte van het
+            # 'NIEUWE SKIN'-label er boven.
+            pending_label = upload_font.render(getattr(self, '_pending_upload_filename', ''), True, theme.color("text.info", (180, 180, 180)))
+            pending_label = self._fit_width(pending_label, name_w + btn_w)
+            _cfg.SCREEN.blit(pending_label, (name_x, y_right))
+            y_right += pending_label.get_height() + self._gap_px(6)
             self.mp_skin_upload_name = self._draw_text_input(events, "",
                 self.mp_skin_upload_name, name_x, y_right, name_w,
-                height=26, field_id="mp_skin_upload_name")
+                height=row_h, field_id="mp_skin_upload_name")
             btn_x = right_cx + int(_cfg.WIDTH * 0.02)
-            con_rect = pygame.Rect(btn_x, y_right, btn_w, 26)
+            con_rect = pygame.Rect(btn_x, y_right, btn_w, row_h)
             hover = con_rect.collidepoint(mouse)
             pygame.draw.rect(_cfg.SCREEN, theme.color("upload.hover_bg", (80, 120, 80)) if hover else theme.color("upload.bg", (60, 90, 60)), con_rect, border_radius=4)
             con_surf = upload_font.render(theme.string("lobby.confirm", "CONFIRM"), True, theme.color("upload.text", (200, 255, 200)))
-            _cfg.SCREEN.blit(con_surf, (btn_x + btn_w//2 - con_surf.get_width()//2, y_right + 5))
+            con_surf = self._fit_width(con_surf, btn_w - 8)
+            _cfg.SCREEN.blit(con_surf, (btn_x + btn_w//2 - con_surf.get_width()//2, y_right + (row_h - con_surf.get_height())//2))
             self._skin_confirm_rect = con_rect
-            pending_label = upload_font.render(getattr(self, '_pending_upload_filename', ''), True, theme.color("text.info", (180, 180, 180)))
-            _cfg.SCREEN.blit(pending_label, (name_x, y_right - 20))
         else:
-            sel_rect = pygame.Rect(right_cx - btn_w//2, y_right, btn_w, 26)
+            sel_rect = pygame.Rect(right_cx - btn_w//2, y_right, btn_w, row_h)
             hover = sel_rect.collidepoint(mouse)
             pygame.draw.rect(_cfg.SCREEN, theme.color("upload.hover_bg", (80, 120, 80)) if hover else theme.color("upload.bg", (60, 90, 60)), sel_rect, border_radius=4)
             sel_surf = upload_font.render(theme.string("lobby.select_file", "SELECT"), True, theme.color("upload.text", (200, 255, 200)))
-            _cfg.SCREEN.blit(sel_surf, (right_cx - sel_surf.get_width()//2, y_right + 5))
+            sel_surf = self._fit_width(sel_surf, btn_w - 8)
+            _cfg.SCREEN.blit(sel_surf, (right_cx - sel_surf.get_width()//2, y_right + (row_h - sel_surf.get_height())//2))
             self._skin_select_rect = sel_rect
-        y_right += 32
+        y_right += row_h + self._gap_px(12)
 
         if self._upload_status:
             col = theme.color("text.success", (0, 200, 0)) if "gelukt" in self._upload_status.lower() else theme.color("text.warning", (200, 100, 0))
-            st = load_numeric_font(15).render(self._upload_status, True, col)
+            st = load_numeric_font(self._font_px("lobby.font.upload_status", 15)).render(self._upload_status, True, col)
+            st = self._fit_width(st, int(_cfg.WIDTH * 0.24))
             _cfg.SCREEN.blit(st, (right_cx - st.get_width()//2, y_right))
-            y_right += 20
+            y_right += st.get_height() + self._gap_px(6)
 
         # ── Custom skins browser ────────────────────────────────────
         self._skin_custom_rects = []
         self._skin_custom_info = []
         if custom:
-            cus_label = load_font(18).render(theme.string("lobby.custom", "CUSTOM"), True, theme.color("text.custom", (160, 140, 255)))
+            cus_label = load_font(self._font_px("lobby.font.custom", 18)).render(theme.string("lobby.custom", "CUSTOM"), True, theme.color("text.custom", (160, 140, 255)))
             _cfg.SCREEN.blit(cus_label, (right_cx - cus_label.get_width()//2, y_right))
-            y_right += 24
+            y_right += cus_label.get_height() + self._gap_px(10)
 
             search_w = int(_cfg.WIDTH * 0.12)
             search_x = right_cx - search_w//2
             self.mp_skin_search = self._draw_text_input(events, "",
                 getattr(self, 'mp_skin_search', ""), search_x, y_right, search_w,
-                height=26, field_id="mp_skin_search")
-            y_right += 32
+                height=row_h, field_id="mp_skin_search")
+            y_right += row_h + self._gap_px(12)
 
             filter_text = getattr(self, 'mp_skin_search', "").lower()
             filtered = [s for s in custom if filter_text in s.get("name", "").lower()]
@@ -442,37 +786,44 @@ class Menu:
                 _cfg.SCREEN.blit(self._skin_thumbnails[sid], (x, y_right))
                 border_color = theme.color("skin.selected", (0, 200, 255)) if sid == GAME.skin_id else theme.color("skin.border", (60, 60, 60))
                 pygame.draw.rect(_cfg.SCREEN, border_color, rect, 2, border_radius=4)
-                name_font = load_numeric_font(12)
                 label = info.get("name", f"S{sid}")
                 if len(label) > 14:
                     label = label[:13] + "..."
-                name_surf = name_font.render(label, True, theme.color("text.info", (160, 160, 160)))
-                _cfg.SCREEN.blit(name_surf, (x + t_size_c//2 - name_surf.get_width()//2, y_right + t_size_c + 2))
+                name_surf = load_numeric_font(self._font_px("lobby.font.custom_name", 12)).render(label, True, theme.color("text.info", (160, 160, 160)))
+                # Net als bij de built-ins: de naam blijft binnen het vakje
+                # erboven, anders lopen vier namen over elkaar heen.
+                name_surf = self._fit_width(name_surf, int((t_size_c + gap_c) * 0.95))
+                _cfg.SCREEN.blit(name_surf, (x + t_size_c//2 - name_surf.get_width()//2, y_right + t_size_c + self._gap_px(2)))
 
-            y_right += t_size_c + 22
+            y_right += t_size_c + self._gap_px(22)
 
             # Pagination controls
             self._skin_prev_rect = None
             self._skin_next_rect = None
             if total_pages > 1:
-                arr_font = load_numeric_font(20)
+                arr_font = load_numeric_font(self._font_px("lobby.font.page", 20))
+                pad = self._gap_px(4)
+                arr_w = max(int(_cfg.WIDTH * 0.04), arr_font.get_height() + pad * 2)
+                arr_h = arr_font.get_height() + pad * 2
+                arr_y = y_right + self._gap_px(6)
                 prev_surf = arr_font.render("<", True, theme.color("pagination.arrow", (200, 200, 200)))
-                prev_rect = pygame.Rect(right_cx - int(_cfg.WIDTH * 0.08), y_right - 6,
-                                        prev_surf.get_width() + 8, prev_surf.get_height() + 4)
+                prev_rect = pygame.Rect(right_cx - int(_cfg.WIDTH * 0.08), arr_y, arr_w, arr_h)
                 pygame.draw.rect(_cfg.SCREEN, theme.color("pagination.active_bg", (70, 70, 70)) if page > 0 else theme.color("pagination.disabled_bg", (40, 40, 40)), prev_rect, border_radius=4)
-                _cfg.SCREEN.blit(prev_surf, (prev_rect.x + 4, prev_rect.y + 2))
+                _cfg.SCREEN.blit(prev_surf, (prev_rect.centerx - prev_surf.get_width()//2,
+                                             prev_rect.centery - prev_surf.get_height()//2))
                 self._skin_prev_rect = prev_rect
                 self._skin_prev_page = page > 0
 
                 page_surf = arr_font.render(f"{page + 1}/{total_pages}", True, theme.color("pagination.page", (180, 180, 180)))
-                _cfg.SCREEN.blit(page_surf, (right_cx - page_surf.get_width()//2, y_right - 4))
+                _cfg.SCREEN.blit(page_surf, (right_cx - page_surf.get_width()//2,
+                                             arr_y + (arr_h - page_surf.get_height())//2))
 
                 next_surf = arr_font.render(">", True, theme.color("pagination.arrow", (200, 200, 200)))
-                next_rect = pygame.Rect(right_cx + int(_cfg.WIDTH * 0.06), y_right - 6,
-                                        next_surf.get_width() + 8, next_surf.get_height() + 4)
+                next_rect = pygame.Rect(right_cx + int(_cfg.WIDTH * 0.06), arr_y, arr_w, arr_h)
                 pygame.draw.rect(_cfg.SCREEN, theme.color("pagination.active_bg", (70, 70, 70)) if page < total_pages - 1 else theme.color("pagination.disabled_bg", (40, 40, 40)),
                                  next_rect, border_radius=4)
-                _cfg.SCREEN.blit(next_surf, (next_rect.x + 4, next_rect.y + 2))
+                _cfg.SCREEN.blit(next_surf, (next_rect.centerx - next_surf.get_width()//2,
+                                             next_rect.centery - next_surf.get_height()//2))
                 self._skin_next_rect = next_rect
                 self._skin_next_page = page < total_pages - 1
 
@@ -537,26 +888,32 @@ class Menu:
             if remaining > 0:
                 seconds = max(1, remaining // 60 + 1)
                 count_text = theme.string("lobby.countdown", "STARTING IN {s}...").format(s=seconds)
-                count_surf = load_font(40).render(count_text, True, theme.color("lobby.countdown", (255, 200, 0)))
+                count_surf = load_font(self._font_px("lobby.font.countdown", 40)).render(count_text, True, theme.color("lobby.countdown", (255, 200, 0)))
                 _cfg.SCREEN.blit(count_surf, (_cfg.WIDTH//2 - count_surf.get_width()//2, int(_cfg.HEIGHT * 0.12)))
 
         # ── Lobby settings (host only) ─────────────────────────────────
+        # Dit blok stond op 55% van de breedte en daarmee midden in de
+        # skinkolom, waar de paginering van de custom skins ook staat. Op
+        # sommige resoluties en skin-aantallen landde 'LOBBY SETTINGS' dan
+        # bovenop de pijlen. Links onder de spelerlijst staat er wel altijd
+        # ruimte: die is daar leeg zodra de wachttijd of de melding weg is.
         if not self.lobby_game_active:
             opts = self.lobby_options if hasattr(self, 'lobby_options') else {}
             is_host = GAME.is_host if hasattr(GAME, 'is_host') else False
-            sx = int(_cfg.WIDTH * 0.55)
-            sy = int(_cfg.HEIGHT * 0.55)
-            set_font = load_font(18)
+            sx = left_x
+            sy = y_left + self._gap_px(20)
+            set_font = load_font(self._font_px("lobby.font.setting", 18))
+            set_h = max(16, int(set_font.get_height() + self._gap_px(8)))
             set_label = set_font.render("LOBBY SETTINGS", True, theme.color("text.subtitle", (200, 200, 200)))
             _cfg.SCREEN.blit(set_label, (sx, sy))
-            sy += 26
+            sy += set_label.get_height() + self._gap_px(8)
 
             self._lobby_option_rects = []
             for opt_key, opt_display in [("shared_health", "Shared Health"), ("shared_ammo", "Shared Ammo")]:
                 val = opts.get(opt_key, True)
                 txt = f"{opt_display}: {'ON' if val else 'OFF'}"
                 col = theme.color("lobby.ready", (0, 200, 0)) if val else theme.color("lobby.not_ready", (200, 80, 80))
-                rect = pygame.Rect(sx, sy, int(_cfg.WIDTH * 0.14), 24)
+                rect = pygame.Rect(sx, sy, int(_cfg.WIDTH * 0.14), set_h)
                 if is_host:
                     hover = rect.collidepoint(mouse)
                     bg = theme.color("button.hover_bg", (80, 80, 80)) if hover else theme.color("button.bg", (60, 60, 60))
@@ -567,12 +924,17 @@ class Menu:
                 else:
                     pygame.draw.rect(_cfg.SCREEN, (40, 40, 40), rect, border_radius=4)
                 opt_surf = set_font.render(txt, True, col)
-                _cfg.SCREEN.blit(opt_surf, (sx + 6, sy + 3))
-                sy += 30
+                opt_surf = self._fit_width(opt_surf, rect.w - self._gap_px(10))
+                _cfg.SCREEN.blit(opt_surf, (sx + self._gap_px(6), sy + (set_h - opt_surf.get_height())//2))
+                sy += set_h + self._gap_px(8)
+
+        # ── "gekopieerd"-bevestiging bovenop alles wat al getekend is ──
+        self._draw_copy_flash()
 
 
 
         def dc():
+            GAME._silence_music()
             GAME._disconnect()
 
         def toggle_ready():
@@ -599,12 +961,27 @@ class Menu:
             self._draw_button_custom(events, ready_label,
                 _cfg.WIDTH//2 - btn_w//2, btn_y, btn_w, int(_cfg.HEIGHT * 0.05), toggle_ready)
             if my_ready:
-                font = load_font(theme.size("button.custom_font", 28))
-                ts = font.render(ready_label, True, 'white')
-                cx = _cfg.WIDTH//2 - ts.get_width()//2 - 18
+                # Dezelfde schaalbare font als de knoptekst, anders blijft
+                # het vinkje op een plek hangen die niet meer bij de knop
+                # hoort zodra de resolutie kleiner wordt.
+                font = load_font(self._font_px("mp.font.button", 28))
+                ts = self._fit_width(font.render(ready_label, True, 'white'),
+                                    btn_w - 12)
+                cx = _cfg.WIDTH//2 - ts.get_width()//2 - self._gap_px(20)
                 cy = btn_y + int(_cfg.HEIGHT * 0.05)//2
-                pts = [(cx, cy - 3), (cx + 5, cy + 4), (cx + 12, cy - 6)]
-                pygame.draw.lines(_cfg.SCREEN, theme.color("lobby.ready_check", (0, 220, 0)), False, pts, 3)
+                v = max(2, self._gap_px(6))
+                pts = [(cx, cy - v // 2), (cx + v, cy + v // 2), (cx + v * 3, cy - v)]
+                pygame.draw.lines(_cfg.SCREEN, theme.color("lobby.ready_check", (0, 220, 0)), False, pts, max(1, v // 2))
+
+            if self.host_pid >= 0 and self.host_pid == GAME.player_id:
+                # Zonder deze knop zit de groep vast zodra één iemand op
+                # READY UP blijft hangen: het spel start pas als ALLE klaar zijn.
+                def start_game():
+                    if GAME.network_client:
+                        GAME.network_client.send({"type": "start_game"})
+                self._draw_button_custom(events, theme.string("lobby.start_now", "START"),
+                    _cfg.WIDTH//2 + btn_w + int(_cfg.WIDTH * 0.02), btn_y, btn_w,
+                    int(_cfg.HEIGHT * 0.05), start_game)
 
         self._draw_button_custom(events, theme.string("lobby.disconnect", "DISCONNECT"), _cfg.WIDTH//2 - int(_cfg.WIDTH * 0.055),
             _cfg.HEIGHT - int(_cfg.HEIGHT * theme.pos("lobby.disconnect_btn_y", 0.10)), int(_cfg.WIDTH * 0.11), int(_cfg.HEIGHT * 0.055), dc)
@@ -623,19 +1000,19 @@ class Menu:
     def _draw_section_header(self, text, y, color=None):
         if color is None:
             color = theme.color("text.section_header", (160, 160, 160))
-        font = load_font(24)
-        surf = font.render(text, True, color)
+        font = load_font(self._font_px("ui.font.section_header", 24))
+        surf = self._fit_width(font.render(text, True, color), int(_cfg.WIDTH * 0.5))
         cx = _cfg.WIDTH // 2
         left_margin = int(_cfg.WIDTH * theme.pos("section_header.left_margin", 0.08))
         right_margin = _cfg.WIDTH - left_margin
         mid_y = y + surf.get_height() // 2
-        gap = theme.size("section_header.gap", 14)
+        gap = self._gap_px(14)
         lx = cx - surf.get_width() // 2 - gap
         rx = cx + surf.get_width() // 2 + gap
         if lx > left_margin:
-            pygame.draw.line(_cfg.SCREEN, color, (left_margin, mid_y), (lx, mid_y), 2)
+            pygame.draw.line(_cfg.SCREEN, color, (left_margin, mid_y), (lx, mid_y), max(1, self._gap_px(2)))
         if rx < right_margin:
-            pygame.draw.line(_cfg.SCREEN, color, (rx, mid_y), (right_margin, mid_y), 2)
+            pygame.draw.line(_cfg.SCREEN, color, (rx, mid_y), (right_margin, mid_y), max(1, self._gap_px(2)))
         _cfg.SCREEN.blit(surf, (cx - surf.get_width() // 2, y))
 
     def draw_settings(self, events, GAME):
@@ -648,10 +1025,11 @@ class Menu:
         title_surf = title_font.render(theme.string("settings.title", "SETTINGS"), True, theme.color("text.title", 'white'))
         _cfg.SCREEN.blit(title_surf, (c - title_surf.get_width() // 2, int(_cfg.HEIGHT * theme.pos("mp.title_y", 0.04))))
 
-        LABEL_FONT_SIZE = theme.size("settings.label_font", 20)
         btn_w = int(_cfg.WIDTH * 0.09)
         btn_h = theme.size("settings.btn_h", int(_cfg.HEIGHT * 0.05))
         gap = int(_cfg.WIDTH * 0.02)
+        # 22 is de maat op 1080p; Button schaalt hem zelf om.
+        btn_font_px = 22
 
         # ── VIDEO ────────────────────────────────────────────
         self._draw_section_header(theme.string("settings.video", "VIDEO"), int(_cfg.HEIGHT * theme.pos("settings.video_header_y", 0.14)))
@@ -659,11 +1037,11 @@ class Menu:
         hi_active = self.game.resolution == "high"
         lo_active = self.game.resolution == "low"
         res_y = int(_cfg.HEIGHT * theme.pos("settings.res_btn_y", 0.21))
-        Res_high = Button(c - btn_w - gap // 2, res_y, btn_w, btn_h, theme.string("settings.high_res", "HIGH RES"), 22,
+        Res_high = Button(c - btn_w - gap // 2, res_y, btn_w, btn_h, theme.string("settings.high_res", "HIGH RES"), btn_font_px,
             text_color="white", button_color=(40, 100, 160) if hi_active else (60, 60, 70),
             hover_text_color="white", hover_button_color=(60, 130, 190) if hi_active else (80, 80, 95),
             game=self.game, target_state="settings", function="res_high")
-        Res_low = Button(c + gap // 2, res_y, btn_w, btn_h, theme.string("settings.low_res", "LOW RES"), 22,
+        Res_low = Button(c + gap // 2, res_y, btn_w, btn_h, theme.string("settings.low_res", "LOW RES"), btn_font_px,
             text_color="white", button_color=(40, 100, 160) if lo_active else (60, 60, 70),
             hover_text_color="white", hover_button_color=(60, 130, 190) if lo_active else (80, 80, 95),
             game=self.game, target_state="settings", function="res_low")
@@ -682,7 +1060,7 @@ class Menu:
         # Tutorial toggle
         tuto_active = self.game.bilal.flags["general"]
         tuto_btn = Button(c - int(_cfg.WIDTH * 0.045), int(_cfg.HEIGHT * theme.pos("settings.tutorial_btn_y", 0.59)),
-            int(_cfg.WIDTH * 0.09), int(_cfg.HEIGHT * 0.05), theme.string("settings.tutorial", "TUTORIAL"), 22,
+            int(_cfg.WIDTH * 0.09), int(_cfg.HEIGHT * 0.05), theme.string("settings.tutorial", "TUTORIAL"), btn_font_px,
             text_color="white", button_color=(40, 100, 160) if tuto_active else (60, 60, 70),
             hover_text_color="white", hover_button_color=(60, 130, 190) if tuto_active else (80, 80, 95),
             game=self.game, target_state="settings", function="tutorial")
@@ -744,8 +1122,8 @@ class Menu:
         prio_w = int(_cfg.WIDTH * 0.018)
         gap = int(_cfg.WIDTH * 0.008)
         visible = col_h // item_h
-        font = load_font(theme.size("pack_select.item_font", 22))
-        label_font = load_font(theme.size("pack_select.column_label", 20))
+        font = load_font(self._font_px("ui.font.pack_item", 22))
+        label_font = load_font(self._font_px("ui.font.pack_label", 20))
         mouse = pygame.mouse.get_pos()
 
         # Center the whole block:
@@ -768,6 +1146,13 @@ class Menu:
         arr_hov = theme.color("pack_select.arrow_bg", (60, 60, 70))
 
         # ── Helper: draw a column list ────────────────────
+        def item_rect(x, i):
+            """Het vakje van item i. Tekenen én klikken gebruiken dit allebei,
+            anders raakt een klik op een andere plek dan wat je ziet."""
+            y = col_y + i * item_h + self._gap_px(4)
+            return pygame.Rect(x + self._gap_px(4), y, col_w - self._gap_px(8),
+                               item_h - self._gap_px(4))
+
         def draw_column(items, x, scroll, sel_idx):
             box = pygame.Rect(x, col_y, col_w, col_h)
             pygame.draw.rect(_cfg.SCREEN, box_bg, box, border_radius=6)
@@ -776,15 +1161,17 @@ class Menu:
                 idx = scroll + i
                 if idx >= len(items):
                     break
-                y = col_y + i * item_h + 4
-                rect = pygame.Rect(x + 4, y, col_w - 8, item_h - 4)
+                rect = item_rect(x, i)
                 selected = idx == sel_idx
                 hover = rect.collidepoint(mouse)
                 bg = sel_bg if selected else (hover_bg if hover else item_bg)
                 pygame.draw.rect(_cfg.SCREEN, bg, rect, border_radius=4)
                 label = items[idx]
                 surf = font.render(label, True, text_col)
-                _cfg.SCREEN.blit(surf, (rect.x + 8, rect.y + (rect.h - surf.get_height()) // 2))
+                # Een lange packnaam loopt anders over de rand van de kolom
+                # heen en in de kolom ernaast.
+                surf = self._fit_width(surf, rect.w - self._gap_px(12))
+                _cfg.SCREEN.blit(surf, (rect.x + self._gap_px(6), rect.y + (rect.h - surf.get_height()) // 2))
 
         # ── Get display name helper ───────────────────────
         def display_name(value):
@@ -796,14 +1183,18 @@ class Menu:
         # ── Left column: Available ─────────────────────────
         avail_labels = [display_name(p) for p in avail]
         left_label = label_font.render(theme.string("pack_select.available", "BESCHIKBAAR"), True, sub_col)
-        _cfg.SCREEN.blit(left_label, (left_x + col_w // 2 - left_label.get_width() // 2, col_y - 28))
+        left_label = self._fit_width(left_label, col_w)
+        _cfg.SCREEN.blit(left_label, (left_x + col_w // 2 - left_label.get_width() // 2,
+                                     col_y - left_label.get_height() - self._gap_px(8)))
         self._pack_sel_avail_scroll = max(0, min(self._pack_sel_avail_scroll, max(0, len(avail) - visible)))
         draw_column(avail_labels, left_x, self._pack_sel_avail_scroll, self._pack_sel_avail_idx)
 
         # ── Right column: Active ───────────────────────────
         active_labels = [f"{i + 1}. {display_name(p)}" for i, p in enumerate(self._working_packs)]
         right_label = label_font.render(theme.string("pack_select.active", "ACTIEF"), True, sub_col)
-        _cfg.SCREEN.blit(right_label, (right_x + col_w // 2 - right_label.get_width() // 2, col_y - 28))
+        right_label = self._fit_width(right_label, col_w)
+        _cfg.SCREEN.blit(right_label, (right_x + col_w // 2 - right_label.get_width() // 2,
+                                       col_y - right_label.get_height() - self._gap_px(8)))
         self._pack_sel_active_scroll = max(0, min(self._pack_sel_active_scroll, max(0, len(self._working_packs) - visible)))
         draw_column(active_labels, right_x, self._pack_sel_active_scroll, self._pack_sel_active_idx)
 
@@ -811,8 +1202,8 @@ class Menu:
         arr_btn_h = int(item_h * 0.6)
         arr_btn_w = arr_w
         center_y = col_y + col_h // 2
-        left_btn = pygame.Rect(arr_x, center_y - arr_btn_h - 4, arr_btn_w, arr_btn_h)
-        right_btn = pygame.Rect(arr_x, center_y + 4, arr_btn_w, arr_btn_h)
+        left_btn = pygame.Rect(arr_x, center_y - arr_btn_h - self._gap_px(4), arr_btn_w, arr_btn_h)
+        right_btn = pygame.Rect(arr_x, center_y + self._gap_px(4), arr_btn_w, arr_btn_h)
         def draw_arr_btn(rect, direction, enabled):
             hover = rect.collidepoint(mouse)
             pygame.draw.rect(_cfg.SCREEN, arr_hov if hover else arr_idle, rect, border_radius=4)
@@ -842,9 +1233,7 @@ class Menu:
                         idx = scroll + i
                         if idx >= len(items):
                             break
-                        y = col_y + i * item_h + 4
-                        rect = pygame.Rect(x + 4, y, col_w - 8, item_h - 4)
-                        if rect.collidepoint(mouse):
+                        if item_rect(x, i).collidepoint(mouse):
                             setattr(self, sel_attr, idx)
                             return True
                     return False
@@ -920,7 +1309,16 @@ class Menu:
         title_surf = self.title_font.render(theme.string("menu.title", "GUNK"), True, white)
         _cfg.SCREEN.blit(title_surf, (_cfg.WIDTH // 2 - title_surf.get_width() // 2, y))
 
-        self.text_font = load_font(int(_cfg.HEIGHT * theme.pos("mp.title_y", 0.04)))
+        self.text_font = load_font(self._font_px("ui.font.credits", 43))
+        # De thema-posities geven 0.04 van het beeldhoogte per regel aan, terwijl
+        # die font een regelhoogte van net iets meer oplevert. Elke regel stond
+        # daardoor een paar pixels in zijn voorganger, en de eerste regel stond
+        # bovenop het logo. We rekenen de stap daarom vanaf de werkelijk
+        # gemeten regelhoogte, met de thema-positie als minimum. Zo blijft de
+        # grotere sprong tussen de secties (Developed by / Music by / ...) ook
+        # echt een sprong.
+        regel_h = self.text_font.get_height()
+        stap = regel_h + self._gap_px(4)
         lines = [
             ("Developed by:", int(_cfg.HEIGHT * theme.pos("credits.dev_label_y", 0.27))),
             ("Kobe Motmans", int(_cfg.HEIGHT * theme.pos("credits.kobe_y", 0.31))),
@@ -936,11 +1334,20 @@ class Menu:
             ("Bilal", int(_cfg.HEIGHT * theme.pos("credits.bilal_y", 0.78))),
         ]
 
+        # Het hele blok schuift een stukje omlaag als de eerste regel anders
+        # bovenop het logo terechtkomt. Eén keer voor alle regels, zodat de
+        # geachte sprong ertussen gewoon een sprong blijft.
+        duw = max(0, title_surf.get_height() + self._gap_px(10) - lines[0][1])
+        vorige_onder = None
         for text, offset in lines:
+            regel_y = y + offset + duw
+            if vorige_onder is not None:
+                regel_y = max(regel_y, vorige_onder)
             _cfg.SCREEN.blit(
                 self.text_font.render(text, False, white),
-                (x, y + offset)
+                (x, regel_y)
             )
+            vorige_onder = regel_y + stap
 
         self.credits_height -= theme.size("credits.scroll_speed", 2)
         if self.credits_height < -int(_cfg.HEIGHT * theme.pos("credits.scroll_reset", 0.87)):
@@ -959,7 +1366,7 @@ class Menu:
         Menu_button.draw_button(events)
         
     def draw_UI(self, events):
-        self.fps_font = load_numeric_font(theme.size("hud.fps_font", 20), bold=True)
+        self.fps_font = load_numeric_font(self._font_px("ui.font.fps", 20), bold=True)
         self.hp_font = load_numeric_font(int(_cfg.HEIGHT * theme.pos("menu.title_y", 0.08)), bold=True)
         _cfg.SCREEN.blit(self.fps_font.render(f"{round(self.game.clock.get_fps())}", True, theme.color("hud.fps", 'green')),(int(_cfg.WIDTH * theme.pos("hud.fps_x", 0.01)), int(_cfg.HEIGHT * theme.pos("hud.fps_y", 0.02))))
         _cfg.SCREEN.blit(self.hp_font.render(f"{round(self.game.global_health)}/{START_HEALTH}", True, theme.color("hud.hp", 'red')),(_cfg.WIDTH - int(_cfg.WIDTH * theme.pos("hud.hp_x", 0.15)), int(_cfg.HEIGHT * theme.pos("hud.hp_y", 0.02))))
@@ -967,7 +1374,7 @@ class Menu:
         in_transition = getattr(self.game, 'elevator_transition', False)
         door_open = getattr(self.game, 'player', None) and self.game.player.door_pos != 0
         if getattr(self.game, 'elevator_waiting', False) and not in_transition and not door_open:
-            warn_font = load_numeric_font(theme.size("hud.warning_font", 36))
+            warn_font = load_numeric_font(self._font_px("ui.font.warning", 36))
             elev_ready = getattr(self.game, 'elevator_ready', False)
             wait_timer = getattr(self.game, 'elevator_wait_timer', 0)
             player_near = getattr(self.game, 'player_near_exit', False)
@@ -978,10 +1385,33 @@ class Menu:
                 msg = theme.string("hud.elevator_go", "GA NAAR DE LIFT!")
                 color = theme.color("hud.warning_danger", (255, 80, 80))
             else:
-                msg = theme.string("hud.elevator_wait", "Wacht op teamgenoten...")
+                # Zeg hoeveel er nog moeten komen: anders staat iedereen te
+                # wachten zonder te weten dat er iemand ontbreekt.
+                pending = getattr(self.game, 'elevator_pending', None) or [0, 0]
+                near, total = pending[0], pending[1]
+                if total > 1 and near < total:
+                    msg = theme.string("hud.elevator_wait_count",
+                                       "Wacht op teamgenoten ({near}/{total})").format(
+                                           near=near, total=total)
+                else:
+                    msg = theme.string("hud.elevator_wait", "Wacht op teamgenoten...")
                 color = theme.color("hud.warning_info", (200, 200, 80))
             warn_surf = warn_font.render(msg, True, color)
             _cfg.SCREEN.blit(warn_surf, (_cfg.WIDTH//2 - warn_surf.get_width()//2, _cfg.HEIGHT//2 - int(_cfg.HEIGHT * theme.pos("hud.elevator_warn_y", 0.19))))
+
+        # Meekijken na je eigen dood: zeg wie je volgt en hoe je wisselt,
+        # anders lijkt het of het spel vastzit. Eigen font, want de
+        # liftmelding hierboven maakt er alleen een als die nodig is.
+        if getattr(self.game, 'spectating', False):
+            name = getattr(self.game, '_spectate_name', "") or "?"
+            spectate_msg = theme.string(
+                "hud.spectating",
+                "SPECTEERT {name}   [Q/E wisselen, ESC stoppen]").format(name=name)
+            spectate_font = load_font(self._font_px("ui.font.spectating", 20), bold=True)
+            spectate_surf = spectate_font.render(spectate_msg, True, (140, 200, 255))
+            _cfg.SCREEN.blit(spectate_surf, (
+                _cfg.WIDTH // 2 - spectate_surf.get_width() // 2,
+                int(_cfg.HEIGHT * 0.06)))
     def draw_paused_screen(self, events, GAME):
         self.game = GAME
         c = _cfg.WIDTH//2
@@ -998,7 +1428,7 @@ class Menu:
         self._draw_main_button(events, theme.string("settings.title", "SETTINGS"), _cfg.HEIGHT//2 - int(_cfg.HEIGHT * theme.pos("pause.settings_y", 0.02)), int(_cfg.WIDTH * 0.11), open_settings, font_size=34)
 
         def go_menu():
-            pygame.mixer.stop()
+            GAME._silence_music()
             if GAME.multiplayer:
                 GAME._disconnect()
             else:
@@ -1066,6 +1496,21 @@ class Menu:
             hover_text_color="white", hover_button_color="black",
             game=self.game, target_state="menu", function="disconnect")
         Menu_button.draw_button(events)
+        # Meekijken kan alleen in multiplayer en alleen als er nog iemand
+        # over is om naar te kijken.
+        if getattr(self.game, 'multiplayer', False) and self.game.can_spectate():
+            spectate_w = int(_cfg.WIDTH * 0.11)
+            spectate_h = theme.size("credits.btn_h", int(_cfg.HEIGHT * 0.06))
+            spectate_button = Button(
+                _cfg.WIDTH // 2 - spectate_w // 2,
+                _cfg.HEIGHT // 2 - spectate_h // 2 + int(_cfg.HEIGHT * theme.pos("dead.btn_y", 0.1))
+                + spectate_h + 12,
+                spectate_w, spectate_h,
+                theme.string("dead.spectate", "MEEKIJKEN"), 26,
+                text_color="black", button_color="white",
+                hover_text_color="white", hover_button_color="black",
+                game=self.game, function="spectate")
+            spectate_button.draw_button(events)
         score_surf = self.score_font.render(theme.string("hud.score_format", "Score:{score}").format(score=self.game.player.score), True, theme.color("hud.score_dead", 'black'))
         _cfg.SCREEN.blit(score_surf, (_cfg.WIDTH//2 - score_surf.get_width()//2, _cfg.HEIGHT//2 - int(_cfg.HEIGHT * theme.pos("mp.title_y", 0.04))))
         title_surf = self.title_font.render(theme.string("hud.game_over", "GAME OVER"), True, theme.color("hud.title_dead", 'black'))
@@ -1258,7 +1703,9 @@ class Button:
                  function=None):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
-        self.text_size = text_size
+        # `text_size` is de maat op 1080p en wordt hier omgeschakeld, zodat
+        # geen enkele aanroeper hoeft te weten in welke resolutie we draaien.
+        self.text_size = _scale_px(text_size)
         self.text_color = text_color
         self.button_color = button_color
         self.hover_text_color = hover_text_color
@@ -1277,6 +1724,10 @@ class Button:
                 if hovering:
                     if self.function == "disconnect" and self.GAME and self.GAME.multiplayer:
                         self.GAME._disconnect()
+                    if self.function == "spectate" and self.GAME:
+                        # De state zet _start_spectating zelf, want die
+                        # moet eerst een levende speler kiezen om te volgen.
+                        self.GAME._start_spectating()
                     if self.mouse_visible is not None:
                         pygame.mouse.set_visible(self.mouse_visible)
                     if self.target_state == "game":
@@ -1310,6 +1761,9 @@ class Button:
         fg = self.hover_text_color if hovering else self.text_color
         pygame.draw.rect(_cfg.SCREEN, bg, self.rect, border_radius=theme.size("button.border_radius", 6))
         text_surf = self.font.render(self.text, True, fg)
+        # Een lang etiket schaalt mee in plaats van over de rand van de
+        # knop heen te lopen.
+        text_surf = _fit_width(text_surf, self.rect.w - 8)
         tx = self.rect.x + (self.rect.w - text_surf.get_width()) // 2
         ty = self.rect.y + (self.rect.h - text_surf.get_height()) // 2
         _cfg.SCREEN.blit(text_surf, (tx, ty))
@@ -1375,7 +1829,7 @@ class Tekstballon:
         self.x_pos = x_pos
         self.max_width = max_width
         self.padding = padding
-        self.font = load_font(theme.size("speech_bubble.font", 20))
+        self.font = load_font(self._font_px("ui.font.speech", 20))
     @staticmethod
     def wrap_text(text, font, max_width):
         words = text.split(" ")

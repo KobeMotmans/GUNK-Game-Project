@@ -103,6 +103,9 @@ HEALTH_REGEN = 2
 
 START_AMMO = 100
 AMMO_CAP = 200
+# Wat één ammo-pickup waard is. Ook het getal waarmee een dode speler zijn
+# ammo in hele oppakkingen laat liggen, dus dit staat op één plek.
+AMMO_PICKUP_AMOUNT = 50
 
 
 if not _HEADLESS:
@@ -139,7 +142,11 @@ AGGRO_DIST = 1000
 
 # Multiplayer instellingen
 DEFAULT_PORT = 5555
-MAX_PLAYERS = 4
+MAX_PLAYERS = 6
 ELEVATOR_WAIT_DIST = 200   # pixels van exit tot speler
 ELEVATOR_WAIT_FRAMES = 90  # frames na "allemaal klaar" voor lift vertrekt
+ELEVATOR_STUCK_FRAMES = 1800  # frames dat de lift op een speiler wacht voor de
+                              # groep volledig is, voordat hij alsnog vertrekt.
+                              # Voorkomt een permanent vastgelopen level als er
+                              # een speler is die blijft hangen.
 

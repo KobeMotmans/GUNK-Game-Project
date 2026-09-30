@@ -7,11 +7,12 @@ import random
 import time
 import os
 import json
+import threading
 from math import atan2, cos, sin, tan, pi, hypot
 
 from src.core import config as cfg
 from src.core.config import (START_AMMO, MAP_PATH, START_ANGLES, HEALTH_CHANCE, MAX_LEVEL, MAX_DEPTH,
-                    set_resolution, ELEVATOR_WAIT_DIST, START_HEALTH, TILE_SIZE, PROJ_DIST)
+                    set_resolution, ELEVATOR_WAIT_DIST, START_HEALTH, TILE_SIZE, PROJ_DIST, MAX_PLAYERS)
 from src.core.paths import resolve_asset, load_font, init_packs
 from src.core.theme import theme
 from src.core.raycaster import dda
@@ -24,8 +25,17 @@ from src.core.map_loader import M, png_to_list_fast
 from src.entities.objects import PickupObject, PlayerSprite
 from src.assets.skin_manager import SkinManager
 from src.core.vector import Vector
-from src.network.network import NetworkClient
+from src.network.network import NetworkClient, ServerIO
+from src.network.port_map import (discover, find_gateway, PortMappingKeeper)
+from src.network.discovery import DiscoveryResponder, DiscoveryListener
 from src.core.logger import log as _log, clear_log
+
+# Interpolatie van de andere spelers: de server stuurt 30 snapshots per
+# seconde, het scherm tekent 60 keer per seconde.
+REMOTE_SNAPSHOT_HZ = 30.0
+REMOTE_INTERP_DELAY = 1.0 / REMOTE_SNAPSHOT_HZ  # één snapshot achter renderen
+REMOTE_MAX_SAMPLES = 8                        # ruimte voor wat packetverlies
+
 
 
 class Game:
@@ -88,6 +98,7 @@ class Game:
         self._intro_duration = 0
         self._intro_start = 0
         self._main_loop_started = False
+        self._intro_channel = None
         self.sounds = {}
         self._load_sounds()
 
@@ -105,11 +116,26 @@ class Game:
         self.network_server = None
         self.network_client = None
         self.remote_players = []
+        self._remote_tracks = {}
         self.host_pid = -1
         self.lobby_options = {"shared_health": True, "shared_ammo": True}
         self.is_host = False
         self.objects = {}
         self.projectiles = []
+
+        # Zelf hosten (de server draait dan in dit proces mee)
+        self.hosted_server = None
+        self.hosted_address = None
+        self.hosted_port = None
+        self.mapping_keeper = None
+        self.discovery_responder = None
+        self.discovery_listener = None
+
+        # Kijken naar de groep na je eigen dood
+        self.spectating = False
+        self._spectate_pid = None
+        self._spectate_name = ""
+        self._spectate_info = {}
 
         # Elevator
         self.keycard_acquired = False
@@ -118,6 +144,7 @@ class Game:
         self.elevator_locked = False
         self.elevator_wait_timer = 0
         self.player_near_exit = False
+        self.elevator_pending = [0, 0]
         self.exit_pos = None
 
         # Minimap
@@ -150,6 +177,29 @@ class Game:
         _log("Game started")
         self.state = "menu"
 
+    def _silence_music(self):
+        """Zet alle muziek stil en vergeet dat er een intro onderweg was.
+
+        Nodig omdat pygame.mixer.stop() buiten ons om alle kanalen afsluit,
+        maar _maybe_start_main_loop niet vertelt dat de intro gestopt is.
+        Die zag daarna een vrij kanaal, concludeerde "de intro is klaar" en
+        zette de main loop op. In de lobby is dat precies wat niemand
+        wilde horen.
+
+        _main_loop_started gaat bewust op True: er komt niets meer, en dat
+        is precies de toestand waarin _maybe_start_main_loop niets hoeft te
+        doen. Zo hoeft die functie niet te weten waaróm het stil is.
+        """
+        if self.main_music_intro:
+            self.main_music_intro.stop()
+        self.main_music_loop.stop()
+        if self.boss_music:
+            self.boss_music.stop()
+        self.boss_music_playing = False
+        self._intro_start = 0
+        self._intro_channel = None
+        self._main_loop_started = True
+
     def _play_music(self):
         if self.boss_music_playing:
             self.boss_music_playing = False
@@ -162,11 +212,38 @@ class Game:
         self.main_music_loop.set_volume(self.music_volume)
         self._intro_start = pygame.time.get_ticks()
         self._main_loop_started = False
+        self._intro_channel = None
         if self._has_intro:
-            self.main_music_intro.play()
+            self._intro_channel = self.main_music_intro.play()
         else:
             self._main_loop_started = True
             self.main_music_loop.play(loops=-1)
+
+    def _maybe_start_main_loop(self):
+        """Zet de main loop op zodra de intro echt uitgespeeld is.
+
+        Vroeger ging dat op de klok: na _intro_duration milliseconden was
+        de loop een feit, hoe de muziek er ook bij stond. Dat loopt
+        misverstanden als je in die tijd pauzeert, want de klok loopt
+        gewoon door terwijl de audio stilstaat. De intro bleef bevroren
+        op zijn kanaal en de loop begon ernaast, dus na het hervatten
+        speelden ze over elkaar heen.
+
+        Vandaar dat we het kanaal van de intro vasthouden en pas loslaten
+        als dat kanaal niet meer bezet is. Dat klopt ook zonder pauze:
+        dan is de intro op dat moment echt klaar.
+        """
+        if self._main_loop_started or not self._intro_start:
+            return
+        # Buiten het spel hoort geen muziek. De lobby gebruikt precies
+        # dezelfde intro->loop-overgang als het spel, dus zonder deze
+        # controle begint de loop daar zodra de intro uit is.
+        if self.state not in ("game", "paused", "dead", "spectating"):
+            return
+        if self._intro_channel is not None and self._intro_channel.get_busy():
+            return
+        self._main_loop_started = True
+        self.main_music_loop.play(loops=-1)
 
     def _settings_path(self):
         return os.path.join(os.path.dirname(__file__), "settings.json")
@@ -221,6 +298,7 @@ class Game:
         self.main_music_loop.set_volume(self.music_volume)
         self._intro_start = 0
         self._main_loop_started = False
+        self._intro_channel = None
         self.Menu.draw_loading_screen(0.15, "Loading music...")
         pygame.event.pump()
         self.sounds = {
@@ -313,7 +391,17 @@ class Game:
             if event.type == pygame.VIDEORESIZE:
                 self.Menu._minimap_bg = None
                 cfg.resize_display(event.w, event.h)
-    
+
+            if self.state == "spectating":
+                # Naar de volgende of vorige teamgenoot kijken, of stoppen.
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_e:
+                        self._cycle_spectate_target(1)
+                    elif event.key == pygame.K_q:
+                        self._cycle_spectate_target(-1)
+                    elif event.key == pygame.K_ESCAPE:
+                        self._stop_spectating()
+
             if self.state == "game":
                 if event.type == pygame.KEYDOWN: #Switch guns
                     if event.key == pygame.K_a:
@@ -470,6 +558,12 @@ class Game:
                                 self.main_music_loop.stop()
                                 if self.main_music_intro:
                                     self.main_music_intro.stop()
+                                # De baas neemt het over. Zet de
+                                # intro-overgang klaar, anders start de
+                                # main loop hierna alsnog bovenop de
+                                # baasmuziek in plaats van erna.
+                                self._main_loop_started = True
+                                self._intro_channel = None
                                 self.boss_music.play(loops=-1)
             elif obj == "ammo":
                 for item in list(self.objects["ammo"]):
@@ -573,9 +667,9 @@ class Game:
             for rp in self.remote_players:
                 if rp is None or not rp.name:
                     continue
-                dist, screen_x = rp.get_screen_pos(player_pos, player_angle)[:2]
-                if 0 < dist < 1500:
-                    rp.render_name_through_walls(dist, screen_x)
+                _dist, _screen_x, _rel_angle = rp.get_screen_pos(player_pos, player_angle)
+                if 0 < _dist < 1500 and abs(_rel_angle) <= cfg.FOV / 2:
+                    rp.render_name_through_walls(_dist, _screen_x)
 
         # 3. Sorteer sprites op afstand (verste eerst)
         sprites.sort(key=lambda x: x[0], reverse=True)
@@ -662,6 +756,7 @@ class Game:
         self.multiplayer = False
         self.player_id = 0
         self.remote_players = []
+        self._remote_tracks = {}
         if self.network_server:
             self.network_server.stop()
             self.network_server = None
@@ -691,6 +786,7 @@ class Game:
         self.elevator_transition = False
         self.elevator_wait_timer = 0
         self.player_near_exit = False
+        self.elevator_pending = [0, 0]
         self.exit_pos = None
         self._pos_seq = 0
         self._pending_removes.clear()
@@ -730,6 +826,7 @@ class Game:
         self.elevator_transition = False
         self.elevator_wait_timer = 0
         self.player_near_exit = False
+        self.elevator_pending = [0, 0]
         self.exit_pos = None
 
     #  Multiplayer methods 
@@ -751,6 +848,7 @@ class Game:
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[level])
         M.start_angle = START_ANGLES[M.map_level]
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[level])
+        preload_textures(self._get_all_texture_paths())
         pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
         pygame.mouse.get_rel()
         self.global_health = START_HEALTH
@@ -764,6 +862,7 @@ class Game:
         if level >= 3:
             self.unlocked_guns.append(self.rifle)
         self.remote_players = []
+        self._remote_tracks = {}
         self.final_boss = None
         self.final_boss_spotted = False
         self.host_pid = -1
@@ -774,6 +873,8 @@ class Game:
         self.elevator_locked = False
         self.elevator_transition = False
         self.elevator_wait_timer = 0
+        self.elevator_pending = [0, 0]
+        self.player_near_exit = False
         self.exit_pos = None
         self._pos_seq = 0
         self._health_delta = 0
@@ -790,6 +891,13 @@ class Game:
         self.state = "game"
 
     def _do_connect(self, ip, port, name):
+        """Verbind met een server. Geeft terug of het gelukte.
+
+        De returnwaarde is niet cosmetisch: _do_host gebruikt hem om te
+        beslissen of hij zijn eigen server mag houden. Zonder return zou
+        `not self._do_connect(...)` altijd waar zijn en zou de host zijn
+        verse server meteen weer afsluiten.
+        """
         self.skin_id = self.Menu.mp_skin_id
         self.network_client = NetworkClient()
         if self.network_client.connect(ip, port, name, self.skin_id):
@@ -798,24 +906,187 @@ class Game:
             self.player_name = name
             self._last_server_packet = time.time()
             self.state = "waiting_lobby"
-        else:
-            self.Menu.mp_status = "Verbinding mislukt!"
-            if self.network_client:
-                self.network_client.disconnect()
-                self.network_client = None
+            return True
+        self.Menu.mp_status = "Verbinding mislukt!"
+        if self.network_client:
+            self.network_client.disconnect()
+            self.network_client = None
+        return False
 
-    def _disconnect(self):
+    def _do_host(self, port, name):
+        """Start een eigen server en verbind er meteen mee.
+
+        Zo hoeft een host geen tweede venster en geen Python-kennis te hebben:
+        de server draait als een achtergronddraadje in hetzelfde proces en
+        sluit weer mee zodra de host uit de lobby vertrekt.
+        """
+        self._stop_host()
+        try:
+            server = ServerIO(port, max_players=MAX_PLAYERS)
+        except OSError as e:
+            self.Menu.mp_status = f"Server starten mislukt: {e.strerror or e}"
+            return
+        server.start()
+        self.hosted_server = server
+
+        # Meld jezelf op het eigen netwerk, zodat anderen je vinden zonder
+        # dat ze je IP hoeven te weten.
+        self.discovery_responder = DiscoveryResponder(
+            port, get_info=self._discovery_info)
+        self.discovery_responder.start()
+
+        if not self._do_connect("127.0.0.1", port, name):
+            self._stop_host()
+            return
+
+        # Het zoeken naar je publieke adres duurt enkele seconden en mag het
+        # spel niet tegenhouden, dus draait het in een eigen draadje.
+        self.hosted_address = None
+        threading.Thread(target=self._discover_host_address,
+                         args=(port,), daemon=True).start()
+
+    def _discovery_info(self):
+        """Wat de aankondiging op het LAN over deze server moet vertellen."""
+        server = getattr(self, "hosted_server", None)
+        if server is None:
+            return {"is_host": False}
+        try:
+            players = len(server.get_lobby_players())
+            maximum = server.max_players
+        except Exception:
+            players, maximum = 0, MAX_PLAYERS
+        return {"players": players, "max_players": maximum, "is_host": True}
+
+    def _discover_host_address(self, port):
+        """Zoek uit hoe de gasten je kunnen bereiken (LAN + internet)."""
+        try:
+            info = discover(port)
+            # Een mapping die de router na een uur laat vervallen zou de
+            # server stilletjes onbereikbaar maken, dus die houden we vast.
+            if info.get("mapped"):
+                gw = find_gateway()
+                if gw:
+                    self.mapping_keeper = PortMappingKeeper(gw, port)
+                    self.mapping_keeper.start()
+            self.hosted_address = info
+            self.hosted_port = info.get("external_port", port)
+        except Exception:
+            # Adres zoeken mag nooit de server om zeep helpen: een
+            # campusnetwerk zonder router geeft een fout, en dan is het
+            # LAN-adres alsnog het enige dat telt.
+            pass
+
+    def _stop_host(self):
+        """Sluit de eigen server af en geef de poort weer vrij."""
+        server = getattr(self, "hosted_server", None)
+        if server is None:
+            return
+        responder = getattr(self, "discovery_responder", None)
+        if responder:
+            responder.stop()
+            self.discovery_responder = None
+        keeper = getattr(self, "mapping_keeper", None)
+        if keeper:
+            keeper.stop()
+            keeper.release()
+            self.mapping_keeper = None
+        try:
+            server.stop()
+        except Exception:
+            pass
+        self.hosted_server = None
+        self.hosted_address = None
+
+    # ── spectaten ────────────────────────────────────────────────
+
+    def spectate_candidates(self):
+        """Wie er nog over is om naar te kijken.
+
+        Alleen in multiplayer: in je eentje is er niemand om mee te leven.
+        Dode spelers vallen eruit, want je kijkt naar iemand die nog vecht.
+        """
+        if not self.multiplayer or not self.network_client:
+            return []
+        out = []
+        for pid, info in getattr(self, "_spectate_info", {}).items():
+            if pid == self.player_id:
+                continue
+            if info.get("state") == "dead":
+                continue
+            out.append((pid, info.get("name", f"Player {pid}")))
+        out.sort()
+        return out
+
+    def can_spectate(self):
+        return bool(self.spectate_candidates())
+
+    def _start_spectating(self):
+        candidates = self.spectate_candidates()
+        if not candidates:
+            self.Menu.mp_status = "Iedereen is dood, er valt niets te kijken"
+            return
+        self.spectating = True
+        self._spectate_pid, self._spectate_name = candidates[0]
+        self.state = "spectating"
+        pygame.mouse.set_visible(True)
+        pygame.event.set_grab(False)
+
+    def _stop_spectating(self, next_state="dead"):
+        if not self.spectating:
+            return
+        self.spectating = False
+        self._spectate_pid = None
+        self._spectate_name = ""
+        self.state = next_state
+
+    def _cycle_spectate_target(self, step=1):
+        candidates = self.spectate_candidates()
+        if not candidates:
+            return
+        pids = [pid for pid, _ in candidates]
+        if self._spectate_pid not in pids:
+            self._spectate_pid, self._spectate_name = candidates[0]
+            return
+        index = (pids.index(self._spectate_pid) + step) % len(pids)
+        self._spectate_pid, self._spectate_name = candidates[index]
+
+    def _update_spectating(self):
+        """Zet de camera op de speler die we volgen.
+
+        De camera gebruikt overal self.player, dus door die op de gekozen
+        teamgenoot te zetten werkt de hele raycaster meteen mee en hoeft er
+        geen tweede camerakpad te komen.
+        """
+        if not self.spectating:
+            return
+        candidates = self.spectate_candidates()
+        if not candidates:
+            # Iedereen is dood of weggegaan: terug naar het game-overscherm.
+            self._stop_spectating()
+            return
+        if self._spectate_pid not in [pid for pid, _ in candidates]:
+            self._spectate_pid, self._spectate_name = candidates[0]
+        track = self._remote_tracks.get(self._spectate_pid)
+        if track is not None:
+            self.player.pos = track["sprite"].pos
+        info = getattr(self, "_spectate_info", {}).get(self._spectate_pid, {})
+        self.player.angle = info.get("angle", self.player.angle)
+
+    def _disconnect(self, next_state="menu"):
         if self.network_client:
             for _ in range(3):
                 self.network_client.send({"type": "disconnect"})
             time.sleep(0.05)
             self.network_client.disconnect()
             self.network_client = None
+        self._stop_host()
         self.multiplayer = False
         self.player_id = 0
         self.remote_players = []
+        self._remote_tracks = {}
         self._pending_removes.clear()
-        self.state = "menu"
+        self._stop_spectating()
+        self.state = next_state
         pygame.mouse.set_visible(True)
         pygame.event.set_grab(False)
 
@@ -857,6 +1128,38 @@ class Game:
         self._remove_pickup = []
         self.network_client.send_input(packet)
 
+    def update_remote_positions(self):
+        """Render de andere spelers één snapshot achter.
+
+        De server stuurt posities 30 keer per seconde terwijl het scherm 60 keer
+        per seconde tekent. Zonder interpolatie maakt elke teamgenoot dus 30
+        sprongen per seconde. Eén snapshot achter renderen en de tussenliggende
+        posities uitvullen geeft vloeiende beweging, en omdat de speler
+        client-authoritative is levert het geen extra vertraging op.
+        """
+        if not self._remote_tracks:
+            return
+        target = time.perf_counter() - REMOTE_INTERP_DELAY
+        for track in self._remote_tracks.values():
+            sprite = track["sprite"]
+            samples = track["samples"]
+            if not samples:
+                continue
+            if len(samples) == 1 or target <= samples[0][0] or target >= samples[-1][0]:
+                _, x, y = samples[0] if target <= samples[0][0] else samples[-1]
+                sprite.pos = Vector(x, y)
+                continue
+            pos = Vector(samples[-1][1], samples[-1][2])
+            for i in range(len(samples) - 1):
+                t0, x0, y0 = samples[i]
+                t1, x1, y1 = samples[i + 1]
+                if t0 <= target <= t1:
+                    span = t1 - t0
+                    frac = 0.0 if span <= 0 else (target - t0) / span
+                    pos = Vector(x0 + (x1 - x0) * frac, y0 + (y1 - y0) * frac)
+                    break
+            sprite.pos = pos
+
     def apply_state(self, state):
         if not state:
             return
@@ -892,16 +1195,37 @@ class Game:
                 if state.get("elevator_transition") and self.player.door_pos == 0:
                     self.player.door_pos = 1
         other_players = [p for p in players_data if p.get("id") != self.player_id]
-        while len(self.remote_players) < len(other_players):
-            self.remote_players.append(PlayerSprite(""))
-        while len(self.remote_players) > len(other_players):
-            self.remote_players.pop()
-        for i, pdata in enumerate(other_players):
-            self.remote_players[i].pos = Vector(pdata["pos"][0], pdata["pos"][1])
-            self.remote_players[i].name = pdata.get("name", f"Player {pdata['id']}")
+        seen_pids = set()
+        self._spectate_info = {}
+        for pdata in players_data:
+            pid = pdata["id"]
+            # Toestand en kijkrichting per speler bewaren: nodig zodra je
+            # zelf dood bent en meeleeft met wie er over zijn.
+            self._spectate_info[pid] = {
+                "name": pdata.get("name", f"Player {pid}"),
+                "state": pdata.get("state", "game"),
+                "angle": pdata.get("angle", 0.0),
+            }
+        for pdata in other_players:
+            pid = pdata["id"]
+            seen_pids.add(pid)
+            track = self._remote_tracks.get(pid)
+            if track is None:
+                track = {"sprite": PlayerSprite(""), "samples": []}
+                self._remote_tracks[pid] = track
+            sprite = track["sprite"]
+            samples = track["samples"]
+            samples.append((time.perf_counter(), pdata["pos"][0], pdata["pos"][1]))
+            if len(samples) > REMOTE_MAX_SAMPLES:
+                del samples[:-REMOTE_MAX_SAMPLES]
+            sprite.name = pdata.get("name", f"Player {pid}")
             skin_id = pdata.get("skin_id", 0)
-            if hasattr(self.remote_players[i], 'set_skin'):
-                self.remote_players[i].set_skin(skin_id)
+            if hasattr(sprite, 'set_skin'):
+                sprite.set_skin(skin_id)
+        for stale_pid in [p for p in self._remote_tracks if p not in seen_pids]:
+            del self._remote_tracks[stale_pid]
+        self.remote_players = [self._remote_tracks[p["id"]]["sprite"]
+                               for p in other_players]
 
         # 3. Enemies — full sync from server (ALL clients)
         enemies_data = state.get("enemies", [])
@@ -975,6 +1299,7 @@ class Game:
             self.elevator_ready = False
             self.elevator_transition = False
             self.elevator_wait_timer = 0
+            self.elevator_pending = [0, 0]
             self.player_near_exit = False
             self.player.got_keycard = False
             self.keycard_acquired = False
@@ -986,6 +1311,9 @@ class Game:
         self.elevator_ready = state.get("elevator_ready", self.elevator_ready)
         self.elevator_transition = state.get("elevator_transition", False)
         self.elevator_wait_timer = state.get("elevator_wait_timer", self.elevator_wait_timer)
+        pending = state.get("elevator_pending")
+        if pending:
+            self.elevator_pending = list(pending)
 
         # 6. Player proximity to exit (for UI message)
         exit_data = state.get("exit_pos")
@@ -1000,17 +1328,24 @@ class Game:
     def handle_network(self):
         if not self.network_client:
             return
-        packet = self.network_client.try_recv()
-        if packet:
-            if packet.get("type") == "state":
-                self.apply_state(packet)
-            elif packet.get("type") == "game_start":
+        # Alle klaarstaande packets lezen, maar per frame alleen het nieuwste
+        # state-pakket toepassen: oudere states overschrijven anders de actuele.
+        newest_state = None
+        for packet in self.network_client.drain():
+            ptype = packet.get("type")
+            if ptype == "state":
+                newest_state = packet
+            elif ptype == "game_start":
                 self._start_multiplayer_client(packet.get("level", 0))
-            elif packet.get("type") in ("server_stopped", "disconnect"):
-                self._disconnect()
-            elif packet.get("type") == "skin_manifest_update":
+                newest_state = None
+            elif ptype in ("server_stopped", "disconnect", "server_full"):
+                self._disconnect(next_state="multiplayer_menu")
+                return
+            elif ptype == "skin_manifest_update":
                 SkinManager.set_manifest(packet.get("skin_manifest", []))
                 SkinManager.start_background_download()
+        if newest_state is not None:
+            self.apply_state(newest_state)
         if self.global_health <= 0 and self.state in ("game", "paused"):
             self.global_health = 0
             pygame.mouse.set_visible(True)
@@ -1033,10 +1368,10 @@ class Game:
 
             elif self.state == "waiting_lobby":
                 if self.network_client:
-                    packet = self.network_client.try_recv()
-                    if packet:
+                    for packet in self.network_client.drain():
                         self._last_server_packet = time.time()
-                        if packet.get("type") == "lobby_info":
+                        ptype = packet.get("type")
+                        if ptype == "lobby_info":
                             players_raw = packet.get("players", [])
                             self.Menu.client_list = players_raw
                             self.Menu.lobby_game_active = packet.get("game_active", False)
@@ -1054,20 +1389,24 @@ class Game:
                                 self.lobby_options = opts
                                 self.Menu.lobby_options = dict(opts)
 
-
-                        elif packet.get("type") == "pong":
+                        elif ptype == "pong":
                             pass
-                        elif packet.get("type") == "game_start":
+                        elif ptype == "game_start":
                             self._start_multiplayer_client(packet.get("level", 0))
-                        elif packet.get("type") == "server_stopped":
+                        elif ptype == "server_stopped":
                             self._disconnect()
-                        elif packet.get("type") == "skin_manifest_update":
+                        elif ptype == "server_full":
+                            cap = packet.get("max_players", "?")
+                            self.Menu.mp_status = f"Server vol ({cap}/{cap})"
+                            self._disconnect(next_state="multiplayer_menu")
+                            return
+                        elif ptype == "skin_manifest_update":
                             SkinManager.set_manifest(packet.get("skin_manifest", []))
                             SkinManager.start_background_download()
                     now = time.time()
                     if now - self._last_server_packet > 30:
                         self.Menu.mp_status = "Server verbinding verloren"
-                        self._disconnect()
+                        self._disconnect(next_state="multiplayer_menu")
                     elif now - self._last_lobby_ping > 2.0:
                         self.network_client.send({"type": "ping"})
                         self._last_lobby_ping = now
@@ -1083,6 +1422,8 @@ class Game:
 
                 if not self.escaped:
                     self.update()
+                    if self.multiplayer:
+                        self.update_remote_positions()
                     self.render()
                     self.Menu.draw_minimap(self)
                     if self.final_boss is not None and self.final_boss_spotted:
@@ -1104,6 +1445,22 @@ class Game:
                     self.Menu.game = self
                     self.Menu.draw_elevator(events, self.player)
 
+            elif self.state == "spectating":
+                self.clock.tick(60)
+                self.Menu.game = self
+                self.handle_network()
+                self.update_remote_positions()
+                self._update_spectating()
+                if self.spectating:
+                    # De wereld loopt gewoon door, alleen zonder jouw muis
+                    # en wapens: update() zou de camera wegjagen.
+                    self.render()
+                    self.Menu.draw_minimap(self)
+                    self.Menu.draw_UI(events)
+                else:
+                    # Iedereen is dood of weggegaan: terug naar de doodsscherm.
+                    self.Menu.draw_dead_screen(events, self)
+
             elif self.state == "paused":
                 self.handle_network()
                 if self._paused_frame:
@@ -1118,10 +1475,7 @@ class Game:
             elif self.state == 'pack_select':
                self.Menu.draw_pack_select(events, self)
 
-            if not self._main_loop_started and self._intro_start:
-                if pygame.time.get_ticks() - self._intro_start >= self._intro_duration:
-                    self._main_loop_started = True
-                    self.main_music_loop.play(loops=-1)
+            self._maybe_start_main_loop()
 
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)

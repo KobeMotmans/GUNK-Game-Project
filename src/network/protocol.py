@@ -17,6 +17,7 @@ KEY_TO_ID = {
     "countdown": 50, "game_active": 51, "ready": 52,
     "host_pid": 53, "lobby_options": 54, "shared_health": 55, "shared_ammo": 56,
     "option_key": 57, "option_value": 58,
+    "max_players": 59, "elevator_pending": 60, "missing": 61,
 }
 
 ID_TO_KEY = {v: k for k, v in KEY_TO_ID.items()}
@@ -28,7 +29,7 @@ PACKET_TYPE_TO_ID = {
     "lobby_info": 12, "game_start": 13, "skin_manifest_update": 14,
     "skin_data": 15, "skin_chunk": 16, "skin_upload_ack": 17,
     "server_stopped": 18, "join_game": 20, "ready": 21, "pong": 22,
-    "set_lobby_option": 23,
+    "set_lobby_option": 23, "server_full": 24, "state_chunk": 25,
 }
 
 ID_TO_PACKET_TYPE = {v: k for k, v in PACKET_TYPE_TO_ID.items()}

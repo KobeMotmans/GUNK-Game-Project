@@ -4,14 +4,16 @@ Runs enemy AI, maintains world state, processes client deltas.
 """
 
 import random
+from math import cos, sin, pi
 
 from ..core.vector import Vector
-from ..core.map_loader import M
+from ..core.map_loader import M, will_collide as _will_collide
 from ..core.config import (AGGRO_DIST, ATTACK_DIST, TILE_SIZE, PATHFIND_INTERVAL,
                     START_HEALTH, HEALTH_REGEN,
-                    START_AMMO, AMMO_CAP, HEALTH_CHANCE, MAP_PATH,
+                    START_AMMO, AMMO_CAP, AMMO_PICKUP_AMOUNT, HEALTH_CHANCE, MAP_PATH,
                     START_ANGLES, ELEVATOR_WAIT_DIST,
-                    ELEVATOR_WAIT_FRAMES)
+                    ELEVATOR_WAIT_FRAMES, ELEVATOR_STUCK_FRAMES)
+from ..core.logger import log as _log
 from ..entities.enemy_ai import EnemyAI
 
 
@@ -82,6 +84,9 @@ class ServerGame:
         self.exit_pos = None
         self.initialized = False
         self._last_player_seq = {}
+        self.elevator_missing = []
+        self._ammo_dropped = set()
+        self._stuck_timer = 0
 
         # Lobby options (shared vs per-player resources)
         self.shared_health = True
@@ -113,8 +118,17 @@ class ServerGame:
         self.exit_pos = Vector(M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1])
 
         spawn = M.SPAWNS["player"]
-        for pdata in self.players.values():
-            pdata["pos"] = Vector(spawn[0], spawn[1])
+        perp = M.start_angle - pi / 2
+        player_count = len(self.players)
+        # Hoe meer spelers, hoe ruimer de spreiding anders staan ze bovenop elkaar
+        spacing = 15 if player_count <= 4 else 20
+        for i, pdata in enumerate(self.players.values()):
+            offset = spacing * (i - (player_count - 1) / 2)
+            nx = spawn[0] + cos(perp) * offset
+            ny = spawn[1] + sin(perp) * offset
+            if _will_collide(nx, ny, 10):
+                nx, ny = spawn
+            pdata["pos"] = Vector(nx, ny)
             pdata["angle"] = M.start_angle
 
     def init_world(self):
@@ -131,11 +145,15 @@ class ServerGame:
         self.jan_spotted = False
         for pid in self._last_player_seq:
             self._last_player_seq[pid] = 0
+        self._ammo_dropped = set()
         self.initialized = True
         # Reset per-player resources to starting values
         for pdata in self.players.values():
             pdata["health"] = START_HEALTH
             pdata["ammo"] = START_AMMO
+            pdata["at_exit"] = False
+        self.elevator_missing = []
+        self._stuck_timer = 0
 
     def set_shared_options(self, options):
         self.shared_health = options.get("shared_health", True)
@@ -154,8 +172,52 @@ class ServerGame:
             "ready": False,
             "health": START_HEALTH,
             "ammo": START_AMMO,
+            "at_exit": False,
         }
         self._last_player_seq[pid] = 0
+        self._ammo_dropped.discard(pid)
+
+    def _drop_ammo_on_death(self, pid):
+        """Leg de ammo van een dode speler neer, zodat de rest hem kan inpikken.
+
+        Een dode komt niet meer terug, dus dit is het enige wat hij nog kan
+        nalaten. Het hoeft geen nieuwe soort pickup te zijn: het is letterlijk
+        hetzelfde voorwerp als de ammo die op het level staat, en die kost
+        vast 50. Daarom is de regel simpelweg "hele oppakkingen per stuk",
+        naar beneden afgerond. Wie minder dan 50 over heeft, laat niets
+        achter - dat is de consequentie van die regel, geen ongeluk.
+
+        Twee voorwaarden, en ze zijn allebei nodig:
+
+          * Gedeeld leven: dan stopt de hele run bij de eerste dode en
+            ligt er een hoopje ammo waar niemand meer bij kan.
+          * Gedeelde ammo: dan is de voorraad van de groep, niet van één
+            speler. Die heeft de dode niet verdiend weg te geven en de rest
+            zou er alleen voor gestraft worden.
+        """
+        if self.shared_health or self.shared_ammo:
+            return
+        if pid in self._ammo_dropped or pid not in self.players:
+            return
+        self._ammo_dropped.add(pid)
+
+        speler = self.players[pid]
+        aantal = speler["ammo"] // AMMO_PICKUP_AMOUNT
+        speler["ammo"] = 0
+        if aantal <= 0:
+            return
+
+        # Iets uit elkaar leggen, anders liggen ze exact op elkaar en zie je
+        # er één. De HELDER ligt binnen de oppakafstand, zodat de groep ze
+        # in een keer kan meenemen in plaats van voor elke los te lopen.
+        for i in range(aantal):
+            hoek = 2 * pi * i / aantal
+            self.objects["ammo"].append({
+                "pos": (speler["pos"].x + cos(hoek) * 12,
+                        speler["pos"].y + sin(hoek) * 12),
+            })
+        _log(f"[SERVER] speler {pid} liet {aantal} ammo liggen op "
+             f"({speler['pos'].x:.0f}, {speler['pos'].y:.0f})")
 
     def toggle_ready(self, pid):
         if pid in self.players:
@@ -188,6 +250,8 @@ class ServerGame:
         self.exit_pos = None
         self.initialized = False
         self._post_transition_grace = 0
+        self.elevator_missing = []
+        self._stuck_timer = 0
 
     def get_nearest_player_pos(self, enemy):
         nearest = None
@@ -250,11 +314,22 @@ class ServerGame:
         if "door_closed" in data:
             p["door_closed"] = data["door_closed"]
         if "state" in data:
+            was_dead = p["state"] == "dead"
             p["state"] = data["state"]
-            if data["state"] == "dead":
+            if data["state"] == "dead" and not was_dead:
+                self._drop_ammo_on_death(pid)
+            # Eén dode = hele groep dode is alleen waar als het leven
+            # gedeeld is. Zonder gedeeld leven leest elke client zijn
+            # eigen health, en zou dit de hele pool op nul zetten omdat
+            # één iemand weg is.
+            if data["state"] == "dead" and self.shared_health:
                 self.global_health = 0
         if "elevator_waiting" in data and self._post_transition_grace <= 0:
-            self.elevator_waiting = data["elevator_waiting"]
+            # Per speler vastleggen, NIET meteen de globale vlag overschrijven:
+            # de vlag is de OR van alle spelers en wordt in tick() berekend.
+            # Anders overschreef de laatst verwerkte speler de rest, waardoor
+            # alleen die ene speler de lift kon starten.
+            p["at_exit"] = bool(data["elevator_waiting"])
         if "escaped" in data:
             self.escaped = data["escaped"]
 
@@ -280,9 +355,9 @@ class ServerGame:
                         self.objects[ot].pop(i)
                         if ot == "ammo":
                             if self.shared_ammo:
-                                self.global_ammo = min(self.global_ammo + 50, AMMO_CAP)
+                                self.global_ammo = min(self.global_ammo + AMMO_PICKUP_AMOUNT, AMMO_CAP)
                             else:
-                                p["ammo"] = min(p["ammo"] + 50, AMMO_CAP)
+                                p["ammo"] = min(p["ammo"] + AMMO_PICKUP_AMOUNT, AMMO_CAP)
                         elif ot == "health":
                             if self.shared_health:
                                 self.global_health = min(self.global_health + HEALTH_REGEN, START_HEALTH)
@@ -320,26 +395,55 @@ class ServerGame:
             if target:
                 enemy.update_ai(target)
 
-        if self.elevator_waiting and not self.elevator_ready and self.exit_pos:
-            all_near = True
+        # De lift-vlag is de OR van alle levende spelers: zodra ÉÉN van hen op
+        # de uitgangstegel staat, weet de hele groep dat het tijd is om te gaan.
+        if self._post_transition_grace > 0:
             for pdata in self.players.values():
-                if pdata["state"] in ("dead", "paused"):
-                    continue
-                dist = (pdata["pos"] - self.exit_pos).norm()
-                if dist >= ELEVATOR_WAIT_DIST:
-                    all_near = False
-                    break
-            if all_near:
+                pdata["at_exit"] = False
+        else:
+            self.elevator_waiting = any(
+                pdata["at_exit"] for pdata in self.players.values()
+                if pdata["state"] not in ("dead", "paused")
+            )
+
+        if self.elevator_waiting and not self.elevator_ready and self.exit_pos:
+            self.elevator_missing = [
+                pid for pid, pdata in self.players.items()
+                if pdata["state"] not in ("dead", "paused")
+                and (pdata["pos"] - self.exit_pos).norm() >= ELEVATOR_WAIT_DIST
+            ]
+            if not self.elevator_missing:
+                self._stuck_timer = 0
                 if self.elevator_wait_timer <= 0:
                     self.elevator_wait_timer = ELEVATOR_WAIT_FRAMES
                 self.elevator_wait_timer -= 1
                 if self.elevator_wait_timer <= 0:
-                    self.elevator_ready = True
-                    self.elevator_transition = True
-                    for pdata in self.players.values():
-                        pdata["door_closed"] = False
+                    self._depart_elevator()
             else:
                 self.elevator_wait_timer = 0
+                self._stuck_timer += 1
+                if self._stuck_timer == ELEVATOR_STUCK_FRAMES:
+                    _log(f"[SERVER] lift wacht op speler(s) {self.elevator_missing} "
+                         f"en vertrekt na {ELEVATOR_STUCK_FRAMES} frames toch")
+                if self._stuck_timer >= ELEVATOR_STUCK_FRAMES:
+                    self._depart_elevator()
+
+    def _depart_elevator(self):
+        self.elevator_ready = True
+        self.elevator_transition = True
+        self._stuck_timer = 0
+        for pdata in self.players.values():
+            pdata["door_closed"] = False
+
+    def _elevator_progress(self):
+        """(spelers bij de lift, spelers die mee moeten) voor de HUD."""
+        if not self.initialized or not self.exit_pos:
+            return (0, 0)
+        active = [p for p in self.players.values()
+                  if p["state"] not in ("dead", "paused")]
+        near = sum(1 for p in active
+                   if (p["pos"] - self.exit_pos).norm() < ELEVATOR_WAIT_DIST)
+        return (near, len(active))
 
     def _level_up(self):
         self.level += 1
@@ -350,11 +454,14 @@ class ServerGame:
         for pdata in self.players.values():
             pdata["door_closed"] = False
             pdata["got_keycard"] = False
+            pdata["at_exit"] = False
         self.keycard_acquired = False
         self.elevator_waiting = False
         self.elevator_ready = False
         self.elevator_wait_timer = 0
         self.elevator_transition = False
+        self.elevator_missing = []
+        self._stuck_timer = 0
         self._transition_timeout = 0
         self._post_transition_grace = 10
 
@@ -375,7 +482,8 @@ class ServerGame:
                     "elevator_waiting": self.elevator_waiting, "elevator_ready": self.elevator_ready,
                     "elevator_transition": self.elevator_transition,
                     "elevator_wait_timer": self.elevator_wait_timer,
-                    "jan_spotted": self.jan_spotted, "exit_pos": None}
+                    "jan_spotted": self.jan_spotted, "exit_pos": None,
+                    "elevator_pending": [0, 0]}
         return {
             "type": "state",
             "players": [{"id": pid, "pos": (p["pos"].x, p["pos"].y),
@@ -401,4 +509,5 @@ class ServerGame:
             "elevator_wait_timer": self.elevator_wait_timer,
             "jan_spotted": self.jan_spotted,
             "exit_pos": (self.exit_pos.x, self.exit_pos.y) if self.exit_pos else None,
+            "elevator_pending": list(self._elevator_progress()),
         }
