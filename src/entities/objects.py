@@ -2,7 +2,7 @@ import pygame
 from math import atan2, hypot, tan, pi
 
 from ..core import config as cfg
-from ..core.config import FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, START_HEALTH, HEALTH_REGEN
+from ..core.config import FOV, MAX_DEPTH, PROJ_DIST, SPRITE_SIZE, MIN_DIST, drop as drop_data
 from ..core.vector import Vector
 from ..assets.skin_manager import SkinManager
 from ..core.paths import resolve_asset, load_font, load_numeric_font
@@ -10,6 +10,11 @@ from ..core.theme import theme
 from ..assets.texture_cache import get as get_cached_texture
 
 class RenderObject:
+    # Als klasseattribuut zodat klassen die hun eigen __init__ schrijven
+    # (bv. PlayerSprite) dit niet hoeven over te nemen. Pickups zetten een
+    # eigen instance-attribute om hun eigen opnamestraal te gebruiken.
+    pickup_radius = MIN_DIST
+
     def __init__(self, type, x, y):
         self.pos = Vector(x, y)
         self.type = type
@@ -53,16 +58,14 @@ class RenderObject:
 
         # Echte afstand (hypot)
         self.dist = hypot(dx, dy)
-        is_hit = False
-        if self.dist < MIN_DIST:
-            is_hit = True
+        is_hit = self.dist < self.pickup_radius
 
         # Niet zichtbaar buiten FOV
         if abs(rel_angle) > FOV / 2:
             return None, None, None, is_hit
 
         # Te ver weg
-        if self.dist > MAX_DEPTH or self.dist < MIN_DIST:
+        if self.dist > MAX_DEPTH or self.dist < self.pickup_radius:
             return None, None, None, is_hit
 
         # Projectie: screen_x = center + tan(rel_angle) * PROJ_DIST
@@ -83,8 +86,9 @@ class RenderObject:
 
     def render_fast(self, dist, screen_x):
         """Render sprite op gegeven afstand en scherm x positie"""
-        # Scale sprite op basis van afstand
-        sprite_h = SPRITE_SIZE * PROJ_DIST / dist
+        # Scale sprite op basis van afstand. `self.size` i.p.v. de constante,
+        # zodat een drop met size != 1.0 ook effectief groter tekent.
+        sprite_h = self.size * PROJ_DIST / dist
 
         # Cache check
         if int(dist) != self._cached_dist:
@@ -105,18 +109,47 @@ class RenderObject:
         pass
 
 class PickupObject(RenderObject):
-    def __init__(self, type, x, y):
+    """Een drop die z'n eigen data meedraagt.
+
+    Wat het oplevert, hoe groot het is en hoe dicht je het kunt oppakken
+    komt uit `config.DROPS` en is per instance te overschrijven. Een
+    grotere variant is dus gewoon:
+
+        PickupObject("objects/health", x, y, amount=25, size=1.6)
+
+    zonder dat iemand aan de interactie-code hoeft te sleutelen.
+    """
+
+    def __init__(self, type, x, y, amount=None, size=None, radius=None):
         super().__init__(type, x, y)
+        data = drop_data(type)
+        self.give = data.get("give")
+        self.sound = data.get("sound")
+        self.amount = data.get("amount", 0) if amount is None else amount
+        factor = data.get("size", 1.0) if size is None else size
+        self.size = int(SPRITE_SIZE * factor)
+        eigen_radius = data.get("radius") if radius is None else radius
+        # None in de tabel = de globale standaard, zodat bestaande drops
+        # exact de oude opnameafstand behouden.
+        self.pickup_radius = MIN_DIST if eigen_radius is None else eigen_radius
+
+    def _speel_geluid(self, game):
+        if self.sound:
+            game.sounds[self.sound].set_volume(game.sfx_volume)
+            game.sounds[self.sound].play()
+
     def interact(self, player, game):
-        if self.type == "objects/ammo":
-            game.global_ammo = min(game.global_ammo + 50, 200)
-            game.sounds["ammo"].set_volume(game.sfx_volume)
-            game.sounds["ammo"].play()
-        if self.type == "objects/keycard":
+        give = self.give
+        if give == "ammo":
+            game.global_ammo = min(game.global_ammo + self.amount, game.max_ammo())
+            self._speel_geluid(game)
+        elif give == "health":
+            game.global_health = min(game.global_health + self.amount, game.max_health())
+            self._speel_geluid(game)
+        elif give == "keycard":
             player.got_keycard = True
-            game.sounds["key"].set_volume(game.sfx_volume)
-            game.sounds["key"].play()
-        if self.type == "objects/exit":
+            self._speel_geluid(game)
+        elif give == "exit":
             if player.got_keycard:
                 player.door_pos = 1
                 game.elevator_locked = True
@@ -125,10 +158,6 @@ class PickupObject(RenderObject):
                 no_kc = self.font.render(theme.string("hud.no_keycard", "NO KEYCARD"), True,'green')
                 cfg.SCREEN.blit(no_kc, (cfg.WIDTH//2 - no_kc.get_width()//2, cfg.HEIGHT//2))
                 return "fail"
-        if self.type == "objects/health":
-            game.global_health = min(game.global_health + HEALTH_REGEN, START_HEALTH)
-            game.sounds["drink"].set_volume(game.sfx_volume)
-            game.sounds["drink"].play()
         return "succes"
 
 

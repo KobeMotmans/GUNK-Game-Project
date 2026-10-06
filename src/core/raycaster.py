@@ -24,9 +24,9 @@ def gnc(a, sg):
     else:
         return int(a)
 
-def draw_wall(dist, ray):
+def draw_wall(dist, ray, y_offset=0):
     wall_height = TILE_SIZE * PROJ_DIST / dist
-    y = cfg.HEIGHT / 2 - wall_height / 2
+    y = cfg.HEIGHT / 2 - wall_height / 2 + y_offset
     col_w = cfg.WIDTH // cfg.NUM_RAYS
     column_x = ray * col_w
 
@@ -35,7 +35,7 @@ def draw_wall(dist, ray):
     pygame.draw.rect(cfg.SCREEN, color, (column_x, y, col_w, wall_height))
 
 
-def dda(player_pos, player_angle):
+def dda(player_pos, player_angle, y_offset=0):
     """
     Digital Differential Analysis raycasting.
     Returnt lijst van muur afstanden per ray voor sprite sorting.
@@ -94,7 +94,7 @@ def dda(player_pos, player_angle):
 
                 # Sla op voor sprite sorting, teken direct
                 wall_distances.append(dist)
-                draw_wall(dist, ray)
+                draw_wall(dist, ray, y_offset=y_offset)
                 break
 
     return wall_distances

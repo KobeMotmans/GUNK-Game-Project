@@ -244,7 +244,7 @@ class Menu:
         c = _cfg.WIDTH//2
         btn_w = theme.size("menu.btn_wide", int(_cfg.WIDTH * 0.16))
         gap = theme.size("menu.btn_gap", int(_cfg.WIDTH * 0.03))
-        self._draw_main_button(events, theme.string("menu.solo", "SOLO"), int(_cfg.HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: GAME.reset_game(), font_size=36, x=c - btn_w - gap//2)
+        self._draw_main_button(events, theme.string("menu.solo", "SOLO"), int(_cfg.HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: GAME.reset_game("campaign"), font_size=36, x=c - btn_w - gap//2)
         self._draw_main_button(events, theme.string("menu.multiplayer", "MULTIPLAYER"), int(_cfg.HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: setattr(GAME, 'state', 'multiplayer_menu'), font_size=36, x=c + gap//2)
         self._draw_main_button(events, theme.string("menu.options", "OPTIONS"), int(_cfg.HEIGHT * theme.pos("menu.options_y", 0.47)), int(_cfg.WIDTH * 0.11), lambda: setattr(GAME, 'state', 'settings'), font_size=36)
         self._draw_main_button(events, theme.string("menu.credits", "CREDITS"), int(_cfg.HEIGHT * theme.pos("menu.credits_y", 0.54)), int(_cfg.WIDTH * 0.11), lambda: setattr(GAME, 'state', 'credits'), font_size=36)
@@ -1401,8 +1401,22 @@ class Menu:
         self.fps_font = load_numeric_font(self._font_px("ui.font.fps", 20), bold=True)
         self.hp_font = load_numeric_font(int(_cfg.HEIGHT * theme.pos("menu.title_y", 0.08)), bold=True)
         _cfg.SCREEN.blit(self.fps_font.render(f"{round(self.game.clock.get_fps())}", True, theme.color("hud.fps", 'green')),(int(_cfg.WIDTH * theme.pos("hud.fps_x", 0.01)), int(_cfg.HEIGHT * theme.pos("hud.fps_y", 0.02))))
-        _cfg.SCREEN.blit(self.hp_font.render(f"{round(self.game.global_health)}/{START_HEALTH}", True, theme.color("hud.hp", 'red')),(_cfg.WIDTH - int(_cfg.WIDTH * theme.pos("hud.hp_x", 0.15)), int(_cfg.HEIGHT * theme.pos("hud.hp_y", 0.02))))
+        max_hp = self.game.max_health()
+        _cfg.SCREEN.blit(self.hp_font.render(f"{round(self.game.global_health)}/{max_hp}", True, theme.color("hud.hp", 'red')),(_cfg.WIDTH - int(_cfg.WIDTH * theme.pos("hud.hp_x", 0.15)), int(_cfg.HEIGHT * theme.pos("hud.hp_y", 0.02))))
         _cfg.SCREEN.blit(self.hp_font.render(f"{round(self.game.global_ammo)}/{AMMO_CAP}", True, theme.color("hud.ammo", 'grey')),(int(_cfg.WIDTH * theme.pos("hud.ammo_x", 0.01)), _cfg.HEIGHT - int(_cfg.HEIGHT * theme.pos("hud.ammo_y", 0.1))))
+
+        # Run timer
+        if getattr(self.game, 'run_timer_active', False):
+            t = getattr(self.game, 'run_time_ms', 0)
+            total_ms = int(t)
+            s = total_ms // 1000
+            ms = (total_ms % 1000) // 10
+            m = s // 60
+            s_rem = s % 60
+            timer_str = f"{m:02d}:{s_rem:02d}.{ms:02d}"
+            timer_font = load_font(self._font_px("ui.font.hud", 20), bold=True)
+            timer_surf = timer_font.render(timer_str, True, (255, 255, 255))
+            _cfg.SCREEN.blit(timer_surf, (_cfg.WIDTH - timer_surf.get_width() - 20, 20))
         in_transition = getattr(self.game, 'elevator_transition', False)
         door_open = getattr(self.game, 'player', None) and self.game.player.door_pos != 0
         if getattr(self.game, 'elevator_waiting', False) and not in_transition and not door_open:
@@ -1444,6 +1458,19 @@ class Menu:
             _cfg.SCREEN.blit(spectate_surf, (
                 _cfg.WIDTH // 2 - spectate_surf.get_width() // 2,
                 int(_cfg.HEIGHT * 0.06)))
+
+        # Run timer tijdens spectate (volgt dezelfde run)
+        if getattr(self.game, 'run_timer_active', False):
+            t = getattr(self.game, 'run_time_ms', 0)
+            total_ms = int(t)
+            s = total_ms // 1000
+            ms = (total_ms % 1000) // 10
+            m = s // 60
+            s_rem = s % 60
+            timer_str = f"{m:02d}:{s_rem:02d}.{ms:02d}"
+            font = load_font(self._font_px("ui.font.hud", 18), bold=True)
+            surf = font.render(timer_str, True, (200, 220, 255))
+            _cfg.SCREEN.blit(surf, (_cfg.WIDTH - surf.get_width() - 20, 20))
     def draw_paused_screen(self, events, GAME):
         self.game = GAME
         c = _cfg.WIDTH//2
@@ -1560,6 +1587,32 @@ class Menu:
         _cfg.SCREEN.blit(s1, (_cfg.WIDTH//2 - s1.get_width()//2, _cfg.HEIGHT//2 - int(_cfg.HEIGHT * theme.pos("escaped.line1_y", 0.45))))
         _cfg.SCREEN.blit(s2, (_cfg.WIDTH//2 - s2.get_width()//2, _cfg.HEIGHT//2 - int(_cfg.HEIGHT * theme.pos("escaped.line2_y", 0.27))))
         _cfg.SCREEN.blit(score_surf, (_cfg.WIDTH//2 - score_surf.get_width()//2, _cfg.HEIGHT//2 + int(_cfg.HEIGHT * theme.pos("escaped.score_y", 0.01))))
+
+        # Run timer + PB
+        t = getattr(GAME, 'run_time_ms', 0)
+        total_ms = int(t)
+        s = total_ms // 1000
+        ms = (total_ms % 1000) // 10
+        m = s // 60
+        s_rem = s % 60
+        timer_str = f"{m:02d}:{s_rem:02d}.{ms:02d}"
+        time_font = load_font(self._font_px("ui.font.hud", 24), bold=True)
+        time_surf = time_font.render(timer_str, True, (255, 255, 255))
+        _cfg.SCREEN.blit(time_surf, (_cfg.WIDTH//2 - time_surf.get_width()//2, _cfg.HEIGHT//2 + int(_cfg.HEIGHT * theme.pos("escaped.score_y", 0.08))))
+        if getattr(GAME, 'run_is_pb', False):
+            pb_font = load_font(self._font_px("ui.font.hud", 20), bold=True)
+            pb_surf = pb_font.render("NEW PB!", True, (255, 215, 0))
+            _cfg.SCREEN.blit(pb_surf, (_cfg.WIDTH//2 - pb_surf.get_width()//2, _cfg.HEIGHT//2 + int(_cfg.HEIGHT * theme.pos("escaped.score_y", 0.14))))
+        elif getattr(GAME, 'run_pb_ms', 0) > 0:
+            pb_total = int(GAME.run_pb_ms)
+            p_s = pb_total // 1000
+            p_ms = (pb_total % 1000) // 10
+            p_m = p_s // 60
+            p_s_rem = p_s % 60
+            pb_str = f"PB {p_m:02d}:{p_s_rem:02d}.{p_ms:02d}"
+            pb_font = load_font(self._font_px("ui.font.hud", 18))
+            pb_surf = pb_font.render(pb_str, True, (200, 200, 200))
+            _cfg.SCREEN.blit(pb_surf, (_cfg.WIDTH//2 - pb_surf.get_width()//2, _cfg.HEIGHT//2 + int(_cfg.HEIGHT * theme.pos("escaped.score_y", 0.14))))
         btn_w = int(_cfg.WIDTH * 0.07)
         btn_h = theme.size("credits.btn_h", int(_cfg.HEIGHT * 0.06))
         Menu_button = Button(_cfg.WIDTH // 2 - btn_w // 2, _cfg.HEIGHT // 2 - btn_h // 2 + int(_cfg.HEIGHT * theme.pos("escaped.btn_y", 0.15)),
@@ -1683,8 +1736,15 @@ class Menu:
         fog = getattr(game, "minimap", None)
         if fog is None:
             return
-        px, py = game.player.pos.x, game.player.pos.y
-        angle = game.player.angle
+        # In spectate willen we dat de minimap de gevolgde speler volgt, niet
+        # onze eigen dode speler. De game vervangt game.player al voor de camera,
+        # maar we maken het hier explicieter voor de duidelijkheid.
+        if getattr(game, 'spectating', False):
+            px, py = game.player.pos.x, game.player.pos.y
+            angle = game.player.angle
+        else:
+            px, py = game.player.pos.x, game.player.pos.y
+            angle = game.player.angle
         # De stand GEZIEN gebruikt de kijkhoek en het bereik uit het thema,
         # maar niet de cheatstand: die zou de hele level onthouden.
         if stand == MINIMAP_GEZIEN:

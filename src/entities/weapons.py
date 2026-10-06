@@ -80,10 +80,10 @@ class Gun:
             else:
                 self.weapon_state = 0
 
-    def draw(self):
+    def draw(self, bob_offset_y=0):
         """Teken het wapen op scherm volgens huidige staat"""
         x_pos = (cfg.WIDTH - self.weapon_rect[2]) // 2 + cfg.WIDTH * WEAPON_OFFSET_X
-        y_pos = cfg.HEIGHT - self.weapon_rect[3]
+        y_pos = cfg.HEIGHT - self.weapon_rect[3] + bob_offset_y
         if self.weapon_state == 0:
             cfg.SCREEN.blit(self.gun_rest, (x_pos, y_pos))
         elif self.weapon_state == 1:

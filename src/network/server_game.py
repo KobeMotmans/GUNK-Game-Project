@@ -9,10 +9,11 @@ from math import cos, sin, pi
 from ..core.vector import Vector
 from ..core.map_loader import M, will_collide as _will_collide
 from ..core.config import (AGGRO_DIST, ATTACK_DIST, TILE_SIZE, PATHFIND_INTERVAL,
-                    START_HEALTH, HEALTH_REGEN,
-                    START_AMMO, AMMO_CAP, AMMO_PICKUP_AMOUNT, HEALTH_CHANCE, MAP_PATH,
+                    START_HEALTH,
+                    START_AMMO, AMMO_CAP, HEALTH_CHANCE, MAP_PATH,
                     START_ANGLES, ELEVATOR_WAIT_DIST, MAX_LEVEL,
-                    ELEVATOR_WAIT_FRAMES, ELEVATOR_STUCK_FRAMES)
+                    ELEVATOR_WAIT_FRAMES, ELEVATOR_STUCK_FRAMES,
+                    gamemode as gm_cfg, DEFAULT_GAMEMODE, drop as drop_data)
 from ..core.logger import log as _log
 from ..entities.enemy_ai import EnemyAI
 
@@ -66,11 +67,14 @@ ENEMY_TYPES = {
 
 class ServerGame:
     def __init__(self):
+        # Gamemode, uit dezelfde tabel als de client zodat die twee niet
+        # uit elkaar kunnen lopen op startwaarden en cap.
+        self.gamemode = DEFAULT_GAMEMODE
         self.players = {}
         self.enemies = []
         self.objects = {"ammo": [], "keycard": [], "health": [], "exit": None}
-        self.global_health = START_HEALTH
-        self.global_ammo = START_AMMO
+        self.global_health = self.gm("start_health", START_HEALTH)
+        self.global_ammo = self.gm("start_ammo", START_AMMO)
         self.keycard_acquired = False
         self.level = 0
         self.elevator_waiting = False
@@ -96,6 +100,28 @@ class ServerGame:
         self.shared_health = True
         self.shared_ammo = True
 
+    # ── Gamemode-config (zelfde vorm als de client) ──────────────────
+    def gm(self, key, default=None):
+        """Eén configwaarde van de gamemode waarop de server draait."""
+        return gm_cfg(self.gamemode).get(key, default)
+
+    def max_health(self):
+        """HP-bovengrens van de actieve gamemode."""
+        return self.gm("health_cap", START_HEALTH)
+
+    def max_ammo(self):
+        """Ammo-bovengrens van de actieve gamemode."""
+        return self.gm("ammo_cap", AMMO_CAP)
+
+    @staticmethod
+    def _drop_amount(kind):
+        """Hoeveel een verse drop van dit type oplevert.
+
+        Op één plek: de server bewaart per drop `amount` in de dict, maar
+        de standaard komt uit dezelfde DROPS-tabel als de client leest.
+        """
+        return drop_data(f"objects/{kind}").get("amount", 0)
+
     def _setup_level(self):
         from ..core.map_loader import png_to_list_fast
         M.map_level = self.level
@@ -114,7 +140,8 @@ class ServerGame:
 
         self.objects = {"ammo": [], "keycard": [], "health": [], "exit": None}
         for apos in M.SPAWNS["ammo"]:
-            self.objects["ammo"].append({"pos": (apos[0], apos[1])})
+            self.objects["ammo"].append({"pos": (apos[0], apos[1]),
+                                         "amount": self._drop_amount("ammo")})
         if M.SPAWNS["keycard"]:
             kpos = random.choice(M.SPAWNS["keycard"])
             self.objects["keycard"].append({"pos": (kpos[0], kpos[1])})
@@ -138,8 +165,8 @@ class ServerGame:
     def init_world(self):
         self.level = 0
         self._setup_level()
-        self.global_health = START_HEALTH
-        self.global_ammo = START_AMMO
+        self.global_health = self.gm("start_health", START_HEALTH)
+        self.global_ammo = self.gm("start_ammo", START_AMMO)
         self.keycard_acquired = False
         self.elevator_waiting = False
         self.elevator_ready = False
@@ -152,9 +179,11 @@ class ServerGame:
         self._ammo_dropped = set()
         self.initialized = True
         # Reset per-player resources to starting values
+        start_hp = self.gm("start_health", START_HEALTH)
+        start_ammo = self.gm("start_ammo", START_AMMO)
         for pdata in self.players.values():
-            pdata["health"] = START_HEALTH
-            pdata["ammo"] = START_AMMO
+            pdata["health"] = start_hp
+            pdata["ammo"] = start_ammo
             pdata["at_exit"] = False
         self.elevator_missing = []
         self._stuck_timer = 0
@@ -174,8 +203,8 @@ class ServerGame:
             "state": "game",
             "score": 0,
             "ready": False,
-            "health": START_HEALTH,
-            "ammo": START_AMMO,
+            "health": self.gm("start_health", START_HEALTH),
+            "ammo": self.gm("start_ammo", START_AMMO),
             "at_exit": False,
         }
         self._last_player_seq[pid] = 0
@@ -206,7 +235,7 @@ class ServerGame:
         self._ammo_dropped.add(pid)
 
         speler = self.players[pid]
-        aantal = speler["ammo"] // AMMO_PICKUP_AMOUNT
+        aantal = speler["ammo"] // self._drop_amount("ammo")
         speler["ammo"] = 0
         if aantal <= 0:
             return
@@ -219,6 +248,7 @@ class ServerGame:
             self.objects["ammo"].append({
                 "pos": (speler["pos"].x + cos(hoek) * 12,
                         speler["pos"].y + sin(hoek) * 12),
+                "amount": self._drop_amount("ammo"),
             })
         _log(f"[SERVER] speler {pid} liet {aantal} ammo liggen op "
              f"({speler['pos'].x:.0f}, {speler['pos'].y:.0f})")
@@ -240,8 +270,8 @@ class ServerGame:
         self._last_player_seq = {}
         self.enemies = []
         self.objects = {"ammo": [], "keycard": [], "health": [], "exit": None}
-        self.global_health = START_HEALTH
-        self.global_ammo = START_AMMO
+        self.global_health = self.gm("start_health", START_HEALTH)
+        self.global_ammo = self.gm("start_ammo", START_AMMO)
         self.keycard_acquired = False
         self.level = 0
         self.elevator_waiting = False
@@ -277,7 +307,8 @@ class ServerGame:
             self.objects["keycard"].append({"pos": (enemy.pos.x, enemy.pos.y)})
         else:
             if random.random() < HEALTH_CHANCE:
-                self.objects["health"].append({"pos": (enemy.pos.x, enemy.pos.y)})
+                self.objects["health"].append({"pos": (enemy.pos.x, enemy.pos.y),
+                                               "amount": self._drop_amount("health")})
         self.enemies.pop(idx)
 
     def process_input(self, pid, data):
@@ -319,12 +350,13 @@ class ServerGame:
                 p["health"] = max(0, p["health"])
         if "ammo_delta" in data:
             delta = data["ammo_delta"]
+            cap = self.max_ammo()
             if self.shared_ammo:
                 self.global_ammo += delta
-                self.global_ammo = max(0, min(AMMO_CAP, self.global_ammo))
+                self.global_ammo = max(0, min(cap, self.global_ammo))
             else:
                 p["ammo"] += delta
-                p["ammo"] = max(0, min(AMMO_CAP, p["ammo"]))
+                p["ammo"] = max(0, min(cap, p["ammo"]))
         if "got_keycard" in data:
             if data["got_keycard"] and self._post_transition_grace <= 0:
                 self.keycard_acquired = True
@@ -370,17 +402,22 @@ class ServerGame:
                 pos = pickup["pos"]
                 for i, obj in enumerate(self.objects.get(ot, [])):
                     if abs(obj["pos"][0] - pos[0]) < 2 and abs(obj["pos"][1] - pos[1]) < 2:
+                        # Het bedrag hoort bij de drop zelf; de fallback is er
+                        # voor oudere dicts die nog geen amount meedroegen.
+                        bedrag = obj.get("amount", self._drop_amount(ot))
                         self.objects[ot].pop(i)
                         if ot == "ammo":
+                            cap = self.max_ammo()
                             if self.shared_ammo:
-                                self.global_ammo = min(self.global_ammo + AMMO_PICKUP_AMOUNT, AMMO_CAP)
+                                self.global_ammo = min(self.global_ammo + bedrag, cap)
                             else:
-                                p["ammo"] = min(p["ammo"] + AMMO_PICKUP_AMOUNT, AMMO_CAP)
+                                p["ammo"] = min(p["ammo"] + bedrag, cap)
                         elif ot == "health":
+                            cap = self.max_health()
                             if self.shared_health:
-                                self.global_health = min(self.global_health + HEALTH_REGEN, START_HEALTH)
+                                self.global_health = min(self.global_health + bedrag, cap)
                             else:
-                                p["health"] = min(p["health"] + HEALTH_REGEN, START_HEALTH)
+                                p["health"] = min(p["health"] + bedrag, cap)
                         elif ot == "keycard":
                             if self._post_transition_grace <= 0:
                                 self.keycard_acquired = True
@@ -500,7 +537,6 @@ class ServerGame:
     def get_spawn_position(self):
         if not self.initialized:
             return None
-        from ..core.map_loader import M
         if M.SPAWNS and "player" in M.SPAWNS:
             spawn = M.SPAWNS["player"]
             return Vector(spawn[0], spawn[1])
@@ -524,7 +560,7 @@ class ServerGame:
                          "got_keycard": p["got_keycard"],
                          "state": p["state"],
                          "score": p["score"],
-                         "health": p.get("health", START_HEALTH),
+                         "health": p.get("health", self.gm("start_health", START_HEALTH)),
                          "ammo": p.get("ammo", START_AMMO)}
                         for pid, p in self.players.items()],
             "enemies": [{"pos": (e.pos.x, e.pos.y), "health": e.health, "type": e.type}

@@ -60,6 +60,10 @@ def png_to_list_fast(path):
     return map_list, spawns, w, h
 
 class MapClass:
+    # Stand van de dev-console. Als klasseattribuut staat hij er altijd,
+    # ook als er nog geen Game bestaat (server, tests, headless).
+    noclip = False
+
     def __init__(self, map_level = 0):
         self.map_level = map_level
         self.MAP, self.SPAWNS, self.width, self.height = png_to_list_fast(MAP_PATH[self.map_level])
@@ -69,9 +73,11 @@ M = MapClass()
 
 # Laad de map bij startup
 
-def hit_wall(pos):
-    MAP = M.MAP
+def hit_wall(pos, allow_all=False):
     """Check of een positie op een muur ligt"""
+    MAP = M.MAP
+    if M.noclip:
+        return False
     if pos.x % 1 == 0:
         x = int(pos.x)
         y = int(pos.y)

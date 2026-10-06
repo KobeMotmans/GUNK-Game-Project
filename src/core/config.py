@@ -107,6 +107,89 @@ AMMO_CAP = 200
 # ammo in hele oppakkingen laat liggen, dus dit staat op één plek.
 AMMO_PICKUP_AMOUNT = 50
 
+# ── Gamemodes ────────────────────────────────────────────────────────
+# Elke gamemode heeft hier een blok met precies dezelfde vorm. Er is géén
+# "standaard gamemode": de code kiest nergens een mode als waarheid, die
+# leest alleen uit deze tabel. Een nieuwe mode toevoegen = een nieuwe
+# sleutel, en de rest van de game gaat vanzelf mee.
+GAMEMODES = {
+    "campaign": {
+        "start_health": 10,
+        "health_cap": 10,
+        "start_ammo": START_AMMO,
+        "ammo_cap": AMMO_CAP,
+        # De lift jaagt de volgende floor aan.
+        "level_progression": True,
+        "uses_elevator": True,
+        "run_timer": True,
+        "save_pb": True,
+    },
+    "survival": {
+        # Ruime HP-balk zodat damage in echte stappen kan lopen
+        # (17, 24, ...) in plaats van tikjes van 10.
+        "start_health": 100,
+        "health_cap": 100,
+        "start_ammo": 300,
+        # Boven de campaign-cap: anders zou de startvoorraad al afgeknepen
+        # worden zodra de server hem sanitizet.
+        "ammo_cap": 400,
+        # Geen floors: je blijft op de kaart tot je valt.
+        "level_progression": False,
+        "uses_elevator": False,
+        "run_timer": False,
+        "save_pb": False,
+    },
+}
+
+DEFAULT_GAMEMODE = "campaign"
+
+
+def gamemode(name):
+    """Config van een gamemode.
+
+    Onbekende naam valt terug op DEFAULT_GAMEMODE, zodat een verkeerde of
+    verouderde naam nooit een KeyError midden in een run veroorzaakt.
+    """
+    return GAMEMODES.get(name, GAMEMODES[DEFAULT_GAMEMODE])
+
+
+# ── Drops ────────────────────────────────────────────────────────────
+# Wat elk voorwerp oplevert staat op het voorwerp zelf, niet in een if in
+# de interactie-code. Daardoor is een tweede, grotere variant gewoon een
+# extra regel hier, in plaats van een nieuwe aftakking in objects.py.
+#
+#   give    het effect: "ammo", "health", "keycard" of "exit"
+#   amount  hoeveel het oplevert (health/ammo; keycard en exit negeren dit)
+#   sound   naam in game.sounds; None = geen geluid
+#   size    schaalfactor t.o.v. SPRITE_SIZE; 1.0 is exact zoals nu
+#   radius  opnamestraal in pixels; None = MIN_DIST (zoals nu)
+#
+# De campaign-waarden hieronder zijn letterlijk de waarden die er voorheen
+# hardcoded in objects.py stonden, zodat de campaign niets verandert.
+DROPS = {
+    "objects/ammo": {"give": "ammo", "amount": AMMO_PICKUP_AMOUNT,
+                     "sound": "ammo", "size": 1.0, "radius": None},
+    "objects/health": {"give": "health", "amount": HEALTH_REGEN,
+                       "sound": "drink", "size": 1.0, "radius": None},
+    "objects/keycard": {"give": "keycard", "amount": 1,
+                        "sound": "key", "size": 1.0, "radius": None},
+    "objects/exit": {"give": "exit", "amount": 0,
+                     "sound": None, "size": 1.0, "radius": None},
+    # Grotere varianten. Niet in de campaign (die roept deze sleutels nooit
+    # aan), maar survival kan ze spawnen met bv.
+    # PickupObject("objects/health_big", x, y).
+    "objects/health_big": {"give": "health", "amount": 25,
+                           "sound": "drink", "size": 1.6, "radius": None},
+    "objects/ammo_big": {"give": "ammo", "amount": 150,
+                         "sound": "ammo", "size": 1.6, "radius": None},
+}
+
+
+def drop(type_name):
+    """Drop-data voor een voorwerp. Onbekende sleutel = lege data,
+    zodat een nieuwe tekstuur nooit een crash geeft."""
+    return DROPS.get(type_name, {})
+
 
 if not _HEADLESS:
     SCREEN_FLASH = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.damage_flash", "textures/ui/Damage_Flash.png"))).convert_alpha(), (WIDTH, HEIGHT))

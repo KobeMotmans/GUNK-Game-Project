@@ -11,8 +11,9 @@ import threading
 from math import atan2, cos, sin, tan, pi, hypot
 
 from src.core import config as cfg
-from src.core.config import (START_AMMO, MAP_PATH, START_ANGLES, HEALTH_CHANCE, MAX_LEVEL, MAX_DEPTH,
-                    set_resolution, ELEVATOR_WAIT_DIST, START_HEALTH, TILE_SIZE, PROJ_DIST, MAX_PLAYERS)
+from src.core.config import (START_AMMO, AMMO_CAP, MAP_PATH, START_ANGLES, HEALTH_CHANCE, MAX_LEVEL, MAX_DEPTH,
+                    set_resolution, ELEVATOR_WAIT_DIST, START_HEALTH, TILE_SIZE, PROJ_DIST, MAX_PLAYERS,
+                    gamemode as gm_cfg, GAMEMODES, DEFAULT_GAMEMODE)
 from src.core.paths import resolve_asset, load_font, init_packs
 from src.core.theme import theme
 from src.core.raycaster import dda
@@ -78,6 +79,16 @@ class Game:
         self.flash_time = 0
         self.ammo_rays = []
         self.possible_enemies = [NormalEnemy, FastEnemy, TankEnemy]
+        # Weapon/head bob
+        self._bob_time = 0.0
+        self._bob_phase = 0.0
+        # Dev console
+        self._console_text = ""
+        self._console_history = []
+        self._console_out = []     # laatste regels terugkoppeling
+        self._console_open = False
+        self.godmode = False
+        M.noclip = False
         self.final_boss = None
         self.final_boss_spotted = False
         self.boss_music = None
@@ -138,6 +149,15 @@ class Game:
         self._spectate_name = ""
         self._spectate_info = {}
 
+        # Gamemode / run
+        self.gamemode = DEFAULT_GAMEMODE  # sleutel uit config.GAMEMODES
+        # Speedrun / run timing
+        self.run_timer_active = False
+        self.run_start_ms = 0
+        self.run_time_ms = 0
+        self.run_pb_ms = self._load_pb()
+        self.run_is_pb = False
+
         # Elevator
         self.keycard_acquired = False
         self.elevator_waiting = False
@@ -176,6 +196,7 @@ class Game:
         # teleport in apply_state.
         self._client_loaded_level = None
 
+        # Gamemode defaults
         self._load_settings()
         self.update_sfx_volume()
         if self.main_music_intro:
@@ -257,6 +278,33 @@ class Game:
 
     def _settings_path(self):
         return os.path.join(os.path.dirname(__file__), "settings.json")
+
+    def _runs_path(self):
+        return os.path.join(os.path.dirname(__file__), "runs.json")
+
+    def _load_pb(self):
+        try:
+            with open(self._runs_path(), "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data.get("full_run_pb_ms", 0) or 0
+            return 0
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return 0
+
+    def _save_pb_if_better(self, time_ms):
+        if time_ms <= 0:
+            return False
+        if self.run_pb_ms == 0 or time_ms < self.run_pb_ms:
+            self.run_pb_ms = time_ms
+            try:
+                data = {"full_run_pb_ms": self.run_pb_ms}
+                with open(self._runs_path(), "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+            except OSError:
+                pass
+            return True
+        return False
 
     def save_settings(self):
         data = {
@@ -430,6 +478,31 @@ class Game:
 
             if self.state == "game":
                 if event.type == pygame.KEYDOWN: #Switch guns
+                    if event.key == pygame.K_BACKQUOTE:
+                        self._console_open = not self._console_open
+                        if self._console_open:
+                            pygame.mouse.set_visible(True)
+                            pygame.event.set_grab(False)
+                        else:
+                            pygame.mouse.set_visible(False)
+                            pygame.event.set_grab(True)
+                        continue
+                    if self._console_open:
+                        if event.key == pygame.K_RETURN:
+                            cmd = self._console_text.strip()
+                            self._console_history.append(cmd)
+                            self._exec_console(cmd)
+                            self._console_text = ""
+                        elif event.key == pygame.K_BACKSPACE:
+                            self._console_text = self._console_text[:-1]
+                        elif event.key == pygame.K_ESCAPE:
+                            self._console_open = False
+                            pygame.mouse.set_visible(False)
+                            pygame.event.set_grab(True)
+                        else:
+                            if event.unicode and event.unicode.isprintable() and len(self._console_text) < 80:
+                                self._console_text += event.unicode
+                        continue
                     if event.key == pygame.K_a:
                         if self.current_gun == self.unlocked_guns[-1]:
                             self.current_gun = self.unlocked_guns[0]
@@ -471,7 +544,10 @@ class Game:
         if keys[pygame.K_DELETE]:
             self.running = False
             self.state = None
-            pygame.quit()
+            try:
+                pygame.quit()
+            except Exception:
+                pass
 
         if self.state == "game" and not self.escaped and not self.elevator_locked:
             # === UNIFIED: all players move and auto-fire locally ===
@@ -503,6 +579,74 @@ class Game:
         if self.network_client:
             self._send_client_state()
 
+    def _say(self, text):
+        """Regel terugkoppeling in de console. Nieuwste bovenaan, max 8."""
+        self._console_out.append(str(text))
+        del self._console_out[:-8]
+
+    def _exec_console(self, cmd):
+        c = str(cmd).lower().strip()
+        if not c:
+            return
+        try:
+            if c in ("help", "?"):
+                self._say("god, noclip, heal, ammo, key, level <0-4>, "
+                          "gamemode <" + "|".join(GAMEMODES) + ">, win, killall")
+            elif c in ("god", "godmode", "invul"):
+                self.godmode = not self.godmode
+                self._say(f"godmode {'aan' if self.godmode else 'uit'}")
+            elif c in ("noclip", "fly", "clip"):
+                M.noclip = not M.noclip
+                self._say(f"noclip {'aan' if M.noclip else 'uit'}")
+            elif c in ("heal", "hp", "fullhealth"):
+                self.global_health = self.max_health()
+                self._say(f"health {self.global_health}/{self.max_health()}")
+            elif c in ("ammo", "fullammo"):
+                self.global_ammo = self.gm("start_ammo", START_AMMO)
+                self._say(f"ammo {self.global_ammo}")
+            elif c in ("key", "keycard"):
+                self.player.got_keycard = True
+                self.keycard_acquired = True
+                self._say("keycard gegeven")
+            elif c.startswith("level "):
+                try:
+                    num = int(c.split()[1])
+                except Exception:
+                    num = -1
+                if 0 <= num <= 4:
+                    M.map_level = num
+                    M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[num])
+                    self.map = M.MAP
+                    self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
+                    self.player.angle = START_ANGLES[M.map_level]
+                    self.objects = self.create_objects()
+                    self._say(f"level {num}")
+                else:
+                    self._say(f"level moet 0-4 zijn (kreeg {num})")
+            elif c.startswith(("gamemode", "mode")):
+                parts = c.split()
+                m = parts[1] if len(parts) > 1 else ""
+                if m in GAMEMODES:
+                    self.gamemode = m
+                    # Startwaarden van de nieuwe mode meteen toepassen, anders
+                    # draai je verder met de stats van de vorige mode.
+                    self.global_health = self.gm("start_health")
+                    self.global_ammo = self.gm("start_ammo")
+                    self._say(f"gamemode = {m}")
+                else:
+                    self._say(f"onbekende mode '{m}'. beschikbaar: "
+                              + ", ".join(GAMEMODES))
+            elif c in ("win", "escape", "victory"):
+                self.escaped = True
+            elif c in ("killall", "noenemies"):
+                if "enemies" in self.objects:
+                    self.objects["enemies"] = []
+                self._say("vijanden gewist")
+            else:
+                self._say(f"onbekende commando: {c} (typ help)")
+        except Exception as e:
+            self._say(f"fout: {e}")
+
     def _store_ammo_ray(self, hit):
         dx = cos(self.player.angle)
         dy = sin(self.player.angle)
@@ -530,11 +674,28 @@ class Game:
             cfg.SCREEN.fill(tuple(bg) if bg else 'black')
 
 
-        player_pos = self.player.get_pos()
+        # Camera bob voor 3D gevoel
+        cam_bob_y = 0
+        try:
+            import math
+            move_speed = self.player._speed if hasattr(self.player, '_speed') else 0
+            if move_speed > 0.1:
+                self._bob_phase += 0.09
+                cam_bob_y = math.sin(self._bob_phase * 0.5) * 0.8  # heel subtiel
+            else:
+                if abs(self._bob_phase) > 0.01:
+                    self._bob_phase *= 0.9
+                else:
+                    self._bob_phase = 0
+                cam_bob_y = math.sin(self._bob_phase * 0.5) * 0.15
+        except Exception:
+            cam_bob_y = 0
+
+        player_pos = Vector(self.player.get_pos().x, self.player.get_pos().y)
         player_angle = self.player.get_angle()
 
         # 1. Raycasting - muren direct tekenen, afstanden opslaan
-        wall_distances = dda(player_pos, player_angle)
+        wall_distances = dda(player_pos, player_angle, y_offset=int(cam_bob_y))
 
         # 2. Verzamel zichtbare sprites
         sprites = []  # (dist, SCREEN_x, enemy)
@@ -762,8 +923,23 @@ class Game:
                             pygame.draw.circle(cfg.SCREEN, (255, 200, 100),
                                                (int(hit_sx), int(cfg.HEIGHT / 2)), 4)
 
-        # 5. Wapen laatst
-        self.current_gun.draw()
+        # 5. Wapen laatst - kleine headbob (hand)
+        bob = 0
+        try:
+            import math
+            move_speed = self.player._speed if hasattr(self.player, '_speed') else 0
+            if move_speed > 0.1:
+                self._bob_phase += 0.11
+                bob = math.sin(self._bob_phase) * 0.7
+            else:
+                if abs(self._bob_phase) > 0.01:
+                    self._bob_phase *= 0.8
+                else:
+                    self._bob_phase = 0
+                bob = math.sin(self._bob_phase) * 0.15
+        except Exception:
+            bob = 0
+        self.current_gun.draw(bob_offset_y=int(bob + cam_bob_y * 0.5))
 
     def _get_all_texture_paths(self):
         paths = []
@@ -778,7 +954,32 @@ class Game:
                 paths.append((path, weapon_size))
         return paths
 
-    def reset_game(self):
+    # ── Gamemode-config ────────────────────────────────────────────────
+    #
+    # Alle verschieden tussen gamemodes staan in `config.GAMEMODES`. Hier
+    # staan alleen de leeshelpers, zodat nergens in de game een if/else op
+    # een modenaam hoeft te staan: nieuw werk vraagt om een veld in de
+    # tabel, niet om een nieuwe aftakking.
+
+    def gm(self, key, default=None):
+        """Eén configwaarde van de huidige gamemode."""
+        return gm_cfg(self.gamemode).get(key, default)
+
+    def max_health(self):
+        """HP-bovengrens van de huidige gamemode.
+
+        Bewust niet START_HEALTH: die is de campaign-waarde, en zou survival
+        na een health-pickup weer op 10 terugzetten.
+        """
+        return self.gm("health_cap", START_HEALTH)
+
+    def max_ammo(self):
+        """Ammo-bovengrens van de huidige gamemode (zie max_health)."""
+        return self.gm("ammo_cap", AMMO_CAP)
+
+    def reset_game(self, gamemode=None):
+        if gamemode is not None:
+            self.gamemode = gamemode
         self.multiplayer = False
         self.player_id = 0
         self.remote_players = []
@@ -801,8 +1002,8 @@ class Game:
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[M.map_level])
         pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
         pygame.mouse.get_rel()
-        self.global_health = START_HEALTH
-        self.global_ammo = START_AMMO
+        self.global_health = self.gm("start_health", START_HEALTH)
+        self.global_ammo = self.gm("start_ammo", START_AMMO)
         M.start_angle = START_ANGLES[M.map_level]
         self.objects = self.create_objects()
         self.projectiles = []
@@ -823,9 +1024,17 @@ class Game:
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
 
+        # Start run timer (alleen voor campaign/speedrun-achtige runs)
+        self.run_timer_active = True
+        self.run_start_ms = pygame.time.get_ticks()
+        self.run_time_ms = 0
+        self.run_is_pb = False
         self._play_music()
 
     def level_up(self):
+        if not self.gm("level_progression"):
+            # Geen floor-voortgang: alleen de mode zelf bepaalt wat er nu gebeurt.
+            return
         if M.map_level >= MAX_LEVEL:
             return
         M.map_level += 1
@@ -880,8 +1089,8 @@ class Game:
         preload_textures(self._get_all_texture_paths())
         pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
         pygame.mouse.get_rel()
-        self.global_health = START_HEALTH
-        self.global_ammo = START_AMMO
+        self.global_health = self.gm("start_health", START_HEALTH)
+        self.global_ammo = self.gm("start_ammo", START_AMMO)
         self.player.door_pos = 0
         self.player.got_keycard = False
         self.current_gun = self.pistol
@@ -1477,6 +1686,9 @@ class Game:
                     self.handle_network()
 
                 if not self.escaped:
+                    if self.run_timer_active:
+                        now = pygame.time.get_ticks()
+                        self.run_time_ms = now - self.run_start_ms
                     self.update()
                     if self.multiplayer:
                         self.update_remote_positions()
@@ -1495,6 +1707,9 @@ class Game:
                     cfg.SCREEN.blit(kc_surf, (cfg.WIDTH - kc_surf.get_width() - int(cfg.WIDTH * 0.04), cfg.HEIGHT - int(cfg.HEIGHT * 0.06)))
                     
                 if self.escaped:
+                    if self.run_timer_active:
+                        self.run_timer_active = False
+                        self.run_is_pb = self._save_pb_if_better(self.run_time_ms)
                     self.Menu.draw_escaped_screen(events, self)
                 
                 if self.player.door_pos != 0:
@@ -1538,6 +1753,23 @@ class Game:
                 self.state = "dead"
             if self.state == "game":
                 self._paused_frame = cfg.SCREEN.copy()
+            # Dev console draw
+            if self._console_open:
+                try:
+                    font = pygame.font.Font(None, 24)
+                    lines = list(reversed(self._console_out[-8:]))
+                    blok_h = 30 + len(lines) * 22
+                    bg = pygame.Surface((cfg.WIDTH, blok_h), pygame.SRCALPHA)
+                    bg.fill((0, 0, 0, 170))
+                    cfg.SCREEN.blit(bg, (0, cfg.HEIGHT - blok_h))
+                    for i, regel in enumerate(lines):
+                        cfg.SCREEN.blit(
+                            font.render(regel, True, (190, 200, 220)),
+                            (10, cfg.HEIGHT - blok_h + 4 + i * 22))
+                    voer = font.render("> " + self._console_text, True, (255, 255, 255))
+                    cfg.SCREEN.blit(voer, (10, cfg.HEIGHT - 26))
+                except Exception:
+                    pass
             pygame.display.flip()
 
         pygame.quit()

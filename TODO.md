@@ -114,10 +114,5 @@ variabele zetten, dan pas het bestand openen.
 Daarom is de fix op het pijltje meteen apart gecommit en niet pas aan het
 einde.
 
-### Nog niet gedaan
-- De levelnaam staat niet op de kaart. Met vijf levels is dat handig om te weten
-  waar je bent, maar het is een extra regel tekst die in het vakje moet passen.
-- De minimap is niet zichtbaar in het meekijken-scherm (`spectating` tekent
-  hem wel, maar dan met de positie van je eigen dode speler).
-- Geen muisaanwijzer op de kaart.
+
 

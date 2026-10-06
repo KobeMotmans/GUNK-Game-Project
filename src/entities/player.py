@@ -20,6 +20,8 @@ class Player:
         self.score = 0
         self.got_keycard = False
         self.door_pos = 0
+        self.velocity = Vector(0, 0)
+        self._speed = 0.0
 
     def rotate(self, direction):
         """
@@ -51,15 +53,27 @@ class Player:
         normalised = Vector(dx, dy).normalize() * speed
         dx, dy = normalised.x, normalised.y
 
+        self._speed = normalised.norm() if normalised.norm() > 0 else 0
+
+        import sys
+        sys.path.insert(0, '.')
+
         # Probeer X beweging
         new_x = self.pos.x + dx
         if not will_collide(new_x, self.pos.y):
             self.pos.x = new_x
+        else:
+            dx = 0
+            self._speed = max(0, self._speed - PLAYER_SPEED * 0.2)
 
         # Probeer Y beweging
         new_y = self.pos.y + dy
         if not will_collide(self.pos.x, new_y):
             self.pos.y = new_y
+        else:
+            dy = 0
+            self._speed = max(0, self._speed - PLAYER_SPEED * 0.2)
+        self.velocity = Vector(dx, dy)
 
     def get_pos(self):
         return self.pos
@@ -68,6 +82,8 @@ class Player:
         return self.angle
 
     def take_damage(self, damage, game):
+        if getattr(game, 'godmode', False):
+            return
         if self.inv_time == 0:
             self.inv_time = 60
             game.global_health -= damage
