@@ -3474,6 +3474,235 @@ def survival_werkt_in_multiplayer():
           f"geen 'SURVIVAL-MP OK' in de uitvoer:\n{proc.stdout[-800:]}")
 
 
+# ── vijandenstroom ──────────────────────────────────────────────
+# De stroom is het hart van survival en staat op precies twee plekken die
+# hem moeten draaien: game.py in solo en server_game.py in multiplayer.
+# De regeling zelf staat één keer in core.stroom. Deze test let op drie
+# dingen die er alleen samen uit kunnen komen:
+#
+#   * de getallen doen wat er beslist is (4 -> 16 met plafond, interval
+#     2 -> 8, monotoon, en nooit boven het aantal spawns);
+#   * de client én de server kunnen alle types uit de mix aan - zou de
+#     client er één niet in zijn tabel hebben, dan bouwt hij die stil om
+#     tot NormalEnemy en speel je met andere vijanden dan de server denkt;
+#   * een mode zonder stroomblok (de campaign) verandert niet.
+
+STROOM_DRIVER = r'''
+import os, sys, time, random
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import pygame
+import game
+from src.core import stroom
+from src.core.config import GAMEMODES
+from src.core.map_loader import M
+from src.core.vector import Vector
+from src.network.server_game import ServerGame, ENEMY_TYPES
+
+fouten = []
+
+
+def check(voorwaarde, bericht):
+    if not voorwaarde:
+        fouten.append(bericht)
+
+
+class V:
+    """Nep-vijand met alleen een positie, voor de bezetheidsproef."""
+
+    def __init__(self, x, y):
+        self.pos = Vector(x, y)
+
+
+blok = GAMEMODES["survival"].get("stream")
+check(blok is not None, "survival heeft geen stroomblok")
+if blok is None:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+ramp = blok["ramp_seconds"]
+
+# ── 1. de getallen ─────────────────────────────────────────────
+check(GAMEMODES["campaign"].get("stream") is None,
+      "de campaign hoort geen stroomblok te hebben")
+check(stroom.grenzen(GAMEMODES["campaign"].get("stream"), 0)
+      == (0, float("inf")),
+      "zonder stroomblok hoort grenzen (0, oneindig) te geven")
+check(stroom.volgende_spawn(GAMEMODES["campaign"].get("stream"), 0,
+                            [], [], None, 0) is None,
+      "zonder stroomblok mag er nooit iets gespawnd worden")
+
+nul = stroom.grenzen(blok, 0)
+check(nul == (blok["start_alive"], blok["start_interval"]),
+      f"bij t=0: {nul} in plaats van "
+      f"{(blok['start_alive'], blok['start_interval'])}")
+vol = stroom.grenzen(blok, ramp)
+check(vol == (blok["max_alive"], blok["end_interval"]),
+      f"bij t=ramp: {vol} in plaats van "
+      f"{(blok['max_alive'], blok['end_interval'])}")
+check(stroom.grenzen(blok, ramp * 10)[0] == blok["max_alive"],
+      "het plafond groeit door na de opbouw")
+check(stroom.grenzen(blok, ramp * 10)[1] == blok["end_interval"],
+      "de interval wordt na de opbouw niet langer maar korter")
+
+vorige_n, vorige_i = -1, -1
+for t in range(0, ramp + 30, 5):
+    n, iv = stroom.grenzen(blok, t)
+    check(n >= vorige_n, f"het plafond daalt bij t={t}: {vorige_n} -> {n}")
+    check(iv >= vorige_i, f"de interval wordt korter bij t={t}: {vorige_i} -> {iv}")
+    vorige_n, vorige_i = n, iv
+
+check(blok["max_alive"] <= 20,
+      f"het plafond ({blok['max_alive']}) ligt boven het aantal spawns (20)")
+
+# ── 2. de mix, tegen beide typetabellen ────────────────────────
+r = random.Random(1)
+begin = [stroom.kies_type(blok, 0, r) for _ in range(300)]
+eind = [stroom.kies_type(blok, ramp, r) for _ in range(300)]
+check("tank_enemy" not in begin,
+      f"er zitten tanks in het begin: {sorted(set(begin))}")
+check("tank_enemy" in eind, f"geen tanks aan het einde: {sorted(set(eind))}")
+
+g = game.Game()
+for naam in set(begin) | set(eind):
+    # Server: de naam is de sleutel in ENEMY_TYPES.
+    check(naam in ENEMY_TYPES,
+          f"de server kent {naam!r} niet")
+    # Client: _create_enemy_from_type valt stil terug op NormalEnemy, dus
+    # vergelijk het type dát er echt uitkomt in plaats van de tabel.
+    e = g._create_enemy_from_type(f"enemies/{naam}", (10.0, 10.0))
+    check(e.type == f"enemies/{naam}",
+          f"de client bouwt {naam!r} om tot {e.type!r}; dan speel je met "
+          f"andere vijanden dan de server stuurt")
+
+# ── 3. bezette spawns: wachten ─────────────────────────────────
+spawns = [(float(i * 100), 0.0) for i in range(20)]
+check(len(stroom.vrije_spawns(spawns, [])) == 20,
+      "zonder vijanden hoort elk punt vrij te zijn")
+check(len(stroom.vrije_spawns(spawns, [V(0, 0)])) == 19,
+      "één vijand op een punt bezet alleen dat punt")
+check(stroom.vrije_spawns(spawns, [V(x, y) for x, y in spawns]) == [],
+      "met alle spawns bezet hoort er geen vrij meer te zijn")
+
+# ── 4. solo ────────────────────────────────────────────────────
+g.reset_game(gamemode="survival")
+check(len(g.objects["enemies"]) == 0,
+      f"bij de start staan al {len(g.objects['enemies'])} vijanden")
+check(len(M.SPAWNS["enemies"]) == 20,
+      f"{len(M.SPAWNS['enemies'])} spawns in plaats van 20")
+
+
+def ver_vooruit(g, verstreken):
+    g.stroom_start = time.time() - verstreken
+    g.stroom_laatste = time.time() - verstreken
+
+
+# Interval nog niet voorbij: niets erbij.
+ver_vooruit(g, 0.0)
+g._stroom_tick()
+check(len(g.objects["enemies"]) == 0,
+      f"toch {len(g.objects['enemies'])} vijanden terwijl de interval "
+      f"niet verstreken is")
+
+# Interval wél voorbij: één per aanroep.
+ver_vooruit(g, 100)
+for _ in range(5):
+    g._stroom_tick()
+    g.stroom_laatste = time.time() - 100
+check(len(g.objects["enemies"]) == 5,
+      f"5 aanroepen met verstreken interval gaven "
+      f"{len(g.objects['enemies'])} vijanden in plaats van 5")
+
+# Plafond, ook met alle tijd van de wereld.
+ver_vooruit(g, ramp * 10)
+for _ in range(200):
+    g._stroom_tick()
+    g.stroom_laatste = time.time() - ramp * 10
+plafond = len(g.objects["enemies"])
+check(plafond == blok["max_alive"],
+      f"na 200 pogingen met alle tijd: {plafond} vijanden in plaats van "
+      f"{blok['max_alive']}")
+check(plafond <= len(M.SPAWNS["enemies"]),
+      f"meer vijanden ({plafond}) dan spawns ({len(M.SPAWNS['enemies'])})")
+check(all(any(abs(e.pos.x - s[0]) < 100 and abs(e.pos.y - s[1]) < 100
+              for s in M.SPAWNS["enemies"])
+          for e in g.objects["enemies"]),
+      "er staat een vijand die niet op een spawn-punt staat")
+
+# ── 5. server: dezelfde regeling ───────────────────────────────
+sg = ServerGame()
+sg.register_player(0, "host")
+sg.set_shared_options({"gamemode": "survival", "shared_health": True,
+                       "shared_ammo": True})
+sg.init_world()
+check(len(sg.enemies) == 0,
+      f"de server zette bij de start al {len(sg.enemies)} vijanden neer")
+check(sg.stroom_start is not None, "de server heeft geen stroom-teller")
+
+for verstreken in (100, ramp * 10):
+    sg.stroom_start = time.time() - verstreken
+    sg.stroom_laatste = time.time() - verstreken
+    for _ in range(60):
+        sg._stroom_tick()
+        sg.stroom_laatste = time.time() - verstreken
+check(len(sg.enemies) == blok["max_alive"],
+      f"de server kwam uit op {len(sg.enemies)} vijanden in plaats van "
+      f"{blok['max_alive']}")
+
+# ── 6. een mode zonder stroomblok verandert niet ───────────────
+g.gamemode = "campaign"
+g.stroom_start = time.time() - 9999
+g.stroom_laatste = time.time() - 9999
+aantal = len(g.objects["enemies"])
+g._stroom_tick()
+check(len(g.objects["enemies"]) == aantal,
+      f"de campaign krijgt er {len(g.objects['enemies']) - aantal} bij "
+      f"terwijl ze geen stroomblok heeft")
+
+# Ook na een verse start in de campaign blijft het stil.
+g.reset_game(gamemode="campaign")
+g.stroom_start = time.time() - 9999
+g.stroom_laatste = time.time() - 9999
+camp = len(g.objects["enemies"])
+g._stroom_tick()
+check(len(g.objects["enemies"]) == camp,
+      f"de campaign vult zichzelf aan: {camp} -> "
+      f"{len(g.objects['enemies'])}")
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("STROOM OK")
+'''
+
+
+@test
+def vijandenstroom_vult_de_map_binnen_het_plafond():
+    """De stroom loopt op met een plafond en blijft van de campaign af."""
+    path = os.path.join(TEMP_DIR, "gunk_stroom_driver.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(STROOM_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de stroomtest liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de stroomtest gaf fouten:\n" + "\n".join(tail[-30:]))
+        return
+    check("STROOM OK" in proc.stdout,
+          f"geen 'STROOM OK' in de uitvoer:\n{proc.stdout[-800:]}")
+
+
 # ── runner ─────────────────────────────────────────────────────
 
 def main():

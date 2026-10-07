@@ -4,10 +4,12 @@ Runs enemy AI, maintains world state, processes client deltas.
 """
 
 import random
+import time
 from math import cos, sin, pi
 
 from ..core.vector import Vector
 from ..core.map_loader import M, will_collide as _will_collide
+from ..core import stroom
 from ..core.config import (AGGRO_DIST, ATTACK_DIST, TILE_SIZE, PATHFIND_INTERVAL,
                     START_HEALTH,
                     START_AMMO, AMMO_CAP, HEALTH_CHANCE, MAP_PATH,
@@ -97,6 +99,11 @@ class ServerGame:
         # groeiend getal betekent dat een client niet meer bijkomt.
         self._stale_pos_rejects = 0
 
+        # De stroom. None zolang er geen level geladen is; zonder level is
+        # er geen run en dus ook niets om te laten oplopen. Zie stroom.py.
+        self.stroom_start = None
+        self.stroom_laatste = None
+
         # Lobby options (shared vs per-player resources)
         self.shared_health = True
         self.shared_ammo = True
@@ -180,6 +187,16 @@ class ServerGame:
                 nx, ny = spawn
             pdata["pos"] = Vector(nx, ny)
             pdata["angle"] = M.start_angle
+
+        # De stroom begint hier opnieuw. Twee reden om het bij de level-
+        # overgang te doen en niet bij init_world: een nieuwe level is een
+        # nieuwe run voor de stroom, en een reset naar de lobby mag er niet
+        # voor zorgen dat de teller van de vorige pot blijft doorlopen.
+        # Het eerste moment dat er iets mag komen is één interval verder,
+        # want stroom_laatste is "nu".
+        nu = time.time()
+        self.stroom_start = nu
+        self.stroom_laatste = nu
 
     def init_world(self):
         self.level = 0
@@ -314,6 +331,11 @@ class ServerGame:
         self._post_transition_grace = 0
         self.elevator_missing = []
         self._stuck_timer = 0
+        # De stroom ook: anders liep de teller van de vorige pot door en zou
+        # de volgende run meteen op het oude niveau beginnen in plaats van
+        # bij het begin.
+        self.stroom_start = None
+        self.stroom_laatste = None
 
     def get_nearest_player_pos(self, enemy):
         nearest = None
@@ -455,6 +477,43 @@ class ServerGame:
         for pid, data in inputs.items():
             self.process_input(pid, data)
 
+    def _stroom_tick(self):
+        """Eén poging om er een vijand bij te zetten.
+
+        Draait alleen als de mode een stroomblok heeft. De campaign heeft
+        er geen, verandert dus niet van gedrag, en er hoeft nergens een
+        modenaam vergeleken te worden - dit is de enige plek die naar het
+        blok kijkt.
+
+        De regeling zelf staat in `core.stroom`, precies omdat game.py in
+        solo hetzelfde moet berekenen. Zou dit hier herhaald worden, dan
+        had je twee versies die pas opvallen als ze uit elkaar lopen.
+        """
+        blok = self.gm("stream")
+        if not blok or self.stroom_start is None:
+            return
+        nu = time.time()
+        verstreken = nu - self.stroom_start
+        pos = stroom.volgende_spawn(
+            blok, verstreken, M.SPAWNS["enemies"], self.enemies,
+            self.stroom_laatste, nu,
+            straal=blok.get("spawn_straal", stroom.STANDAARD_STRAAL))
+        if pos is None:
+            return
+        naam = stroom.kies_type(blok, verstreken)
+        # De klok telt in beide foutgevallen wél door. Zou dat niet zo
+        # zijn, dan stokt de stroom hier voor goed en zou er elke tick
+        # opnieuw geprobeerd worden - zichtbaar nergens.
+        self.stroom_laatste = nu
+        if naam is None:
+            return
+        t = ENEMY_TYPES.get(naam)
+        if t is None:
+            _log(f"[SERVER] stroomblok verwijst naar onbekend type {naam!r}")
+            return
+        self.enemies.append(ServerEnemy(naam, pos[0], pos[1],
+                                        t["health"], t["damage"], t["speed"]))
+
     def tick(self):
         if not self.initialized:
             return
@@ -472,6 +531,11 @@ class ServerGame:
             if all_done:
                 self._level_up()
             return
+
+        # Pas ná de liftafhandeling: tijdens een overgang verandert er een
+        # level en hoort er niets bij te komen. Survival heeft geen lift,
+        # dus daar draait dit elke tick.
+        self._stroom_tick()
 
         for enemy in self.enemies:
             target = self.get_nearest_player_pos(enemy)

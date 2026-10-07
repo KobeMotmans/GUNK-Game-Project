@@ -14,6 +14,7 @@ from src.core import config as cfg
 from src.core.config import (START_AMMO, AMMO_CAP, MAP_PATH, START_ANGLES, HEALTH_CHANCE, MAX_LEVEL, MAX_DEPTH,
                     set_resolution, ELEVATOR_WAIT_DIST, START_HEALTH, TILE_SIZE, PROJ_DIST, MAX_PLAYERS,
                     gamemode as gm_cfg, GAMEMODES, DEFAULT_GAMEMODE, kaart_voor)
+from src.core import stroom
 from src.core.paths import resolve_asset, load_font, init_packs
 from src.core.theme import theme
 from src.core.raycaster import dda
@@ -193,6 +194,13 @@ class Game:
         self.run_time_ms = 0
         self.run_pb_ms = self._load_pb()
         self.run_is_pb = False
+
+        # Vijandenstroom. None tot een run begint, zodat er niets draait
+        # vóórdat er iets te laten oplopen valt. In multiplayer blijft het
+        # ongebruikt: dan is de server leidend en zou het nooit mogen
+        # beslissen. Zie src/core/stroom.py.
+        self.stroom_start = None
+        self.stroom_laatste = None
 
         # Elevator
         self.keycard_acquired = False
@@ -744,7 +752,49 @@ class Game:
             end = self.player.pos + Vector(dx * MAX_DEPTH, dy * MAX_DEPTH)
         self.ammo_rays.append({"start": Vector(self.player.pos.x, self.player.pos.y), "end": end, "timer": 6, "is_hit": hit is not None})
 
+    def _stroom_tick(self):
+        """Eén poging om er een vijand bij te zetten (alleen solo).
+
+        In multiplayer draait de server dit; zou de client het ook doen,
+        dan zouden er meer vijanden zijn dan de server kent en zou de
+        volgende state-UPDATE ze weer weg moeten poetsen. Vandaar de
+        afsluiter in update().
+
+        De regeling zelf staat in `core.stroom`, precies omdat
+        server_game.py hetzelfde moet berekenen. Zou die hier herhaald
+        worden, dan had je twee versies die pas opvallen als ze uit elkaar
+        lopen - en dat merk je dan als de client een andere vijand
+        verwacht dan de server aanstuurt.
+        """
+        blok = self.gm("stream")
+        if not blok or self.stroom_start is None:
+            return
+        nu = time.time()
+        verstreken = nu - self.stroom_start
+        pos = stroom.volgende_spawn(
+            blok, verstreken, M.SPAWNS["enemies"],
+            self.objects.get("enemies", []),
+            self.stroom_laatste, nu,
+            straal=blok.get("spawn_straal", stroom.STANDAARD_STRAAL))
+        if pos is None:
+            return
+        naam = stroom.kies_type(blok, verstreken)
+        # De klok telt in beide foutgevallen wél door, anders stokt de
+        # stroom hier voor goed en zou er elke tick opnieuw geprobeerd
+        # worden zonder dat het ergens zichtbaar is.
+        self.stroom_laatste = nu
+        if naam is None:
+            return
+        # _create_enemy_from_type verwacht "enemies/..." en valt terug op
+        # NormalEnemy. Dat die terugval hier zou leiden tot een stille
+        # ombouw van een tank naar een normal is opgevangen door de test:
+        # die zet de mixnaam naast beide typetabellen.
+        vijanden = self.objects.setdefault("enemies", [])
+        vijanden.append(self._create_enemy_from_type(f"enemies/{naam}", pos))
+
     def update(self):
+        if not self.multiplayer:
+            self._stroom_tick()
         self.current_gun.update()
         self.player.tick()
 
@@ -1117,6 +1167,12 @@ class Game:
         self.run_start_ms = pygame.time.get_ticks()
         self.run_time_ms = 0
         self.run_is_pb = False
+        # De stroom begint hier: dit is het begin van de run, dus de eerste
+        # vijand mag er pas na één interval komen. In multiplayer is dit
+        # de client-zijde die niets doet; daar zet de server zijn eigen
+        # teller in _setup_level().
+        self.stroom_start = time.time()
+        self.stroom_laatste = time.time()
         self._play_music()
 
     def level_up(self):

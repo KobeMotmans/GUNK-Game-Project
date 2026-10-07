@@ -136,8 +136,12 @@ GAMEMODES = {
         # Geen floors: je blijft op de kaart tot je valt.
         "level_progression": False,
         "uses_elevator": False,
-        "run_timer": False,
-        "save_pb": False,
+        # De klok ís de run en de tijd wordt bewaard, naast de kills die
+        # als ranglijst ernaast staan (keuze in SURVIVAL.md). Let op: deze
+        # twee worden pas gelezen zodra de code ze respecteert - ze staan
+        # hier nu al goed omdat het de bedoeling is.
+        "run_timer": True,
+        "save_pb": True,
         # Eén eigen kaart. Daardoor is er geen levelnummer om af te leiden
         # en ook geen START_ANGLES[level]: pad en hoek komen hier vandaan.
         # Zie kaart_voor().
@@ -145,6 +149,35 @@ GAMEMODES = {
         "start_angle": -pi / 2,
         # De stroom brengt de vijanden; er staat er geen bij de start.
         "spawn_enemies_at_start": False,
+        # De hele regeling van die stroom, als één blok. Geen
+        # `if mode == "survival"` in de gameplay-code: die leest dit en
+        # draait het. Een mode zonder dit blok heeft geen stroom.
+        # Zie src/core/stroom.py.
+        "stream": {
+            # Hoeveel er tegelijk in leven mogen zijn: 4 bij de start, 16
+            # als plafond. Het plafond is er omdat de map 20 bronnen heeft
+            # en een stapeling tot de boel vastloopt; 16 laat vier plekken
+            # vrij zodat de stroom altijd ergens heen kan.
+            "start_alive": 4,
+            "max_alive": 16,
+            # Tijd waarin 4 -> 16 en de interval 2 -> 8 doorlopen wordt.
+            # Vijf minuten: lang genoeg om op te warmen, kort genoeg dat je
+            # het plafond in een zittende sessie haalt.
+            "ramp_seconds": 300,
+            # Interval tussen twee spawns aan begin en einde. Langer wordend
+            # = minder vaak een nieuwe erbij, zoals het dossier wil: het
+            # plafond bepaalt de druk, de interval voorkomt dat er per
+            # seconde drie bij komen zodra de kaart al vol is.
+            "start_interval": 2.0,
+            "end_interval": 8.0,
+            # De mix, begin en einde. Gewichten, dus 0 = nooit. Tanks
+            # beginnen op nul en komen er later bij.
+            "start_mix": {"normal_enemy": 3, "fast_enemy": 1, "tank_enemy": 0},
+            "end_mix": {"normal_enemy": 2, "fast_enemy": 2, "tank_enemy": 2},
+            # Een spawn-punt is bezet als er al een vijand op minder dan dit
+            # staat (pixels; één tegel).
+            "spawn_straal": 64.0,
+        },
     },
 }
 

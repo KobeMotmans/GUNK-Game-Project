@@ -384,38 +384,73 @@ vogelvlucht dichtbij maar niet bereikbaar.
 
 ---
 
-## Vijandenstroom (nog niet gebouwd)
+## Vijandenstroom
 
 **Geen afgebakende waves met pauzes ertussen, maar een incrementele,
 constante stroom** die naarmate de run vordert steeds zwaarder wordt. Er is
 dus geen "wave X begint", geen aftelling en geen moment waarop de map leeg
 is — er komt simpelweg meer.
 
-De druk is dus een functie van de tijd (of de score):
+De druk is een functie van de tijd, en die staat nu in één blok:
+`GAMEMODES["survival"]["stream"]`. Alle getallen daar, geen enkele
+modenaamcheck in de gameplay-code.
 
-- **Hoeveel** er tegelijk in leven zijn, loopt op mét een plafond. Zonder
-  dat plafond stapelen ze op tot de map vol is en loopt de boel vast.
-- **Hoe vaak** er een nieuwe bijkomt, neemt af naarmate de run duurt.
-- **De mix** verschuift: eerst makkelijke types, later zwaardere en meer.
-- De hele regeling hoort als een eigen blok in `config.GAMEMODES`, niet als
-  een modenaamcheck — precies zoals de rest van de gamemodes.
+| | begin | einde | over |
+|---|---|---|---|
+| gelijktijdig in leven | 4 | **16** (plafond) | 300 s |
+| interval tussen spawns | 2,0 s | 8,0 s | 300 s |
+| mix | 3 normal, 1 fast, 0 tank | 2 normal, 2 fast, 2 tank | 300 s |
 
-### Wat de kaart al moet leveren
+- **Hoeveel** er tegelijk in leven zijn, loopt op mét een plafond. Het
+  plafond staat op 16 terwijl er 20 spawns zijn: vier plekken blijven vrij,
+  zodat de stroom altijd ergens heen kan en er niets vastloopt.
+- **Hoe vaak** er een nieuwe bijkomt, neemt af — de interval wordt juist
+  *langer*. Het plafond bepaalt de druk, de interval voorkomt dat er per
+  seconde drie bij komen zodra de kaart al vol is.
+- **De mix** verschuift over dezelfde 300 seconden. Tanks staan op gewicht
+  0 bij de start en komen er dus echt niet in de eerste minuten bij.
 
-- **Spawn-punten zijn de rode `X`-tegels.** Die komen nu al in
+De regeling zelf staat één keer in `src/core/stroom.py`, en dat is
+bewust: er zijn twee plekken die hem moeten draaien, `game.py` in solo en
+`server_game.py` in multiplayer. Zou hij hier twee keer komen te staan,
+dan heb je een tweede waarheid die pas opvalt als de twee uit elkaar
+lopen — en dat merk je dan als de client een andere vijand verwacht dan
+de server aanstuurt.
+
+### Wat de kaart al levert
+
+- **Spawn-punten zijn de rode `X`-tegels.** Die komen in
   `spawns["enemies"]` terecht en dienen als bronlijst voor de stroom. De 20
   in het grondplan liggen verspreid over ring, kruisgang en de armen, zodat
   vijanden niet allemaal uit dezelfde hoek komen en er altijd een bezet kan
-  zijn zonder dat de volgende blijft hangen.
+  zijn zonder dat de volgende blijft hangen. Ze staan in
+  wereldcoördinaten (`map_to_cord(x) + TILE_SIZE/2`), net als `enemy.pos`,
+  dus de afstandsberekening in `stroom.py` klopt direct.
 - Daarbij hoort `spawn_enemies_at_start = False`: er staat er geen meteen
   bij de start; de stroom brengt ze.
 
-### Nog te bepalen
+### Besloten op 2026-10-07
 
-- de escalatiecurve en het plafond
-- wat de speler wint (survival stopt niet vanzelf: `level_progression` is
-  False, dus geen uitgang — overleefde tijd? score?)
-- wat er gebeurt als alle spawns bezet zijn: wachten, of een plek vrijmaken
+- **Escalatiecurve en plafond:** tijd-gedreven, plafond 16, zoals de tabel
+  hierboven. Bewust niet score-gedreven: dan zou de stroom in multiplayer
+  voor iedereen iets anders betekenen, afhankelijk van wie er toevallig
+  goed speelt.
+- **Wat de speler wint:** beide naast elkaar. De klok ís de run en de tijd
+  wordt bewaard; de kills staan ernaast als ranglijst. (Survival stopt niet
+  vanzelf: `level_progression` is False, dus geen uitgang.)
+- **Bezette spawns:** wachten. Er wordt pas gespawnd als er ergens een plek
+  vrij is, dus nooit meer dan 20 in leven. De interval telt wél door, dus
+  zodra er één vrij komt krijgt die meteen een vijand — anders zou een volle
+  kaart de klok voorgoed stilzetten.
+
+### Wat er nog moet
+
+Het blok staat er en de stroom draait, maar de twee dingen die eruit
+komen zijn nog niet afgewerkt: `run_timer` en `save_pb` staan inmiddels
+op `True` voor survival, maar de code leest die twee nog niet (ze worden
+nergens vergeleken, en een PB wordt alleen bewaard bij `escaped` — wat in
+survival nooit gebeurt). En de weergave van tijd én kills naast elkaar
+op het scherm moet nog bekeken worden.
 
 ---
 
@@ -440,8 +475,11 @@ zetten.
    stonden nergens anders in `color_to_number`, dus het bleef oranje. Dit
    punt blijft hier staan omdat `map_loader` ernaar verwijst; als de campaign
    die kleur ooit gaat gebruiken, kies dan hier eerst iets anders.
-3. **Escalatie van de vijandenstroom:** curve, plafond en wat de speler
-   wint. Zie "Vijandenstroom".
+3. **Escalatie van de vijandenstroom — beslist op 2026-10-07.** Tijd-gedreven
+   met plafond 16, de klok is de run en de kills staan ernaast, en bij volle
+   spawns wachten we. Zie "Vijandenstroom" voor de getallen. Wat er ná die
+   beslissing nog rest (de code die `run_timer`/`save_pb` nog niet leest)
+   staat daar ook.
 4. **Gemengde versies, deze build naast 1.0.12.** Er is geen protocolversie;
    `discovery.VERSION` dekt alleen de LAN-broadcast-indeling en die is niet
    veranderd. `decode_packet` doet `ID_TO_KEY.get(kid, f"key_{kid}")`, dus
