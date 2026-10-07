@@ -3001,6 +3001,103 @@ def stille_sound_doet_wat_een_sound_doet():
     check(s.get_busy() is False, "stil geluid meldt dat er iets speelt")
 
 
+# ── dev-console toets ──────────────────────────────────────────
+# De console hangt aan de fysieke toets links van de 1. Alleen naar
+# event.key kijken werkt daarom alleen op een Amerikaans toetsenbord: die
+# ene plek heeft per layout een andere keycode, en op AZERTY-BE geeft zij
+# een ². Het gevolg was dat de console op niemands toetsenbord openging -
+# en dat merk je pas als je een bug probeert na te kijken.
+
+CONSOLE_DRIVER = r'''
+import os, sys
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import pygame
+import game
+
+fouten = []
+
+
+def check(voorwaarde, bericht):
+    if not voorwaarde:
+        fouten.append(bericht)
+
+
+g = game.Game()
+g.state = "game"
+
+
+def druk(key, teken):
+    """Eén aanslag afsturen; geeft terug of de console nu openstaat."""
+    pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=key,
+                                         unicode=teken, mod=0))
+    g.handle_events()
+    return g._console_open
+
+
+# Drie layouts, elk met hun eigen teken op die ene fysieke plek.
+for naam, key, teken in (
+        ("US-layout", pygame.K_BACKQUOTE, "`"),
+        ("US-layout met shift", pygame.K_BACKQUOTE, "~"),
+        ("AZERTY-BE", 178, "\u00b2"),
+        ("AZERTY-BE met shift", 179, "\u00b3"),
+        ("DQWERTZ", 94, "^"),
+):
+    g._console_open = False
+    check(druk(key, teken), f"de console gaat niet open op {naam}")
+
+# En alles wat geen console is moet dicht blijven.
+for naam, key, teken in (
+        ("a", pygame.K_a, "a"),
+        ("1", pygame.K_1, "1"),
+        ("tab", pygame.K_TAB, "\t"),
+        ("spatie", pygame.K_SPACE, " "),
+):
+    g._console_open = False
+    check(not druk(key, teken), f"{naam} opent de console")
+
+# Nog een keer op diezelfde toets moet hem weer sluiten.
+g._console_open = False
+druk(178, "\u00b2")
+check(g._console_open, "de AZERTY-toets opent de console niet")
+druk(178, "\u00b2")
+check(not g._console_open, "de AZERTY-toets sluit de console niet")
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("CONSOLE OK")
+'''
+
+
+@test
+def console_opent_op_elk_toetsenbord():
+    """De dev-console opent op de toets links van de 1, hoe die ook heet."""
+    path = os.path.join(TEMP_DIR, "gunk_console_driver.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(CONSOLE_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de consoletest liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de consoletest gaf fouten:\n"
+              + "\n".join(tail[-25:]))
+        return
+    check("CONSOLE OK" in proc.stdout,
+          f"geen 'CONSOLE OK' in de uitvoer:\n{proc.stdout[-500:]}")
+
+
 # ── runner ─────────────────────────────────────────────────────
 
 def main():

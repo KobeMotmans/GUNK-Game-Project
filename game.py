@@ -39,6 +39,22 @@ REMOTE_SNAPSHOT_HZ = 30.0
 REMOTE_INTERP_DELAY = 1.0 / REMOTE_SNAPSHOT_HZ  # één snapshot achter renderen
 REMOTE_MAX_SAMPLES = 8                        # ruimte voor wat packetverlies
 
+# De toets die de dev-console opent is de fysieke toets links van de 1.
+# Die heeft per layout een andere keycode: op US-layout geeft hij `, op
+# AZERTY-BE een ² en op DQWERTZ een ^. Alleen naar event.key kijken zou de
+# console dus alleen op een Amerikaans toetsenbord laten openen - op elk
+# toetsenbord hier in huis nooit. Daarom ook naar het teken kijken dat die
+# ene toets produceert; dat tekent verschilt per layout, de plek niet.
+CONSOLE_TEKENS = ("`", "~", "²", "³", "^", "°")
+
+
+def opent_de_console(event):
+    """Is dit event de toets links van de 1?"""
+    if event.type != pygame.KEYDOWN:
+        return False
+    if event.key == pygame.K_BACKQUOTE:
+        return True
+    return getattr(event, "unicode", "") in CONSOLE_TEKENS
 
 
 class Game:
@@ -495,7 +511,7 @@ class Game:
 
             if self.state == "game":
                 if event.type == pygame.KEYDOWN: #Switch guns
-                    if event.key == pygame.K_BACKQUOTE:
+                    if opent_de_console(event):
                         self._console_open = not self._console_open
                         if self._console_open:
                             pygame.mouse.set_visible(True)
