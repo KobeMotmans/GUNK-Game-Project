@@ -13,7 +13,7 @@ from math import atan2, cos, sin, tan, pi, hypot
 from src.core import config as cfg
 from src.core.config import (START_AMMO, AMMO_CAP, MAP_PATH, START_ANGLES, HEALTH_CHANCE, MAX_LEVEL, MAX_DEPTH,
                     set_resolution, ELEVATOR_WAIT_DIST, START_HEALTH, TILE_SIZE, PROJ_DIST, MAX_PLAYERS,
-                    gamemode as gm_cfg, GAMEMODES, DEFAULT_GAMEMODE)
+                    gamemode as gm_cfg, GAMEMODES, DEFAULT_GAMEMODE, kaart_voor)
 from src.core.paths import resolve_asset, load_font, init_packs
 from src.core.theme import theme
 from src.core.raycaster import dda
@@ -83,8 +83,13 @@ class Game:
             # van sturen; dit vertelt het en verandert verder niets.
             self.bilal.say("Geen geluidsuitgang gevonden - het spel speelt verder zonder geluid.", 400)
 
+        # Gamemode. Al hier en niet pas honderd regels lager: de speler
+        # wordt hieronder met de start-hoek van de actieve mode neergezet.
+        self.gamemode = DEFAULT_GAMEMODE  # sleutel uit config.GAMEMODES
+
         # Init speler
-        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[0])
+        _, start_angle = kaart_voor(self.gamemode, 0)
+        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=start_angle)
         self.global_health = START_HEALTH
         self.global_ammo = START_AMMO
 
@@ -159,7 +164,11 @@ class Game:
         self.remote_players = []
         self._remote_tracks = {}
         self.host_pid = -1
-        self.lobby_options = {"shared_health": True, "shared_ammo": True}
+        # "gamemode" staat erbij al is het geen schakelaar: het is de mode
+        # waarmee de server speelt, en de client volgt die zodat ze
+        # allebei dezelfde kaart te zien krijgen.
+        self.lobby_options = {"shared_health": True, "shared_ammo": True,
+                              "gamemode": DEFAULT_GAMEMODE}
         self.is_host = False
         self.objects = {}
         self.projectiles = []
@@ -178,8 +187,6 @@ class Game:
         self._spectate_name = ""
         self._spectate_info = {}
 
-        # Gamemode / run
-        self.gamemode = DEFAULT_GAMEMODE  # sleutel uit config.GAMEMODES
         # Speedrun / run timing
         self.run_timer_active = False
         self.run_start_ms = 0
@@ -461,10 +468,13 @@ class Game:
     def create_enemies(self):
         """Maak een lijst van test vijanden"""
         enemies = []
-        for enemy_pos in M.SPAWNS["enemies"]:
-            randomnumber = random.randint(0,2)
-            random_enemy =  self.possible_enemies[randomnumber]
-            enemies.append(random_enemy(enemy_pos[0], enemy_pos[1]))
+        # Sommige modes brengen hun vijanden via de stroom; die mogen er
+        # dan niet meteen al een rijtje bij de start staan hebben.
+        if self.gm("spawn_enemies_at_start", True):
+            for enemy_pos in M.SPAWNS["enemies"]:
+                randomnumber = random.randint(0,2)
+                random_enemy =  self.possible_enemies[randomnumber]
+                enemies.append(random_enemy(enemy_pos[0], enemy_pos[1]))
         if "final_boss" in M.SPAWNS:
             boss_pos = M.SPAWNS["final_boss"]
             boss = FinalBoss(boss_pos[0], boss_pos[1])
@@ -473,8 +483,13 @@ class Game:
         return enemies
 
     def create_objects(self):
+        # Zonder lift geen uitgang. Zonder groene tegel blijft
+        # spawns["end_point"] op (0,0), dus zou er een lift in de hoek van
+        # de kaart staan die niets doet - en waar de speler niet in kan.
         objects = {
-            "exit": PickupObject("objects/exit", M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1]),
+            "exit": (PickupObject("objects/exit", M.SPAWNS["end_point"][0],
+                                  M.SPAWNS["end_point"][1])
+                     if self.gm("uses_elevator", True) else None),
             "enemies": self.create_enemies(),
             "ammo": [],
             "keycard": [],
@@ -482,6 +497,11 @@ class Game:
         }
         for ammo_pos in M.SPAWNS["ammo"]:
             objects["ammo"].append(PickupObject("objects/ammo", ammo_pos[0], ammo_pos[1]))
+        # Oranje tegels uit de kaart zelf. De campaign-plaatsing van health
+        # is een drop van dode vijanden en blijft daarnaast gewoon lopen;
+        # een kaart zonder H-tegel levert dus een lege lijst op.
+        for health_pos in M.SPAWNS["health"]:
+            objects["health"].append(PickupObject("objects/health", health_pos[0], health_pos[1]))
         if M.SPAWNS["keycard"]:
             keycard_pos = M.SPAWNS["keycard"][random.randint(0, len( M.SPAWNS["keycard"])-1)]
             objects["keycard"].append(PickupObject("objects/keycard", keycard_pos[0], keycard_pos[1]))
@@ -677,10 +697,11 @@ class Game:
                     num = -1
                 if 0 <= num <= 4:
                     M.map_level = num
-                    M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[num])
+                    kaart, hoek = kaart_voor(self.gamemode, num)
+                    M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(kaart)
                     self.map = M.MAP
                     self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
-                    self.player.angle = START_ANGLES[M.map_level]
+                    self.player.angle = hoek
                     self.objects = self.create_objects()
                     self._say(f"level {num}")
                 else:
@@ -688,16 +709,20 @@ class Game:
             elif c.startswith(("gamemode", "mode")):
                 parts = c.split()
                 m = parts[1] if len(parts) > 1 else ""
-                if m in GAMEMODES:
-                    self.gamemode = m
-                    # Startwaarden van de nieuwe mode meteen toepassen, anders
-                    # draai je verder met de stats van de vorige mode.
-                    self.global_health = self.gm("start_health")
-                    self.global_ammo = self.gm("start_ammo")
-                    self._say(f"gamemode = {m}")
-                else:
+                if m not in GAMEMODES:
                     self._say(f"onbekende mode '{m}'. beschikbaar: "
                               + ", ".join(GAMEMODES))
+                elif self.multiplayer:
+                    # De server bepaalt de mode en die zit in lobby_options.
+                    # Alleen de eigen teller omzetten zou betekenen dat wij
+                    # een andere kaart laden dan de server stuurt.
+                    self._say("in multiplayer bepaalt de server de mode")
+                else:
+                    # Opnieuw starten, niet alleen de stats omdraaien: de
+                    # mode bepaalt nu ook welke kaart er ligt en of er een
+                    # uitgang is, en die twee horen bij dezelfde run.
+                    self.reset_game(gamemode=m)
+                    self._say(f"gamemode = {m}")
             elif c in ("win", "escape", "victory"):
                 self.escaped = True
             elif c in ("killall", "noenemies"):
@@ -1059,14 +1084,15 @@ class Game:
         self.current_gun = self.pistol
         self.unlocked_guns = [self.pistol]
         self.player.score = 0
-        M.MAP, M.SPAWNS, M.width, M.height  = png_to_list_fast(MAP_PATH[M.map_level])
+        kaart, hoek = kaart_voor(self.gamemode, M.map_level)
+        M.MAP, M.SPAWNS, M.width, M.height  = png_to_list_fast(kaart)
         self.map = M.MAP
-        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[M.map_level])
+        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=hoek)
         pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
         pygame.mouse.get_rel()
         self.global_health = self.gm("start_health", START_HEALTH)
         self.global_ammo = self.gm("start_ammo", START_AMMO)
-        M.start_angle = START_ANGLES[M.map_level]
+        M.start_angle = hoek
         self.objects = self.create_objects()
         self.projectiles = []
         self.elevator_waiting = False
@@ -1108,11 +1134,12 @@ class Game:
             self.bilal.trigger("floor_1")
         elif M.map_level == 4:
             self.bilal.trigger("floor_0")
-        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[M.map_level])
+        kaart, hoek = kaart_voor(self.gamemode, M.map_level)
+        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(kaart)
         self.map = M.MAP
         self.player.pos = Vector(M.SPAWNS["player"][0], M.SPAWNS["player"][1])
         self.player.got_keycard = False
-        self.player.angle = START_ANGLES[M.map_level]
+        self.player.angle = hoek
         pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
         pygame.mouse.get_rel()
         self.objects = self.create_objects()
@@ -1140,14 +1167,21 @@ class Game:
         if self.network_client:
             self.network_client.send({"type": "join_game"})
 
-    def _start_multiplayer_client(self, level=0):
+    def _start_multiplayer_client(self, level=0, gamemode=None):
+        # De mode komt uit het game_start-pakket en moet vóór het laden
+        # toegepast zijn: anders kiest de client de campaignkaart terwijl
+        # de server op survival staat, en dat zie je pas als er een muur
+        # staat die de ander niet heeft.
+        if gamemode in GAMEMODES:
+            self.gamemode = gamemode
         M.map_level = level
-        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[level])
-        M.start_angle = START_ANGLES[M.map_level]
+        kaart, hoek = kaart_voor(self.gamemode, level)
+        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(kaart)
+        M.start_angle = hoek
         # Hier laadt de client zelf een level. Onze eigen teller moet mee,
         # anders denkt apply_state dat level 0 nog nooit geladen is.
         self._client_loaded_level = level
-        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[level])
+        self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=hoek)
         preload_textures(self._get_all_texture_paths())
         pygame.mouse.set_pos(cfg.WIDTH // 2, cfg.HEIGHT // 2)
         pygame.mouse.get_rel()
@@ -1480,6 +1514,20 @@ class Game:
                     break
             sprite.pos = pos
 
+    def _neem_lobby_options(self, opts):
+        """Lobby-opties toepassen.
+
+        De gamemode hoort erbij, al is het geen schakelaar: die bepaalt
+        welke kaart er geladen wordt. Zou de client hem niet overnemen,
+        dan draait de server op survival terwijl de client de campaign-
+        kaart tekent - en dat merk je pas als er een muur staat die de
+        ander niet heeft.
+        """
+        self.lobby_options = dict(opts)
+        modenaam = self.lobby_options.get("gamemode", DEFAULT_GAMEMODE)
+        if modenaam in GAMEMODES:
+            self.gamemode = modenaam
+
     def apply_state(self, state):
         if not state:
             return
@@ -1487,7 +1535,7 @@ class Game:
         # 0. Lobby options (from server state during game)
         opts = state.get("lobby_options")
         if opts:
-            self.lobby_options = opts
+            self._neem_lobby_options(opts)
 
         # 1. Overwrite shared resources from server (absolute values)
         players_data = state.get("players", [])
@@ -1601,9 +1649,10 @@ class Game:
                 if self.boss_music:
                     self.boss_music.stop()
             M.map_level = new_level
-            M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[new_level])
+            kaart, hoek = kaart_voor(self.gamemode, new_level)
+            M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(kaart)
             self.map = M.MAP
-            M.start_angle = START_ANGLES[new_level]
+            M.start_angle = hoek
             # NIET hier de speler neerzetten. De hele levelovergang komt in
             # een eigen blok hieronder, dat niet op M.map_level steunt.
             if M.map_level == 1:
@@ -1679,7 +1728,8 @@ class Game:
             if ptype == "state":
                 newest_state = packet
             elif ptype == "game_start":
-                self._start_multiplayer_client(packet.get("level", 0))
+                self._start_multiplayer_client(packet.get("level", 0),
+                                               packet.get("gamemode"))
                 newest_state = None
             elif ptype in ("server_stopped", "disconnect", "server_full"):
                 self._disconnect(next_state="multiplayer_menu")
@@ -1729,13 +1779,14 @@ class Game:
                                 self.Menu.host_pid = new_host
                             opts = packet.get("lobby_options")
                             if opts:
-                                self.lobby_options = opts
+                                self._neem_lobby_options(opts)
                                 self.Menu.lobby_options = dict(opts)
 
                         elif ptype == "pong":
                             pass
                         elif ptype == "game_start":
-                            self._start_multiplayer_client(packet.get("level", 0))
+                            self._start_multiplayer_client(packet.get("level", 0),
+                                                           packet.get("gamemode"))
                         elif ptype == "server_stopped":
                             self._disconnect()
                         elif ptype == "server_full":

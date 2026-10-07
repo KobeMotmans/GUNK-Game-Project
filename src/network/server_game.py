@@ -13,7 +13,8 @@ from ..core.config import (AGGRO_DIST, ATTACK_DIST, TILE_SIZE, PATHFIND_INTERVAL
                     START_AMMO, AMMO_CAP, HEALTH_CHANCE, MAP_PATH,
                     START_ANGLES, ELEVATOR_WAIT_DIST, MAX_LEVEL,
                     ELEVATOR_WAIT_FRAMES, ELEVATOR_STUCK_FRAMES,
-                    gamemode as gm_cfg, DEFAULT_GAMEMODE, drop as drop_data)
+                    gamemode as gm_cfg, GAMEMODES, DEFAULT_GAMEMODE,
+                    drop as drop_data, kaart_voor)
 from ..core.logger import log as _log
 from ..entities.enemy_ai import EnemyAI
 
@@ -125,14 +126,18 @@ class ServerGame:
     def _setup_level(self):
         from ..core.map_loader import png_to_list_fast
         M.map_level = self.level
-        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(MAP_PATH[self.level])
-        M.start_angle = START_ANGLES[self.level]
+        kaart, hoek = kaart_voor(self.gamemode, self.level)
+        M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(kaart)
+        M.start_angle = hoek
 
         self.enemies = []
-        for epos in M.SPAWNS["enemies"]:
-            tn = random.choice(["normal_enemy", "fast_enemy", "tank_enemy"])
-            t = ENEMY_TYPES[tn]
-            self.enemies.append(ServerEnemy(tn, epos[0], epos[1], t["health"], t["damage"], t["speed"]))
+        # De stroom kan de vijanden brengen; dan mag de kaart er niet
+        # meteen al een rijtje neerzetten.
+        if self.gm("spawn_enemies_at_start", True):
+            for epos in M.SPAWNS["enemies"]:
+                tn = random.choice(["normal_enemy", "fast_enemy", "tank_enemy"])
+                t = ENEMY_TYPES[tn]
+                self.enemies.append(ServerEnemy(tn, epos[0], epos[1], t["health"], t["damage"], t["speed"]))
         if "final_boss" in M.SPAWNS:
             boss_pos = M.SPAWNS["final_boss"]
             t = ENEMY_TYPES["final_boss"]
@@ -142,11 +147,25 @@ class ServerGame:
         for apos in M.SPAWNS["ammo"]:
             self.objects["ammo"].append({"pos": (apos[0], apos[1]),
                                          "amount": self._drop_amount("ammo")})
+        # Oranje tegels uit de kaart. In precies dezelfde vorm als een drop
+        # van een dode vijand, zodat de client ze niet anders hoeft te
+        # behandelen. Een kaart zonder H geeft een lege lijst.
+        for hpos in M.SPAWNS["health"]:
+            self.objects["health"].append({"pos": (hpos[0], hpos[1]),
+                                           "amount": self._drop_amount("health")})
         if M.SPAWNS["keycard"]:
             kpos = random.choice(M.SPAWNS["keycard"])
             self.objects["keycard"].append({"pos": (kpos[0], kpos[1])})
-        self.objects["exit"] = {"pos": (M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1])}
-        self.exit_pos = Vector(M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1])
+        # Zonder lift geen uitgang. Zonder groene tegel blijft
+        # spawns["end_point"] op (0,0), en dan staat er een lift die niets
+        # doet en waar niemand in kan. exit_pos=None wordt overal hieronder
+        # al afgevinkt (elevator-tick, get_state), dus dat is veilig.
+        if self.gm("uses_elevator", True):
+            self.objects["exit"] = {"pos": (M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1])}
+            self.exit_pos = Vector(M.SPAWNS["end_point"][0], M.SPAWNS["end_point"][1])
+        else:
+            self.objects["exit"] = None
+            self.exit_pos = None
 
         spawn = M.SPAWNS["player"]
         perp = M.start_angle - pi / 2
@@ -191,6 +210,15 @@ class ServerGame:
     def set_shared_options(self, options):
         self.shared_health = options.get("shared_health", True)
         self.shared_ammo = options.get("shared_ammo", True)
+        # De mode hoort hierbij, al is het geen schakelaar. De aanroepers
+        # doen dit vlak vóór init_world(), dus wat hier staat is de mode
+        # waarmee de wereld wordt opgezet - inclusief de kaart die
+        # _setup_level() erbij zoekt. Een onbekende naam negeren we en
+        # houden we de huidige aan: liever de mode die al liep dan een
+        # lege kaart.
+        modenaam = options.get("gamemode", self.gamemode)
+        if modenaam in GAMEMODES:
+            self.gamemode = modenaam
 
     def register_player(self, pid, name, skin_id=0):
         self.players[pid] = {

@@ -3098,6 +3098,342 @@ def console_opent_op_elk_toetsenbord():
           f"geen 'CONSOLE OK' in de uitvoer:\n{proc.stdout[-500:]}")
 
 
+# ── survival: generator en koppeling ────────────────────────────
+# Twee dingen die niet vanzelfsprekend samenblijven:
+#
+# 1. De kaartbron. De ASCII staat in SURVIVAL.md met uitleg erbij en in
+#    tools/gen_survival_map.py als eigenlijke bron. Zou de eerste
+#    veranderen zonder de tweede, dan toont het document een grondplan
+#    dat niet gespeeld wordt - precies de stille fout die hier eerder
+#    al met game.spec gebeurde.
+# 2. Het game_start-pakket. protocol.KEY_TO_ID mist een sleutel en de
+#    encoder schrijft dan 255, en dat is de TERMINATOR: de decoder stopt
+#    midden in het pakket en "gamemode" komt nooit aan. Dat valt niet
+#    op tot iemand een andere kaart laadt dan de server stuurt.
+
+SURVIVAL_DRIVER = r'''
+import os, sys, subprocess, importlib.util
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import pygame
+import game
+from src.core.map_loader import M, is_in_wall, png_to_list_fast
+from src.core.vector import Vector
+from src.core.config import kaart_voor, MAP_PATH, START_ANGLES, GAMEMODES
+from src.network.protocol import encode_packet, decode_packet, KEY_TO_ID
+
+fouten = []
+
+
+def check(voorwaarde, bericht):
+    if not voorwaarde:
+        fouten.append(bericht)
+
+
+# ── 1. De generator draait en levert een speelbare kaart ────────
+proc = subprocess.run([sys.executable, os.path.join("tools",
+                                                    "gen_survival_map.py")],
+                      capture_output=True, text=True, timeout=300)
+check(proc.returncode == 0,
+      "de generator weigerde de kaart:\n" + (proc.stdout + proc.stderr))
+check("alle validaties gehaald" in proc.stdout,
+      "geen validatiemelding: " + proc.stdout)
+
+pad, _ = kaart_voor("survival", 0)
+check(os.path.exists(pad), f"de survival-kaart bestaat niet: {pad}")
+if os.path.exists(pad):
+    lijst, spawns, w, h = png_to_list_fast(pad)
+    check((w, h) == (32, 32), f"kaart is {w}x{h} in plaats van 32x32")
+    check(len(spawns["enemies"]) == 20,
+          f"{len(spawns['enemies'])} vijandspawns in plaats van 20")
+    check(len(spawns["health"]) == 6,
+          f"{len(spawns['health'])} health-tegels in plaats van 6")
+    check(len(spawns["ammo"]) == 8,
+          f"{len(spawns['ammo'])} ammo-tegels in plaats van 8")
+    check(not spawns.get("keycard"), "survival heeft geen keycard nodig")
+
+# ── 2. Het document toont dezelfde kaart ────────────────────────
+spec = importlib.util.spec_from_file_location(
+    "gen_survival", os.path.join(ROOT, "tools", "gen_survival_map.py"))
+gen = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gen)
+
+dossier = open(os.path.join(ROOT, "SURVIVAL.md"), encoding="utf-8").read()
+gevonden = None
+for blok in dossier.split("```"):
+    regels = [l for l in blok.splitlines() if l.strip()]
+    if regels and len(regels) == 32 and set(regels[0]) == {"#"}:
+        gevonden = regels
+        break
+check(gevonden is not None,
+      "geen 32x32-grondplanblok in SURVIVAL.md gevonden")
+if gevonden is not None:
+    check(gevonden == gen.lees_grondplan(),
+          "de kaart in SURVIVAL.md verschilt van die in "
+          "tools/gen_survival_map.py")
+
+# ── 3. De validaties werken echt ────────────────────────────────
+# Een gebroken plan moet geweigerd worden, niet netjes weggeschreven.
+kapot = list(gen.lees_grondplan())
+kapot[0] = "." * 32
+fout = gen.valideer(kapot)
+check(any("bovenrand" in f for f in fout),
+      f"gat in de bovenrand werd niet gemeld: {fout}")
+
+kapot = list(gen.lees_grondplan())
+rij = next(i for i, r in enumerate(kapot) if "@" in r)
+kapot[rij] = kapot[rij].replace("@", ".", 1)
+fout = gen.valideer(kapot)
+check(any("spelerspawns" in f for f in fout),
+      f"ontbrekende spawn werd niet gemeld: {fout}")
+
+kapot = list(gen.lees_grondplan())
+for y in range(1, 31):
+    kapot[y] = "#" * 32
+fout = gen.valideer(kapot)
+check(bool(fout), "een dichtgemetselde kaart werd niet gemeld")
+
+# ── 4. Het game_start-pakket draagt de mode echt over ───────────
+check("gamemode" in KEY_TO_ID,
+      "protocol.KEY_TO_ID mist 'gamemode': de encoder schrijft dan 255, "
+      "en dat is de TERMINATOR, dus het pakket wordt middenin afgebroken")
+
+for mode in GAMEMODES:
+    terug = decode_packet(encode_packet(
+        {"type": "game_start", "level": 0, "gamemode": mode}))
+    check(terug is not None and terug.get("gamemode") == mode,
+          f"gamemode {mode!r} overleeft het pakket niet: {terug}")
+    check(terug is not None and terug.get("level") == 0,
+          f"'level' komt na 'gamemode' niet meer terug: {terug}")
+
+# ── 5. survival en de campaign, naast elkaar ────────────────────
+g = game.Game()
+
+g.reset_game(gamemode="campaign")
+camp_exit = g.objects["exit"] is not None
+camp_vijanden = len(g.objects["enemies"])
+camp_health = g.global_health
+check(camp_exit, "campaign heeft geen uitgang")
+check(camp_vijanden > 0, "campaign heeft geen vijanden")
+check(camp_health == 10, f"campaign start_health {camp_health} in plaats van 10")
+for lvl in range(len(MAP_PATH)):
+    check(kaart_voor("campaign", lvl) == (MAP_PATH[lvl], START_ANGLES[lvl]),
+          f"campaign level {lvl} wijkt af van MAP_PATH/START_ANGLES")
+
+g.reset_game(gamemode="survival")
+check(g.gamemode == "survival", f"gamemode niet gezet: {g.gamemode}")
+check(len(M.MAP) == 32, f"survival-kaart is {len(M.MAP)} rijen")
+check(g.global_health == 100, f"survival start_health {g.global_health}")
+check(g.global_ammo == 300, f"survival start_ammo {g.global_ammo}")
+check(g.objects["exit"] is None,
+      "survival heeft een uitgang terwijl uses_elevator False is: die zou "
+      "op (0,0), buiten beeld of in een muur staan")
+check(len(g.objects["enemies"]) == 0,
+      f"survival zette {len(g.objects['enemies'])} vijanden neer terwijl "
+      f"spawn_enemies_at_start False is")
+check(len(g.objects["health"]) == 6,
+      f"{len(g.objects['health'])} health-objects in plaats van 6")
+check(len(g.objects["ammo"]) == 8,
+      f"{len(g.objects['ammo'])} ammo-objects in plaats van 8")
+check(abs(g.player.angle - START_ANGLES[0]) < 1e-6,
+      f"survival start op hoek {g.player.angle} in plaats van -pi/2")
+
+sx = g.player.pos.x / 64
+sy = g.player.pos.y / 64
+check(is_in_wall(Vector(sx, sy)) is False,
+      f"de speler staat in een muur op ({sx:.1f}, {sy:.1f})")
+
+# Het levelnummer mag er voor survival niet toe doen: er is er maar één.
+check(kaart_voor("survival", 0) == kaart_voor("survival", 4),
+      "survival hangt wel van het levelnummer af")
+# En een onbekende naam valt terug zoals gamemode() dat al doet.
+check(kaart_voor("bestaat_niet", 2) == (MAP_PATH[2], START_ANGLES[2]),
+      "een onbekende mode valt niet terug op de campaign")
+
+# ── 6. De campaign blijft zoals hij was ─────────────────────────
+g.reset_game(gamemode="campaign")
+check((g.objects["exit"] is not None) == camp_exit,
+      "campaign heeft na survival geen uitgang meer")
+check(len(g.objects["enemies"]) == camp_vijanden,
+      "campaign heeft na survival andere vijanden")
+check(g.global_health == camp_health,
+      f"campaign health na survival: {g.global_health}")
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("SURVIVAL OK")
+'''
+
+
+@test
+def survival_generator_en_koppeling():
+    """De survival-kaart klopt met het dossier en de mode laadt hem."""
+    path = os.path.join(TEMP_DIR, "gunk_survival_driver.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(SURVIVAL_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de survivaltest liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de survivaltest gaf fouten:\n" + "\n".join(tail[-30:]))
+        return
+    check("SURVIVAL OK" in proc.stdout,
+          f"geen 'SURVIVAL OK' in de uitvoer:\n{proc.stdout[-800:]}")
+
+
+# ── survival in multiplayer ─────────────────────────────────────
+# Los van de vorige test, want dit kan kapot gaan zonder dat de solo-proef
+# het merkt: de server zet de mode via set_shared_options, en _setup_level
+# leest hem pas ná de kaartselectie. Doet hij dat verkeerd, dan draait de
+# server op survival terwijl er een campaignkaart ligt - en dat valt pas op
+# als iemand tegen een muur aanloopt die de ander niet heeft.
+
+SURVIVAL_MP_DRIVER = r'''
+import os, sys
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import pygame
+import game
+from src.core.map_loader import M
+from src.network.server_game import ServerGame
+from src.network.network import ServerIO
+from src.network.protocol import decode_packet
+
+fouten = []
+
+
+def check(voorwaarde, bericht):
+    if not voorwaarde:
+        fouten.append(bericht)
+
+
+# ── server ─────────────────────────────────────────────────────
+sg = ServerGame()
+sg.register_player(0, "host")
+opties = {"gamemode": "survival", "shared_health": True, "shared_ammo": True}
+sg.set_shared_options(opties)
+check(sg.gamemode == "survival", f"set_shared_options zette {sg.gamemode!r}")
+sg.init_world()
+
+check(len(M.MAP) == 32, f"server draait op een kaart van {len(M.MAP)} rijen")
+check(sg.objects.get("exit") is None,
+      "server heeft een uitgang terwijl uses_elevator False is")
+check(sg.exit_pos is None, f"server exit_pos is {sg.exit_pos}")
+check(len(sg.enemies) == 0,
+      f"server zette {len(sg.enemies)} vijanden neer terwijl "
+      f"spawn_enemies_at_start False is")
+check(len(sg.objects["health"]) == 6,
+      f"server heeft {len(sg.objects['health'])} health-objects in plaats "
+      f"van 6 uit de kaart")
+check(len(sg.objects["ammo"]) == 8,
+      f"server heeft {len(sg.objects['ammo'])} ammo-objects in plaats van 8")
+
+# De elevator-tick mag hier niet op crashen nu exit_pos None is.
+try:
+    for _ in range(30):
+        sg.process_input(0, {"type": "input", "seq": 0, "keys": {}})
+except Exception as e:
+    fouten.append(f"elevator-tick crasht met exit_pos=None: "
+                  f"{type(e).__name__}: {e}")
+
+# En de client mag geen lift op (0,0) aangeboden krijgen.
+state = sg.get_state()
+check(state.get("exit_pos") is None,
+      f"get_state meldt exit_pos={state.get('exit_pos')} terwijl er geen "
+      f"lift is; (0,0) zou de client in de hoek van de kaart sturen")
+
+# ── het game_start-pakket ──────────────────────────────────────
+# Zonder socket: dit pad leest alleen lobby_options.
+ns = ServerIO.__new__(ServerIO)
+ns.lobby_options = dict(opties)
+ns.server_game = sg
+terug = decode_packet(ns._game_start_packet(0))
+check(terug is not None, "decode_packet gaf niets terug voor game_start")
+check(terug is not None and terug.get("gamemode") == "survival",
+      f"het pakket draagt gamemode={terug.get('gamemode')!r}; dan laadt de "
+      f"client de campaignkaart")
+check(terug is not None and terug.get("level") == 0,
+      f"het pakket draagt level={terug.get('level')!r}")
+
+# Ook zonder 'gamemode' in lobby_options moet er een naam in het pakket
+# komen, anders valt de client terug op de default terwijl de server
+# survival draait.
+ns.lobby_options = {"shared_health": True, "shared_ammo": True}
+zonder = decode_packet(ns._game_start_packet(0))
+check(zonder is not None and zonder.get("gamemode"),
+      f"zonder 'gamemode' in lobby_options komt er geen mode aan: {zonder}")
+
+# ── client ─────────────────────────────────────────────────────
+g = game.Game()
+g.gamemode = "campaign"          # alsof hij daarvoor gespeeld had
+g._start_multiplayer_client(terug["level"], terug.get("gamemode"))
+
+check(g.gamemode == "survival",
+      f"de client past de mode niet toe: {g.gamemode!r}")
+check(len(M.MAP) == 32,
+      f"de client laadt een kaart van {len(M.MAP)} rijen in plaats van 32")
+check(g.objects.get("exit") is None,
+      f"de client tekent een uitgang: {g.objects.get('exit')}")
+check(len(g.objects["enemies"]) == 0,
+      f"de client zet {len(g.objects['enemies'])} vijanden neer")
+check(g._client_loaded_level == terug["level"],
+      f"_client_loaded_level is {g._client_loaded_level}, "
+      f"server stuurt {terug['level']}")
+
+# Een game_start zonder mode (oudere server, of een bondigere variant)
+# mag de mode van de client niet stil overschrijven.
+g.gamemode = "survival"
+g._start_multiplayer_client(0, None)
+check(g.gamemode == "survival",
+      f"een game_start zonder gamemode zette de mode om naar {g.gamemode!r}")
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("SURVIVAL-MP OK")
+'''
+
+
+@test
+def survival_werkt_in_multiplayer():
+    """De server, het game_start-pakket en de cliënt spreken dezelfde taal."""
+    path = os.path.join(TEMP_DIR, "gunk_survival_mp_driver.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(SURVIVAL_MP_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de survival-MP-test liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de survival-MP-test gaf fouten:\n"
+                     + "\n".join(tail[-30:]))
+        return
+    check("SURVIVAL-MP OK" in proc.stdout,
+          f"geen 'SURVIVAL-MP OK' in de uitvoer:\n{proc.stdout[-800:]}")
+
+
 # ── runner ─────────────────────────────────────────────────────
 
 def main():

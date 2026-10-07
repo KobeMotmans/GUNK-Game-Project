@@ -22,6 +22,12 @@ KEY_TO_ID = {
     # zou de encoder 255 schrijven, en dat is de TERMINATOR: de decoder
     # stopt dan midden in het pakket.
     "chunks": 62,
+    # De gamemode hoort in game_start. De client moet vóór het laden van de
+    # kaart weten welke mode er speelt, en erop vertrouwen dat er eerder een
+    # lobby_info met de opties is aangekomen is erop vertrouwen dat UDP die
+    # volgorde houdt. Dezelfde reden als hierboven: dit nummer moet in deze
+    # tabel staan, anders verdwijnt de waarde midden in het pakket.
+    "gamemode": 63,
 }
 
 ID_TO_KEY = {v: k for k, v in KEY_TO_ID.items()}

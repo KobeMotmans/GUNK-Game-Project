@@ -16,6 +16,7 @@ import pygame
 
 from .protocol import encode_packet, decode_packet
 from ..core.logger import log as _log
+from ..core.config import GAMEMODES, DEFAULT_GAMEMODE
 
 # Maximale grootte van één UDP-datagram naar de client. Ruim onder de
 # 1500-byte MTU blijven zodat de router niets hoeft te fragmenteren: één
@@ -117,7 +118,14 @@ class ServerIO(threading.Thread):
         self.host_pid = -1
 
         # Lobby options (host can toggle these)
-        self.lobby_options = {"shared_health": True, "shared_ammo": True}
+        #
+        # "gamemode" hoort erbij, ook al is het geen schakelaar: die bepaalt
+        # welke kaart de server laadt. Zou de client hem niet delen, dan
+        # draait de server op survival terwijl de client de campaignkaart
+        # tekent - en dat merk je pas als er een muur staat die de ander
+        # niet ziet.
+        self.lobby_options = {"shared_health": True, "shared_ammo": True,
+                              "gamemode": DEFAULT_GAMEMODE}
 
         # Server-side skin management
         self.skin_manifest = []
@@ -382,10 +390,7 @@ class ServerIO(threading.Thread):
                     _log(f"start_game genegeerd voor pid {pid} (host is {self.host_pid})")
                     continue
                 if self.server_game.initialized:
-                    game_start_packet = encode_packet({
-                        "type": "game_start",
-                        "level": self.server_game.level
-                    })
+                    game_start_packet = self._game_start_packet(self.server_game.level)
                     for _ in range(3):
                         try:
                             self.udp_socket.sendto(game_start_packet, addr)
@@ -395,7 +400,7 @@ class ServerIO(threading.Thread):
                     self.countdown = 0
                     self.server_game.set_shared_options(self.lobby_options)
                     self.server_game.init_world()
-                    game_start_packet = encode_packet({"type": "game_start", "level": 0})
+                    game_start_packet = self._game_start_packet(0)
                     with self.clients_lock:
                         for c_addr, _, _ in self.clients:
                             for _ in range(3):
@@ -456,6 +461,10 @@ class ServerIO(threading.Thread):
                 direct_resp = {"type": "lobby_info", "players": players}
                 if self.server_game.initialized:
                     direct_resp["game_active"] = True
+                # Zelfde opties als in _broadcast_lobby(). Zonder dit ziet
+                # de net binnengekomen client even de standaardwaarden en
+                # zou hij de lobby tonen met de verkeerde modus.
+                direct_resp["lobby_options"] = self.lobby_options
                 try:
                     self.udp_socket.sendto(encode_packet(direct_resp), addr)
                 except OSError:
@@ -476,10 +485,7 @@ class ServerIO(threading.Thread):
                     if spawn and pid in self.server_game.players:
                         self.server_game.players[pid]["pos"] = spawn
                         self.server_game.players[pid]["state"] = "game"
-                    game_start_packet = encode_packet({
-                        "type": "game_start",
-                        "level": self.server_game.level
-                    })
+                    game_start_packet = self._game_start_packet(self.server_game.level)
                     for _ in range(5):
                         try:
                             self.udp_socket.sendto(game_start_packet, addr)
@@ -494,7 +500,12 @@ class ServerIO(threading.Thread):
                 if pid == self.host_pid:
                     key = packet.get("option_key", "")
                     value = packet.get("option_value")
-                    if key in ("shared_health", "shared_ammo") and isinstance(value, bool):
+                    # Een onbekende modenaam mag er niet door: die zou de
+                    # server op een lege kaart zetten.
+                    geldig = ((key in ("shared_health", "shared_ammo")
+                               and isinstance(value, bool))
+                              or (key == "gamemode" and value in GAMEMODES))
+                    if geldig:
                         self.lobby_options[key] = value
                         self.server_game.set_shared_options(self.lobby_options)
                         self._broadcast_lobby()
@@ -608,8 +619,22 @@ class ServerIO(threading.Thread):
                 except Exception as e:
                     _log(f"[SERVER] ERROR in countdown init: {e}")
 
+    def _game_start_packet(self, level=0):
+        """game_start, mét de gamemode erbij.
+
+        De client laadt zijn kaart op dit pakket. De mode moet er dus in
+        zitten en niet uit een eerder lobby_info-pakket komen: dit is UDP,
+        en op volgorde rekenen is hier het verschil tussen de goede kaart
+        en een campaign-kaart die er toevallig ook is.
+        """
+        return encode_packet({
+            "type": "game_start",
+            "level": level,
+            "gamemode": self.lobby_options.get("gamemode", DEFAULT_GAMEMODE),
+        })
+
     def _broadcast_game_start(self):
-        game_start_packet = encode_packet({"type": "game_start", "level": self.server_game.level})
+        game_start_packet = self._game_start_packet(self.server_game.level)
         with self.clients_lock:
             for c_addr, _, _ in self.clients:
                 for _ in range(3):

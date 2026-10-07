@@ -14,7 +14,16 @@ GUNK.zip
 # bouwde iedereen op een eigen, ongeziene spec. Juist daardoor bleef een fout
 # in de opbouw ongemerkt. game.spec is handgeschreven en drijft de hele build,
 # dus die moet wél mee.
-/tools/
+# Binaire rommel zoals upx.exe hoort hier niet in de repo.
+#
+# Let op de vorm: niet `/tools/` maar `/tools/*`. Een genegeerde map wordt
+# door git helemaal niet binnengekeken, waardoor een `!`-regel er géén
+# bestand meer uit kan halen - zou de survival-kaartbron erin verdwijnen,
+# zonder dat `git status` ooit iets laat zien. Zelfde valkuil als hierboven
+# bij `*.spec`: de bron wordt onzichtbaar en niemand merkt het.
+# Nu de inhoud negeren, met de bron er expliciet weer bij.
+/tools/*
+!/tools/gen_survival_map.py
 /.opencode
 gunk.log
 settings.json

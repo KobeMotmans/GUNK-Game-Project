@@ -138,6 +138,13 @@ GAMEMODES = {
         "uses_elevator": False,
         "run_timer": False,
         "save_pb": False,
+        # Eén eigen kaart. Daardoor is er geen levelnummer om af te leiden
+        # en ook geen START_ANGLES[level]: pad en hoek komen hier vandaan.
+        # Zie kaart_voor().
+        "map": asset_path("assets/textures/floor/survival.png"),
+        "start_angle": -pi / 2,
+        # De stroom brengt de vijanden; er staat er geen bij de start.
+        "spawn_enemies_at_start": False,
     },
 }
 
@@ -151,6 +158,27 @@ def gamemode(name):
     verouderde naam nooit een KeyError midden in een run veroorzaakt.
     """
     return GAMEMODES.get(name, GAMEMODES[DEFAULT_GAMEMODE])
+
+
+def kaart_voor(mode, level=0):
+    """(kaartpad, start_angle) voor een mode op een level.
+
+    Een mode met een eigen `"map"` bepaalt zelf pad én hoek, en het
+    levelnummer doet er dan niet toe: survival heeft precies één kaart.
+    Zonder eigen kaart tellen MAP_PATH en START_ANGLES gewoon mee, dus
+    de campaign krijgt exact dezelfde twee waarden als hiervoor.
+
+    Alle plekken die een kaart laden vragen hierom in plaats van zelf
+    `MAP_PATH[level]` te nemen. Zou een enkele plek dat wel blijven
+    doen, dan waren er twee waarheden en werkte een mode met eigen kaart
+    op de ene plek wel en op de andere niet - precies het soort tweede
+    waarheid dat de gamemodes-tabellen er juist uit moesten halen.
+    """
+    config = gamemode(mode)
+    pad = config.get("map")
+    if pad is not None:
+        return pad, config.get("start_angle", -pi / 2)
+    return MAP_PATH[level], START_ANGLES[level]
 
 
 # ── Drops ────────────────────────────────────────────────────────────

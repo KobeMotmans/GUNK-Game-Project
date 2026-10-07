@@ -3,7 +3,7 @@ map_loader.py - Laadt en beheert de game map
 """
 
 from PIL import Image
-from .config import TILE_SIZE, MAP_PATH, START_ANGLES, WALL_TEXTURES
+from .config import (TILE_SIZE, WALL_TEXTURES, kaart_voor, DEFAULT_GAMEMODE)
 
 color_to_number = {
     (255, 255, 255): 0, #Open space
@@ -13,7 +13,13 @@ color_to_number = {
     (0, 255, 255): 4, #Player Spawn
     (0, 0, 255): 5, #Keycard
     (255, 255, 0): 6, #Ammo
-    (255, 0, 255): 7 #Final Boss
+    (255, 0, 255): 7, #Final Boss
+    # Health. Oranje, en voor zover bekend nergens anders in gebruik: de
+    # health die in de campaign verschijnt is een drop van een dode vijand
+    # (HEALTH_CHANCE in game.py en server_game.py) en kijkt nooit naar een
+    # kleur. Een kaart zonder H-tegel levert dus een lege lijst op en
+    # verandert verder niets. Zie SURVIVAL.md, openstaande keuze 2.
+    (255, 128, 0): 8, #Health
 }
 
 # ── Wat telt als muur? ──────────────────────────────────────────────
@@ -44,6 +50,9 @@ def png_to_list_fast(path):
         "enemies": [],
         "ammo": [],
         "keycard": [],
+        # Oranje tegels. Staat er geen in de kaart dan blijft de lijst leeg,
+        # en dat is het gewone geval: de campaign zet health willekeurig.
+        "health": [],
         "end_point": (0,0)
     }
     for y in range(h):
@@ -65,6 +74,8 @@ def png_to_list_fast(path):
                 spawns["ammo"].append((x_center,y_center))
             elif number == 7:
                 spawns["final_boss"] = (x_center, y_center)
+            elif number == 8:
+                spawns["health"].append((x_center, y_center))
     return map_list, spawns, w, h
 
 class MapClass:
@@ -74,8 +85,12 @@ class MapClass:
 
     def __init__(self, map_level = 0):
         self.map_level = map_level
-        self.MAP, self.SPAWNS, self.width, self.height = png_to_list_fast(MAP_PATH[self.map_level])
-        self.start_angle = START_ANGLES[self.map_level]
+        # Standaardmodus: dit object wordt één keer bij import aangemaakt,
+        # nog vóór er een mode gekozen is. Elke mode wisselt daarna de kaart
+        # zelf via kaart_voor(); dit is alleen de begintoestand.
+        kaart, hoek = kaart_voor(DEFAULT_GAMEMODE, map_level)
+        self.MAP, self.SPAWNS, self.width, self.height = png_to_list_fast(kaart)
+        self.start_angle = hoek
         
 M = MapClass()
 
