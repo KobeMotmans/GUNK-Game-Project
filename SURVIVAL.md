@@ -261,6 +261,34 @@ De keuze tussen Optie A (gezamenlijk), Optie A (los) en Optie B komt pas
 als de rest werkt. Wat al vastligt: Optie A met gezamenlijke wissel is het
 goedkoopst en bouwt op het bestaande lift-patroon.
 
+### Opmerkingen speler — 2026-10-07
+
+Vier punten die na de analyse boven zijn binnengekomen:
+
+1. **Twee verschillende indelingen.** Geen verdiepingen die elkaars plan
+   herhalen: het moeten echt twee verschillende plattegronden zijn, anders
+   is het "hetzelfde plan twee keer". Dat schrapt de besparing uit de
+   analyse ("ontwerp de muren uitgelijnd, dan zijn beide grids identiek")
+   als aanbeveling — die bleek de goedkoopste route, maar het mag de
+   geloofwaardigheid niet kosten. De gevolgen die daaruit volgden —
+   collision per laag, `M.MAP` dat niet meer één waarheid is, de raycaster
+   die moet kiezen welke laag hij tekent — komen dus wél terug in beeld.
+2. **Het gevoel van echt oplopen.** De illusie moet aanvoelen zoals in 3D,
+   maar **zonder** dat de speler vrij omhoog en omlaag kan lopen: geen
+   pitch-besturing, geen vrij kijkvlak. Dus: stijgen mag alleen op de trap,
+   en de camera volgt dat gedwongen.
+3. **45° omhoog bij de trap.** Idee: zodra je de trap op wilt, gaat de
+   camera 45 graden omhoog, puur voor dat trap-gedeelte. Zo zou je de
+   helling "tegenkomen" zonder dat de raycaster een vrij pitch-vlak hoeft
+   te ondersteunen.
+4. **Nog te beantwoorden:** wat die 45° in deze renderer precies kost en
+   oplevert. De analyse daarvan was onderbroken en hoort hieronder
+   bijgeschreven te worden voordat er iets gebouwd wordt: of het bij
+   Optie A past, wat het met de vloerloze achtergrond doet (er is geen
+   zichtbare vloerlijn die kan "omhoogschuiven"), en of het
+   trap-gedeelte en het gewone kijkvlak met elkaar te rijmen zijn zonder
+   een zichtbare knik.
+
 ---
 
 ## Vijand-AI
