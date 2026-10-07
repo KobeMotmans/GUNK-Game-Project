@@ -211,10 +211,20 @@ sleutel, en `survival_werkt_in_multiplayer` de hele keten server → pakket →
 cliënt. Verder draagt `lobby_options` `"gamemode"` zodat een net
 binnengekomen client in de lobby al de juiste modus ziet, en past de client
 hem op één plek toe — `_neem_lobby_options()`, zowel in `apply_state` als in
-de `lobby_info`-handler, zodat de twee niet uiteenlopen. De dev-console
-`gamemode survival` roept nu `reset_game(gamemode=...)` aan: alleen de stats
-omdraaien zou half werk zijn, want de mode bepaalt ook welke kaart er ligt en
-of er een uitgang is.
+de `lobby_info`-handler, zodat de twee niet uiteenlopen.
+
+Zegt het `game_start`-pakket niets — dan komt dat van een oudere server, want
+`_game_start_packet` zet hem er altijd in — dan valt de client terug op de
+default in plaats van de mode te bewaren die hier toevallig actief was. Die
+kan survival zijn na een eerdere pot, en dan lagen de twee spelers op een
+verschillende kaart zonder dat iemand het zag. Beide plekken doen het
+zelfde; de test legt dat vast, want het verschil is alleen te zien als je
+weet welke van de twee het laatst kwam. Zie "Openstaande keuzes" 4 voor de
+volledige matrix.
+
+De dev-console `gamemode survival` roept nu `reset_game(gamemode=...)` aan:
+alleen de stats omdraaien zou half werk zijn, want de mode bepaalt ook welke
+kaart er ligt en of er een uitgang is.
 
 ---
 
@@ -432,6 +442,29 @@ zetten.
    die kleur ooit gaat gebruiken, kies dan hier eerst iets anders.
 3. **Escalatie van de vijandenstroom:** curve, plafond en wat de speler
    wint. Zie "Vijandenstroom".
+4. **Gemengde versies, deze build naast 1.0.12.** Er is geen protocolversie;
+   `discovery.VERSION` dekt alleen de LAN-broadcast-indeling en die is niet
+   veranderd. `decode_packet` doet `ID_TO_KEY.get(kid, f"key_{kid}")`, dus
+   een oudere client leest de nieuwe sleutel `gamemode` om tot `key_63` en
+   negeert hem — decoderen stopt niet, alleen bij 255. Drie van de zes
+   combinaties werken:
+
+   | client \ server | oudere server | nieuwe, campaign | nieuwe, survival |
+   |---|---|---|---|
+   | oudere (1.0.12) | werkt | werkt (negeert `key_63`) | **kaart mismatch** |
+   | nieuwe | werkt | werkt | werkt |
+
+   De nieuwe client valt zonder `gamemode` terug op de default
+   (`_start_multiplayer_client` en `_neem_lobby_options` doen hetzelfde),
+   en dat is precies wat een oudere server draait.
+
+   Alleen de rechterbovenhoek is kapot: een oudere client die bij een
+   nieuwe survivalserver komt, tekent de campaignkaart. Niet te verhelpen
+   vanaf deze kant — die client is al uitgeleverd en leest de sleutel simpelweg
+   niet. Keuze: `discovery.VERSION` van 1 naar 2 (dan zien de versies elkaar
+   helemaal niet, en de drie werkende cellen sneuvelen mee), een echte
+   capaciteitsafspraaak toevoegen, of het accepteren en hier noteren. Dit is
+   een keuze van de gebruiker, niet iets om stil in te bouwen.
 
 ## Ver in de toekomst
 

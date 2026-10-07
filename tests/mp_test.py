@@ -3347,12 +3347,38 @@ check(len(sg.objects["ammo"]) == 8,
       f"server heeft {len(sg.objects['ammo'])} ammo-objects in plaats van 8")
 
 # De elevator-tick mag hier niet op crashen nu exit_pos None is.
+#
+# Belangrijker: de level-overgang mag niet op gang komen. Een client kan
+# zichzelf bij de lift melden ("elevator_waiting"), en dan loopt het via
+# _depart_elevator -> tick() -> _level_up(). Die keten is alleen geblokkeerd
+# door "and self.exit_pos" in tick(). Zou die val eruit, dan meldt de
+# survivalserver level 1 en past de client de campaign-beloning voor level 1
+# toe op een survivalrun. Dus: wél die melding sturen, en dan kijken.
+#
+# Let op de seq: process_input doet "if data['seq'] <= last_seq: return" en
+# de teller start op 0, dus met een vaste seq 0 wordt élk pakket gedroopt
+# en bewaak je feitelijk niets. Ophogen dus.
 try:
-    for _ in range(30):
-        sg.process_input(0, {"type": "input", "seq": 0, "keys": {}})
+    for i in range(120):
+        sg.process_input(0, {"type": "input", "seq": i + 1, "keys": {},
+                             "elevator_waiting": True})
+        sg.tick()
 except Exception as e:
-    fouten.append(f"elevator-tick crasht met exit_pos=None: "
+    fouten.append(f"de lift-/tickcode crasht met exit_pos=None: "
                   f"{type(e).__name__}: {e}")
+
+check(sg.level == 0,
+      f"de survivalserver staat op level {sg.level} nadat een client zich "
+      f"bij de lift meldde; zonder lift zou hij op 0 moeten blijven")
+check(sg.elevator_transition is False,
+      f"elevator_transition is {sg.elevator_transition} terwijl er geen "
+      f"lift is")
+
+# NB: elevator_waiting wordt wél True hierboven - die vlag is de OR van
+# "meldt een speler zich bij de lift", en er is geen uitgangstegel die dat
+# zou tegenhouden. Dat mag, zolang _depart_elevator maar niet komt: die
+# wordt geblokkeerd door "and self.exit_pos", en dat is precies wat level
+# en elevator_transition hier bewaken.
 
 # En de client mag geen lift op (0,0) aangeboden krijgen.
 state = sg.get_state()
@@ -3398,12 +3424,26 @@ check(g._client_loaded_level == terug["level"],
       f"_client_loaded_level is {g._client_loaded_level}, "
       f"server stuurt {terug['level']}")
 
-# Een game_start zonder mode (oudere server, of een bondigere variant)
-# mag de mode van de client niet stil overschrijven.
+# Een game_start zonder mode hoort van een oudere server te komen, want die
+# leest "gamemode" niet (decode_packet maakt er "key_63" van) en draait
+# campaign. Dan moet de client naar de default, niet de mode bewaren die
+# hier toevallig actief was: zou hij survival bewaren, dan lagen de twee
+# spelers op een verschillende kaart zonder dat iemand het zag.
 g.gamemode = "survival"
 g._start_multiplayer_client(0, None)
-check(g.gamemode == "survival",
-      f"een game_start zonder gamemode zette de mode om naar {g.gamemode!r}")
+check(g.gamemode == "campaign",
+      f"een game_start zonder gamemode bleef op {g.gamemode!r}; een oudere "
+      f"server hoort de client op de default te zetten")
+
+# En die terugval moet dezelfde zijn als in _neem_lobby_options. Zou de een
+# terugvallen en de ander bewaren, dan hangt het ervan af welke van de twee
+# als laatste kwam - en dat is precies het soort tweede waarheid dat de
+# gamemodes-tabellen eruit moesten halen.
+g.gamemode = "survival"
+g._neem_lobby_options({"shared_health": True, "shared_ammo": True})
+check(g.gamemode == "campaign",
+      f"_neem_lobby_options zonder gamemode bleef op {g.gamemode!r}; dat "
+      f"moet hetzelfde doen als _start_multiplayer_client")
 
 if fouten:
     for f in fouten:

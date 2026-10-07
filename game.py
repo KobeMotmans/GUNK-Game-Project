@@ -1172,8 +1172,15 @@ class Game:
         # toegepast zijn: anders kiest de client de campaignkaart terwijl
         # de server op survival staat, en dat zie je pas als er een muur
         # staat die de ander niet heeft.
-        if gamemode in GAMEMODES:
-            self.gamemode = gamemode
+        #
+        # Zegt de server niets, dan is dat een oudere versie die campaign
+        # draait (decode_packet schrijft een onbekende sleutel om naar
+        # "key_63", dus die leest "gamemode" simpelweg niet). Dan terug naar
+        # de default, niet de mode bewaren die hier toevallig actief was:
+        # die kan survival zijn na een eerdere pot, en dan lagen twee
+        # spelers op een verschillende kaart. Precies dezelfde terugval als
+        # in _neem_lobby_options, zodat de twee niet uiteenlopen.
+        self.gamemode = gamemode if gamemode in GAMEMODES else DEFAULT_GAMEMODE
         M.map_level = level
         kaart, hoek = kaart_voor(self.gamemode, level)
         M.MAP, M.SPAWNS, M.width, M.height = png_to_list_fast(kaart)
