@@ -2767,6 +2767,134 @@ def spatiebalk_is_een_schietknop():
           f"geen 'SPATIE OK' in de uitvoer:\n{proc.stdout[-500:]}")
 
 
+# ── zelfhosten: de lift en de gedeelde M ─────────────────────────
+#
+# Bij zelfhosten draait de server in een draadje in hetzelfde proces en
+# deelt hij de module-singleton M. Dat werkt twee kanten op, en de tweede
+# kant was nog niet dicht: _send_client_state stuurde M.map_level mee.
+# De server zet die al in _setup_level, nog vóór de client de nieuwe state
+# ontvangen heeft. Het pakket zei dus "level 1" met een positie die nog op
+# level 0 lag, en process_input keurt een positie af als de getallen NIET
+# kloppen - dus hier klopten ze wél en werd de oude liftpositie overgenomen.
+# Die ligt op de nieuwe kaart midden in een muur.
+#
+# Alleen de host heeft dit, want alleen hij deelt die M. Een externe client
+# heeft een eigen M, meldt nog level 0, en wordt netjes geweigerd.
+
+ZELFHOST_DRIVER = r'''
+import os, sys
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import pygame
+import game
+from src.core.map_loader import M, will_collide
+from src.core.vector import Vector
+from src.network.server_game import ServerGame
+
+fouten = []
+
+
+def check(voorwaarde, bericht):
+    if not voorwaarde:
+        fouten.append(bericht)
+
+
+class _Net:
+    """Vangt het pakket dat de client naar de server zou sturen."""
+
+    def __init__(self):
+        self.pakket = None
+
+    def send_input(self, pakket):
+        self.pakket = pakket
+
+
+# 1. De server draait de lift: level 0 -> 1. Dat zet M.map_level alvast
+#    op 1, precies zoals bij zelfhosten gebeurt.
+sg = ServerGame()
+sg.register_player(0, "host")
+sg.init_world()
+oude_liftpositie = (sg.exit_pos.x, sg.exit_pos.y)
+check(will_collide(oude_liftpositie[0], oude_liftpositie[1], 0) is False,
+      "de liftpositie van level 0 hoort open te zijn, anders bewijst deze "
+      "test niets")
+
+sg.level = 1
+sg._setup_level()
+check(M.map_level == 1,
+      f"de server zou M.map_level op 1 moeten zetten, staat op {M.map_level}")
+
+# 2. De host-client: die heeft de nieuwe state nog niet gezien. Zijn positie
+#    staat nog op de lift van level 0.
+g = game.Game()
+g.multiplayer = True
+g.state = "game"
+g._client_loaded_level = 0
+g.player.pos = Vector(oude_liftpositie[0], oude_liftpositie[1])
+g.network_client = _Net()
+g._pos_seq = 1  # zodat de teller na ophogen deelbaar door 2 is
+
+check(M.map_level == 1 and g._client_loaded_level == 0,
+      "de proefopstelling klopt niet: gedeeld M is 1, de client is nog 0")
+
+g._send_client_state()
+check(g.network_client.pakket is not None,
+      "_send_client_state stuurde niets")
+
+pakket = g.network_client.pakket
+check(pakket.get("level") == 0,
+      f"het pakket meldt level {pakket.get('level')} terwijl de positie van "
+      f"level 0 komt; de server zal het dan toch accepteren")
+
+# 3. De server verwerkt precies dat pakket.
+sg.process_input(0, pakket)
+
+p = sg.players[0]["pos"]
+check(will_collide(p.x, p.y, 0) is False,
+      f"de host staat na de lift in een muur op ({p.x:.0f}, {p.y:.0f}) op "
+      f"level {sg.level}")
+
+# En de spawn die de server zelf had bedacht mag niet overschreven zijn door
+# de stille positie van vóór de overgang.
+spawn = [sg.players[0]["pos"].x, sg.players[0]["pos"].y]
+check((spawn[0], spawn[1]) != oude_liftpositie,
+      "de oude liftpositie is doorgelaten naar de nieuwe level")
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("ZELFHOST OK")
+'''
+
+
+@test
+def zelfhost_blijft_buiten_de_muur_na_de_lift():
+    """De host deelt M met de server, dus zijn eigen level is leidend."""
+    path = os.path.join(TEMP_DIR, "gunk_zelfhost_lift.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(ZELFHOST_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de zelfhosttest liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de zelfhosttest gaf fouten:\n"
+              + "\n".join(tail[-25:]))
+        return
+    check("ZELFHOST OK" in proc.stdout,
+          f"geen 'ZELFHOST OK' in de uitvoer:\n{proc.stdout[-500:]}")
+
+
 # ── geen audio-uitgang ───────────────────────────────────────────
 #
 # Zonder geluidsuitgang weigert SDL de mixer, en pygame.init() vangt dat af

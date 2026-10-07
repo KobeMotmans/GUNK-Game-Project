@@ -1400,7 +1400,23 @@ class Game:
             # De server negeert de positie als dit nummer niet klopt met wat
             # hij zegt. Zo kan een pakket dat onderweg was toen de lift
             # vertrok niet de nieuwe spawn wegschrijven. Zie process_input.
-            "level": M.map_level,
+            #
+            # Het nummer moet zeggen welke kaart onze positie GEMAAKT heeft.
+            # M.map_level is daarvoor de verkeerde bron: bij zelfhosten deelt
+            # de server in ditzelfde proces die M, en die heeft M.map_level al
+            # op de nieuwe level gezet in _setup_level - terwijl onze positie
+            # nog op de oude staat, want wij hebben de nieuwe state nog niet
+            # ontvangen. Dan beweert het pakket "level 1" met een positie van
+            # level 0, precies het geval dat de vangnet in process_input zou
+            # moeten tegenhouden, en die keurt het goed omdat de getallen
+            # kloppen. Het gevolg: de host belandt na de lift in een muur op
+            # de nieuwe kaart, en alleen hij, want alleen hij deelt die M.
+            #
+            # _client_loaded_level is van de client alleen en verandert pas
+            # als wij daadwerkelijk overgezet zijn, dus het loopt nooit voor.
+            "level": (self._client_loaded_level
+                      if self._client_loaded_level is not None
+                      else M.map_level),
             "health_delta": self._health_delta,
             "ammo_delta": self._ammo_delta,
             "enemy_damage": self._enemy_damage,
