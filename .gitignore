@@ -6,6 +6,10 @@ GUNK.zip
 /dist/
 /build/
 /Output/
+# Terug te vinden installers van eerdere versies. build.ps1 veegt Output/,
+# dist/ en build/ leeg, dus zonder deze plek is er van de vorige stabiele
+# bouw niets meer over.
+/_releases/
 # Let op: hier stond eerder '*.spec'. Daardoor stond game.spec niet in de repo en
 # bouwde iedereen op een eigen, ongeziene spec. Juist daardoor bleef een fout
 # in de opbouw ongemerkt. game.spec is handgeschreven en drijft de hele build,
