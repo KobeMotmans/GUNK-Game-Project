@@ -87,6 +87,9 @@ class Game:
         self._console_history = []
         self._console_out = []     # laatste regels terugkoppeling
         self._console_open = False
+        # Tussenstand van de spatiebalk van de vorige frame, voor de
+        # edge-detectie in handle_input(). Zie daar.
+        self._spatie_ingedrukt = False
         self.godmode = False
         M.noclip = False
         self.final_boss = None
@@ -515,17 +518,8 @@ class Game:
                         pygame.mixer.pause()
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:
-                        if not self.current_gun.auto and self.current_gun.weapon_state == 0:
-                            if self.global_ammo >= self.current_gun.ammo_weight:
-                                if not self.multiplayer:
-                                    self.global_ammo -= self.current_gun.ammo_weight
-                                self._ammo_delta -= self.current_gun.ammo_weight
-                                hit = self.current_gun.shoot(self.player.pos,self.player.angle,self.objects.get("enemies",[]), apply_damage=True)
-                                self._store_ammo_ray(hit)
-                                if hit:
-                                    idx, pos = hit
-                                    self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
+                    if event.button == 1 and not self.current_gun.auto:
+                        self._try_fire()
 
             elif self.state == "paused":
                  if event.type == pygame.KEYDOWN: #unpause
@@ -536,10 +530,50 @@ class Game:
                            pygame.mixer.unpause()
 
         return events
-    
+
+    def _try_fire(self):
+        """Eén poging tot schieten met het huidige wapen.
+
+        Doet het hele pad: mag er überhaupt geschoten worden, munitie
+        afboeken, schieten, de kogel vastleggen voor de tekening en de
+        schade doorgeven aan de server. Twee plekken doen dit - de
+        muusklik voor semi-autowapens en de per-frame polling voor
+        autowapens - en die twee kopieerden alle elf regels naar elkaar,
+        inclusief het munitieboekhoudtje. Eén fout erin betekende dus
+        twee plekken om te repareren.
+        """
+        gun = self.current_gun
+        if gun.weapon_state != 0:
+            return
+        if self.global_ammo < gun.ammo_weight:
+            return
+        if not self.multiplayer:
+            self.global_ammo -= gun.ammo_weight
+        self._ammo_delta -= gun.ammo_weight
+        hit = gun.shoot(self.player.pos, self.player.angle,
+                        self.objects.get("enemies", []), apply_damage=True)
+        self._store_ammo_ray(hit)
+        if hit:
+            idx, pos = hit
+            self._enemy_damage.append({"enemy_index": idx, "pos": pos,
+                                       "damage": gun.damage})
+
     def handle_input(self):
         """Verwerk toetsenbord input (continuous events)"""
         keys = pygame.key.get_pressed()
+
+        # Spatie is een tweede schietknop en doet hetzelfde als de
+        # linkermuisknop: een autowapen blijft vuren zolang je hem
+        # ingedrukt houdt, een semi-autowapen precies één keer per druk.
+        # pygame.key.set_repeat(400, 50) zorgt ervoor dat pygame het
+        # KEYDOWN-event blijft herhalen zolang je de toets vasthoudt, dus
+        # dit kan niet op het event rusten - het moet op de tussenstand
+        # van de vorige frame. Die tussenstand wordt hier ongeacht de
+        # staat hieronder bijgewerkt, anders zou de eerste frame na een
+        # pauze alsnog schieten terwijl de speler alleen terugkeert.
+        spatie = keys[pygame.K_SPACE]
+        spatie_net_ingedrukt = spatie and not self._spatie_ingedrukt
+        self._spatie_ingedrukt = spatie
 
         if keys[pygame.K_DELETE]:
             self.running = False
@@ -564,16 +598,14 @@ class Game:
                 self.player.move("right")
 
             mouse_buttons = pygame.mouse.get_pressed()
-            if self.current_gun.auto and mouse_buttons[0] and self.current_gun.weapon_state == 0:
-                    if self.global_ammo >= self.current_gun.ammo_weight:
-                        if not self.multiplayer:
-                            self.global_ammo -= self.current_gun.ammo_weight
-                        self._ammo_delta -= self.current_gun.ammo_weight
-                        hit = self.current_gun.shoot(self.player.pos, self.player.angle, self.objects.get("enemies", []), apply_damage=True)
-                        self._store_ammo_ray(hit)
-                        if hit:
-                            idx, pos = hit
-                            self._enemy_damage.append({"enemy_index": idx, "pos": pos, "damage": self.current_gun.damage})
+            # De eerste helft is de autowapens (muis of spatie ingedrukt
+            # houden), de tweede de semi-autowapens (spatie één keer
+            # indrukken). Een muusklik komt via de eventloop, omdat een
+            # klik van nature een enkele gebeurtenis is.
+            vuurt = spatie_net_ingedrukt or (
+                self.current_gun.auto and (mouse_buttons[0] or spatie))
+            if vuurt:
+                self._try_fire()
 
         # === Client: send position + state to server (rate-limited) ===
         if self.network_client:

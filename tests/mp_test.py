@@ -2647,6 +2647,127 @@ def muziek_main_loop_start_niet_op_de_klok():
           + "\n" + (proc.stderr or "")[-800:])
 
 
+# ── spatiebalk als schietknop ───────────────────────────────────
+#
+# Dit is een Game-test, dus die hoort in een eigen proces: game.py is één
+# grote staat en een stukgelopen muziek- of menutoestand in het
+# hoofdproces is niet te herstellen voor de tests die erna komen.
+#
+# Het lastige deel is dat spatie zich anders moet gedragen dan elk ander
+# toetsenbordevent. pygame.key.set_repeat(400, 50) laat pygame het
+# KEYDOWN-event herhalen zolang je de toets vasthoudt, dus een
+# implementatie op dat event zou een semi-autowapen ongemerkt automatisch
+# laten vuren. Vandaar de flankdetectie op de tussenstand van de vorige
+# frame. Hier bootsen we dat na door get_pressed() te vervangen, en we
+# doen alsof de herlaadtijd elke frame voorbij is - precies de situatie
+# waarin het wapen wél kan vuren maar het toch niet mag doen.
+
+SPATIE_DRIVER = r'''
+import os, sys
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import pygame
+import game
+
+fouten = []
+
+
+def check(voorwaarde, bericht):
+    if not voorwaarde:
+        fouten.append(bericht)
+
+
+g = game.Game()
+gun = g.current_gun
+check(gun.ammo_weight > 0,
+      "testwapen heeft munitiegewicht nodig om schoten te tellen")
+
+origineel_pressed = pygame.key.get_pressed
+spatie = {"aan": False}
+
+
+class _Toetsen:
+    """Vervangt get_pressed(): alleen de spatieborpel is bekend."""
+
+    def __getitem__(self, key):
+        return spatie["aan"] if key == pygame.K_SPACE else False
+
+
+def frame():
+    """Eén frame laten lopen; geeft het aantal schoten terug."""
+    oud_delta = g._ammo_delta
+    gun.weapon_state = 0   # alsof de herlaadtijd net voorbij is
+    g.handle_input()
+    return (oud_delta - g._ammo_delta) // gun.ammo_weight
+
+
+pygame.key.get_pressed = lambda: _Toetsen()
+try:
+    g.state = "game"
+    g.escaped = False
+    g.elevator_locked = False
+    g.network_client = None
+    g.global_ammo = 9999
+    g._ammo_delta = 0
+
+    # Semi-auto: precies één schot per druk. De tweede frame is de
+    # proef op de som - het wapen kan weer vuren, maar de toets staat
+    # nog steeds ingedrukt en dat mag niet als een nieuwe druk tellen.
+    gun.auto = False
+    spatie["aan"] = True
+    check(frame() == 1, "spatie vuurt niet bij de eerste druk")
+    check(frame() == 0,
+          "semi-autowapen bleef vuren terwijl de spatie ingedrukt bleef")
+    spatie["aan"] = False
+    check(frame() == 0, "spatie vuurde terwijl hij losgelaten was")
+    spatie["aan"] = True
+    check(frame() == 1, "een nieuwe druk op spatie vuurt niet opnieuw")
+
+    # Auto: zolang ingedrukt blijven vuren, loslaten stopt het.
+    gun.auto = True
+    check(frame() == 1, "autowapen vuurt niet met spatie ingedrukt")
+    check(frame() == 1,
+          "autowapen stopte terwijl de spatie ingedrukt bleef")
+    spatie["aan"] = False
+    check(frame() == 0, "autowapen bleef vuren na het loslaten")
+finally:
+    pygame.key.get_pressed = origineel_pressed
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("SPATIE OK")
+'''
+
+
+@test
+def spatiebalk_is_een_schietknop():
+    """Spatie is een tweede schietknop naast de linkermuisknop."""
+    path = os.path.join(TEMP_DIR, "gunk_spatie_driver.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(SPATIE_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de spatiebalktest liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de spatiebalktest gaf fouten:\n"
+              + "\n".join(tail[-25:]))
+        return
+    check("SPATIE OK" in proc.stdout,
+          f"geen 'SPATIE OK' in de uitvoer:\n{proc.stdout[-500:]}")
+
+
 # ── runner ─────────────────────────────────────────────────────
 
 def main():
