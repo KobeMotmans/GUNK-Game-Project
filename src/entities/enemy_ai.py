@@ -2,7 +2,7 @@ import heapq
 from math import atan2, hypot, cos, sin
 
 from ..core.vector import Vector
-from ..core.map_loader import map_to_cord, cord_to_map, is_in_wall, will_collide, M
+from ..core.map_loader import map_to_cord, cord_to_map, is_in_wall, will_collide, M, WALL_VALUES
 from ..core.config import MAX_DEPTH, TILE_SIZE
 
 
@@ -75,7 +75,7 @@ class EnemyAI:
                 nc, nr = col + dc, row + dr
                 if not (0 <= nc < MAP_W and 0 <= nr < MAP_H):
                     continue
-                if M.MAP[nr][nc] == 1:
+                if M.MAP[nr][nc] in WALL_VALUES:
                     continue
                 new_g = g_score[node] + 1
                 nb = (nc, nr)

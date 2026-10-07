@@ -3,7 +3,7 @@ map_loader.py - Laadt en beheert de game map
 """
 
 from PIL import Image
-from .config import TILE_SIZE, MAP_PATH, START_ANGLES
+from .config import TILE_SIZE, MAP_PATH, START_ANGLES, WALL_TEXTURES
 
 color_to_number = {
     (255, 255, 255): 0, #Open space
@@ -15,6 +15,14 @@ color_to_number = {
     (255, 255, 0): 6, #Ammo
     (255, 0, 255): 7 #Final Boss
 }
+
+# ── Wat telt als muur? ──────────────────────────────────────────────
+# Dit is hét antwoord op "is dit een muur?", afgeleid van de tekstuur-
+# tabel in config. Collision, raycaster, minimap en padvinding vragen hier
+# allemaal naar, zodat er niet zes plekken zijn die over muurtegels
+# beslissen: een nieuwe muursoort toevoegen is één regel in
+# config.WALL_TEXTURES plus één kleur in color_to_number.
+WALL_VALUES = frozenset(WALL_TEXTURES)
 
 
 def cord_to_map(cord):
@@ -81,14 +89,45 @@ def hit_wall(pos, allow_all=False):
     if pos.x % 1 == 0:
         x = int(pos.x)
         y = int(pos.y)
-        if MAP[y][x - 1] == 1 or MAP[y][x] == 1:
+        if MAP[y][x - 1] in WALL_VALUES or MAP[y][x] in WALL_VALUES:
             return True
     elif pos.y % 1 == 0:
         x = int(pos.x)
         y = int(pos.y)
-        if MAP[y - 1][x] == 1 or MAP[y][x] == 1:
+        if MAP[y - 1][x] in WALL_VALUES or MAP[y][x] in WALL_VALUES:
             return True
     return False
+
+
+def wall_face(pos):
+    """Welke muur raakte de ray, en waar op dat vlak?
+
+    Keert dezelfde twee-cellen-check terug als hit_wall(), zodat de
+    raycaster en de collision nooit over een verschillende muur
+    discussieren. Returnt (tegelwaarde, u in 0..1 over de breedte van het
+    muurvlak) - de coördinaat die de tekstuurkolom bepaalt.
+
+    `pos` is in map-coördinaten, dus precies zoals de DDA hem heeft vóór
+    hij naar pixels wordt omgerekend: precies één van beide assen is een
+    geheel getal (de grens die is overgestoken).
+    """
+    MAP = M.MAP
+    x = int(pos.x)
+    y = int(pos.y)
+    if pos.x % 1 == 0:
+        # Verticaal vlak: de muur loopt langs y, dus y is de tekstuur-as.
+        # x - 1 eerst, net als hit_wall.
+        for cx in ((x - 1, x) if x > 0 else (x,)):
+            if 0 <= cx < len(MAP[y]) and MAP[y][cx] in WALL_VALUES:
+                return MAP[y][cx], pos.y - y
+    elif pos.y % 1 == 0:
+        # Horizontaal vlak: de muur loopt langs x.
+        for cy in ((y - 1, y) if y > 0 else (y,)):
+            if 0 <= cy < len(MAP) and MAP[cy][x] in WALL_VALUES:
+                return MAP[cy][x], pos.x - x
+    # Randgeval (hoek of afgeronde coördinaat): val terug op de eerste
+    # muur in de tabel. Er wordt getekend, dus er ís een muur.
+    return next(iter(WALL_TEXTURES)), 0.0
 
 
 def will_collide(nx, ny, radius=10):
@@ -114,7 +153,7 @@ def will_collide(nx, ny, radius=10):
         if mx < 0 or my < 0 or mx >= MAP_W or my >= MAP_H:
             return True
 
-        if MAP[my][mx] == 1:
+        if MAP[my][mx] in WALL_VALUES:
             return True
 
     return False
@@ -123,6 +162,6 @@ def will_collide(nx, ny, radius=10):
 def is_in_wall(pos):
     MAP = M.MAP
     pos = pos // 1
-    if MAP[pos.y][pos.x] == 1:
+    if MAP[pos.y][pos.x] in WALL_VALUES:
         return True
     return False

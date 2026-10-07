@@ -8,7 +8,7 @@ from ..core.config import set_resolution, START_HEALTH, AMMO_CAP, ELEV_SPEED, MA
 from ..core.paths import list_packs, set_packs, save_active_packs, TEXTURE_PACKS, load_font, load_numeric_font, resolve_asset
 from ..core.theme import theme
 from collections import deque
-from ..core.map_loader import M
+from ..core.map_loader import M, WALL_VALUES
 from ..core.minimap import UIT as MINIMAP_UIT, GEZIEN as MINIMAP_GEZIEN, VOLLEDIG as MINIMAP_VOLLEDIG
 from ..assets.skin_manager import SkinManager
 from ..network.network import NetworkClient
@@ -1716,13 +1716,14 @@ class Menu:
             self._mm_kaart = M.MAP
             self._mm_onthouden = None
             self._mm_helder = self._minimap_laag(
-                lambda x, y: muur if M.MAP[y][x] == 1 else vloer)
+                lambda x, y: muur if M.MAP[y][x] in WALL_VALUES else vloer)
         # `versie` telt omhoog zodra de speler nieuwe tegels heeft ontdekt, en
         # dat is het enige moment waarop de onthouden laag opnieuw getekend moet
         # worden. Zonder die check zou elke frame 1600 set_at kosten.
         if self._mm_onthouden is None or self._mm_versie != fog.versie:
             self._mm_onthouden = self._minimap_laag(
-                lambda x, y: (muur_donker if M.MAP[y][x] == 1 else vloer_donker)
+                lambda x, y: (muur_donker if M.MAP[y][x] in WALL_VALUES
+                              else vloer_donker)
                 if (x, y) in fog.gezien else None)
             self._mm_versie = fog.versie
         return self._mm_onthouden, muur, vloer
@@ -1762,7 +1763,7 @@ class Menu:
             # helder, een tegel die je alleen kent donker.
             laag = onthouden.copy()
             for (tx, ty) in fog.zichtbaar:
-                laag.set_at((tx, ty), muur if M.MAP[ty][tx] == 1 else vloer)
+                laag.set_at((tx, ty), muur if M.MAP[ty][tx] in WALL_VALUES else vloer)
 
         # De hele level in een vierkant vakje, met de verhouding intact. De
         # kaarten zijn niet vierkant (22 tot 40 tegels per kant), dus er blijft

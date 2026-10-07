@@ -191,6 +191,41 @@ def drop(type_name):
     return DROPS.get(type_name, {})
 
 
+# ── Muurtexturen ────────────────────────────────────────────────────
+# Muurtegel-waarde -> tekstuur. Dit is tegelijk dé definitie van "muur":
+# map_loader.WALL_VALUES is hieruit afgeleid en collision, raycaster,
+# minimap en padvinding lezen daar allemaal van. Een nieuwe muursoort
+# toevoegen = één regel hier + één kleur in map_loader.color_to_number.
+#
+# Een pad dat niet bestaat valt terug op een procedureel patroon met
+# dezelfde bestandsnaam (zie assets/wall_textures.py), zodat de renderer
+# ook zonder kunstwerken werkt en meteen zichtbaar is. Echte PNG's horen
+# in assets/textures/wall/.
+WALL_TEXTURES = {
+    1: "textures/wall/beton.png",
+}
+
+# Aantal afstandslicht-niveaus. Elk niveau is een vooraf verdunde kopie van
+# de tekstuur; per frame kost dat alleen een tabelindex, dus meer banden is
+# vrijwel gratis en geeft geen zichtbare trappen over een muurvlak.
+WALL_SHADE_BANDS = 32
+
+# Muurtexturen worden hier naartoe geschaald bij het laden. Groot genoeg voor
+# scherpe muren (per ray bemonsteren we één texelkolom per schermkolom van
+# 4 px), klein genoeg om niet 16000 oppervlakken per textuur te vullen als
+# iemand een 512x512 afbeelding als muur opgeeft.
+WALL_TEXTURE_SIZE = 128
+
+
+def wall_texture(value):
+    """Tekstuurpad voor een muurtegel.
+
+    Onbekende waarde valt terug op de eerste muur, zodat een nieuwe
+    tegelwaarde nooit een KeyError midden in een run geeft.
+    """
+    return WALL_TEXTURES.get(value) or next(iter(WALL_TEXTURES.values()))
+
+
 if not _HEADLESS:
     SCREEN_FLASH = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.damage_flash", "textures/ui/Damage_Flash.png"))).convert_alpha(), (WIDTH, HEIGHT))
     SCREEN_DEAD = pygame.transform.scale(pygame.image.load(resolve_asset(theme.get("textures.ui.dead", "textures/ui/dead.png"))).convert_alpha(), (WIDTH, HEIGHT))

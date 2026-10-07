@@ -42,6 +42,11 @@ def set_packs(names):
     TEXTURE_PACKS[:] = list(names)
     _pack_config = {}
     clear_texture_cache()
+    # De muurtexturen zijn bij het laden al in kolomstrips gesneden, met het
+    # pad dat toen gold. Bij een packwissel wijst dat pad naar een ander
+    # bestand, dus die strips mogen niet blijven liggen.
+    from ..assets.wall_textures import clear as clear_wall_textures
+    clear_wall_textures()
     _font_path_cache.clear()
     _font_cache.clear()
     _theme.set_packs(names)

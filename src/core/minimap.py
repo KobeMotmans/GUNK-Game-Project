@@ -29,6 +29,7 @@ import math
 from collections import deque
 
 from .config import FOV, TILE_SIZE
+from .map_loader import WALL_VALUES
 
 # De drie standen die de knop in Instellingen laat zien.
 UIT = 0
@@ -148,7 +149,7 @@ class Minimap:
             x, y = rij.popleft()
             if diepte[(x, y)] >= self.zicht_tegels:
                 continue
-            if kaart[y][x] == 1:
+            if kaart[y][x] in WALL_VALUES:
                 # De muur zelf is zichtbaar, wat erachter ligt niet.
                 continue
             for dx, dy in _STAPPEN:

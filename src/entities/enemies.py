@@ -9,6 +9,7 @@ from ..core import config as cfg
 from ..core.config import AGGRO_DIST, PATHFIND_INTERVAL, ATTACK_DIST, SPRITE_SIZE, PROJ_DIST, TILE_SIZE
 from ..core.vector import Vector
 from ..core.paths import load_font, resolve_asset
+from ..core.map_loader import WALL_VALUES
 from ..core.theme import theme
 from .objects import RenderObject
 from .enemy_ai import EnemyAI
@@ -203,7 +204,7 @@ class Fireball(RenderObject):
             if py < 0 or py >= len(game.map) or px < 0 or px >= len(game.map[0]):
                 self.alive = False
                 break
-            if game.map[py][px] == 1:
+            if game.map[py][px] in WALL_VALUES:
                 self.alive = False
                 break
         if (self.pos - player.pos).norm() < self.size / 2 + SPRITE_SIZE / 2:
