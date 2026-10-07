@@ -2195,8 +2195,7 @@ try:
         doel_w = max(1, int(mm_size * kaart_w / kaart_h))
     in_x = (mm_size - doel_w) / 2
     in_y = (mm_size - doel_h) / 2
-    screen_x = int(_cfg.WIDTH * theme.pos("minimap.x", 0.78))
-    screen_y = int(_cfg.HEIGHT * theme.pos("minimap.y", 0.02))
+    screen_x, screen_y = menu._minimap_positie(mm_size)
 
     def op_scherm(px, py):
         """Waar een tegel van de kaart op het scherm terechtkomt."""

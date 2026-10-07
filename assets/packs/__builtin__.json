@@ -33,7 +33,7 @@
       "height": 30
     },
     "minimap": {
-      "size": 0.12,
+      "size": 0.16,
       "view_radius": 7,
       "border": 2
     }

@@ -1729,6 +1729,24 @@ class Menu:
             self._mm_versie = fog.versie
         return self._mm_onthouden, muur, vloer
 
+    def _minimap_positie(self, size):
+        """Waar het vakje op het scherm komt, voor een vakje van `size` px.
+
+        De maat schaalt met het scherm maar de positie is een fractie van de
+        breedte, en blit pakt de linkerbovenhoek. Bij een grotere minimap of
+        een smal venster zou het rechterdeel dus buiten beeld schuiven.
+        Daarom wint de opgegeven linkerhoek alleen als er ruimte voor is;
+        anders schuift de hele vak op zodat de rechterrand tegen de marge
+        blijft die het thema nu al heeft. Eén plek die dat doet, zodat de
+        tekening en de tests niet uit elkaar kunnen lopen.
+        """
+        x = int(_cfg.WIDTH * theme.pos("minimap.x", 0.78))
+        y = int(_cfg.HEIGHT * theme.pos("minimap.y", 0.02))
+        marge = max(8, int(_cfg.WIDTH * 0.013))
+        x = min(x, _cfg.WIDTH - size - marge)
+        y = min(y, _cfg.HEIGHT - size - marge)
+        return max(0, x), max(0, y)
+
     def draw_minimap(self, game):
         stand = getattr(game, "minimap_mode", MINIMAP_UIT)
         if stand == MINIMAP_UIT:
@@ -1872,8 +1890,7 @@ class Menu:
             border_c = tuple(theme.color("minimap.border", (200, 200, 200)))
             pygame.draw.rect(mm, border_c, (0, 0, size, size), border)
 
-        screen_x = int(_cfg.WIDTH * theme.pos("minimap.x", 0.78))
-        screen_y = int(_cfg.HEIGHT * theme.pos("minimap.y", 0.02))
+        screen_x, screen_y = self._minimap_positie(size)
         _cfg.SCREEN.blit(mm, (screen_x, screen_y))
 
 
