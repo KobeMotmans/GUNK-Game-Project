@@ -38,19 +38,25 @@ Gedaan:
 | `28def8b` | spatiebalk als schietknop + één gedeeld vuurpad `_try_fire()` |
 | `5796162` | `assets/textures/wall/beton.png` ligt er echt |
 | `fbfd9e8` | survivalkaart + generator, health-kleur, `kaart_voor()`, en de mode in `game_start` |
+| `79432bd` | terugval op de default bij een game_start zonder mode, plus de lift-test die eindelijk de bewaker bereikte |
+| `097239c` | de vijandenstroom: `GAMEMODES["survival"]["stream"]`, `src/core/stroom.py`, cliént én server |
 
 `config.GAMEMODES["survival"]` draagt nu ook `"map"` en `"start_angle"`,
-naast `start_health`/`health_cap` 100, `start_ammo` 300, `ammo_cap` 400, en
-`level_progression`, `uses_elevator`, `run_timer` en `save_pb` allemaal
-`False`. Zie "Koppelen aan de mode" verderop voor hoe de kaart eruit komt.
+naast `start_health`/`health_cap` 100, `start_ammo` 300 en `ammo_cap` 400.
+`level_progression` en `uses_elevator` staan op `False`, `run_timer` en
+`save_pb` staan op `True` — maar die twee worden nog nergens gelezen, zie
+"Wat er nog moet" onder "Vijandenstroom". En er is het `stream`-blok voor
+de vijandenstroom. Zie "Koppelen aan de mode" en "Vijandenstroom"
+verderop.
 
 Nog **niet** gedaan, en dat is de rest van dit document:
 
-- de vijandenstroom (incrementeel, zie hieronder)
 - karakter-/spec-keuze
 - een keuzemenu voor de gamemode (nu alleen via de dev-console:
   `gamemode survival`, of `reset_game(gamemode=...)`; in multiplayer mag
   alleen de server hem zetten, via `lobby_options`)
+- `run_timer`/`save_pb` daadwerkelijk laten werken voor survival, en tijd
+  én kills op het scherm naast elkaar
 
 ---
 
