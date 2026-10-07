@@ -9,6 +9,7 @@ from math import sin, cos
 from ..core.vector import Vector
 from ..core.paths import resolve_asset
 from ..core.theme import theme
+from ..core import audio
 from ..assets.texture_cache import get as get_cached_texture
 
 class Gun:
@@ -30,7 +31,7 @@ class Gun:
         self.gun_shoot = self._load_texture(resolve_asset(theme.get(f"textures.weapons.{guntype}.muzzle", f"textures/weapons/{guntype}/GUN_muzzle.png")))
 
         sound_path = resolve_asset(theme.get(f"sounds.sfx.{guntype}", f"sounds/sfx/{default_sound}"))
-        self.shoot_sound = pygame.mixer.Sound(sound_path)
+        self.shoot_sound = audio.load(sound_path)
 
         self.weapon_rect = self.gun_rest.get_rect()
 
@@ -39,7 +40,7 @@ class Gun:
         self.gun_recoil = self._load_texture(resolve_asset(theme.get(f"textures.weapons.{self.guntype}.recoil", f"textures/weapons/{self.guntype}/GUN_recoil.png")))
         self.gun_shoot = self._load_texture(resolve_asset(theme.get(f"textures.weapons.{self.guntype}.muzzle", f"textures/weapons/{self.guntype}/GUN_muzzle.png")))
         sound_path = resolve_asset(theme.get(f"sounds.sfx.{self.guntype}", f"sounds/sfx/{self.default_sound}"))
-        self.shoot_sound = pygame.mixer.Sound(sound_path)
+        self.shoot_sound = audio.load(sound_path)
         self.weapon_rect = self.gun_rest.get_rect()
 
     def _load_texture(self, path):

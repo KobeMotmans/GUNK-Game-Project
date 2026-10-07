@@ -7,6 +7,7 @@ from math import sin, cos, pi
 from ..core.config import PLAYER_SPEED, PLAYER_ROT_SPEED, START_HEALTH
 from ..core.map_loader import will_collide
 from ..core.vector import Vector
+from ..core import audio
 
 
 class Player:
@@ -91,7 +92,7 @@ class Player:
             game.sounds["damage"].set_volume(game.sfx_volume)
             game.sounds["damage"].play()
             if game.global_health <= 0:
-                pygame.mixer.stop()
+                audio.stop_all()
                 game.sounds["damage"].set_volume(game.sfx_volume)
                 game.sounds["damage"].play()
                 self.death = True

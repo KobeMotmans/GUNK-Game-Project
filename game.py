@@ -31,6 +31,7 @@ from src.network.network import NetworkClient, ServerIO
 from src.network.port_map import (discover, find_gateway, PortMappingKeeper)
 from src.network.discovery import DiscoveryResponder, DiscoveryListener
 from src.core.logger import log as _log, clear_log
+from src.core import audio
 
 # Interpolatie van de andere spelers: de server stuurt 30 snapshots per
 # seconde, het scherm tekent 60 keer per seconde.
@@ -43,6 +44,9 @@ REMOTE_MAX_SAMPLES = 8                        # ruimte voor wat packetverlies
 class Game:
     def __init__(self):
         pygame.init()
+        # Vóór de wapens: die maken direct een Sound, en dat is de eerste
+        # aanroep die een niet-geopende mixer merkt. Zie src/core/audio.py.
+        audio.init()
         pygame.key.set_repeat(400, 50)
         self.clock = pygame.time.Clock()
         self.running = False
@@ -57,6 +61,11 @@ class Game:
         self.bilal.say("Je zit vast op verdieping 5 van het K gebouw. Probeer via de lift te ontsnappen.", 250)
         self.bilal.say("Er moet in n van deze kamers een keycard liggen. Zoek hem!", 200)
         self.bilal.say("Maar pas op, want de andere assistenten zijn gek geworden van het K gebouw!", 200)
+        if audio.status != "apparaat":
+            # Alleen op machines zonder werkende audio-uitgang. Stilzwijgend
+            # geen geluid hebben is het soort ding waar mensen een bugrapport
+            # van sturen; dit vertelt het en verandert verder niets.
+            self.bilal.say("Geen geluidsuitgang gevonden - het spel speelt verder zonder geluid.", 400)
 
         # Init speler
         self.player = Player(M.SPAWNS["player"][0], M.SPAWNS["player"][1], angle=START_ANGLES[0])
@@ -100,11 +109,12 @@ class Game:
         # Init objects
         self.resolution = "high"
 
-        pygame.mixer.init()
-
         init_packs()
 
-        self.Menu.draw_loading_screen(0, "Loading sounds...")
+        self.Menu.draw_loading_screen(
+            0,
+            "Loading sounds..." if audio.status == "apparaat"
+            else "Geen geluid - verder zonder geluid")
         pygame.event.pump()
 
         self.main_music_intro = None
@@ -209,6 +219,10 @@ class Game:
         set_resolution(self.resolution)
         clear_log()
         _log("Game started")
+        # clear_log wist wat audio.init() al schreef, dus de stand hoort
+        # hier opnieuw in het logboek - het eerste wat iemand zoekt als er
+        # "geen geluid" gemeld wordt.
+        _log(f"Audio: {audio.status} - {audio.detail}")
         self.state = "menu"
 
     def _silence_music(self):
@@ -360,7 +374,7 @@ class Game:
 
         intro_path = theme.get("sounds.music.main_intro")
         if intro_path:
-            self.main_music_intro = pygame.mixer.Sound(resolve_asset(intro_path))
+            self.main_music_intro = audio.load(resolve_asset(intro_path))
             self._has_intro = True
             self._intro_duration = int(self.main_music_intro.get_length() * 1000)
         else:
@@ -369,7 +383,7 @@ class Game:
             self._intro_duration = 0
 
         loop_path = theme.get("sounds.music.main") or theme.get("sounds.music.main_loop", "sounds/music/esKape Main Loop.ogg")
-        self.main_music_loop = pygame.mixer.Sound(resolve_asset(loop_path))
+        self.main_music_loop = audio.load(resolve_asset(loop_path))
         if self.main_music_intro:
             self.main_music_intro.set_volume(self.music_volume)
         self.main_music_loop.set_volume(self.music_volume)
@@ -379,16 +393,16 @@ class Game:
         self.Menu.draw_loading_screen(0.15, "Loading music...")
         pygame.event.pump()
         self.sounds = {
-            "damage": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.damage", "sounds/sfx/damage.ogg"))),
-            "ammo":   pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.ammo", "sounds/sfx/ammo.ogg"))),
-            "key":    pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.key", "sounds/sfx/key.ogg"))),
-            "drink":  pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.drink", "sounds/sfx/drink.ogg"))),
-            "elev_ding": pygame.mixer.Sound(resolve_asset(theme.get("sounds.sfx.elevator_ding", "sounds/sfx/elev_ding.ogg"))),
-            "victory": pygame.mixer.Sound(resolve_asset(theme.get("sounds.music.victory", "sounds/music/Motivator.ogg"))),
+            "damage": audio.load(resolve_asset(theme.get("sounds.sfx.damage", "sounds/sfx/damage.ogg"))),
+            "ammo":   audio.load(resolve_asset(theme.get("sounds.sfx.ammo", "sounds/sfx/ammo.ogg"))),
+            "key":    audio.load(resolve_asset(theme.get("sounds.sfx.key", "sounds/sfx/key.ogg"))),
+            "drink":  audio.load(resolve_asset(theme.get("sounds.sfx.drink", "sounds/sfx/drink.ogg"))),
+            "elev_ding": audio.load(resolve_asset(theme.get("sounds.sfx.elevator_ding", "sounds/sfx/elev_ding.ogg"))),
+            "victory": audio.load(resolve_asset(theme.get("sounds.music.victory", "sounds/music/Motivator.ogg"))),
         }
         boss_path = theme.get("sounds.music.boss")
         if boss_path:
-            self.boss_music = pygame.mixer.Sound(resolve_asset(boss_path))
+            self.boss_music = audio.load(resolve_asset(boss_path))
             self.boss_music.set_volume(self.music_volume)
         else:
             self.boss_music = None
@@ -515,7 +529,7 @@ class Game:
                         pygame.mouse.set_visible(True)
                         pygame.event.set_grab(False)
                         self.state = "paused"
-                        pygame.mixer.pause()
+                        audio.pause()
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1 and not self.current_gun.auto:
@@ -527,7 +541,7 @@ class Game:
                            pygame.mouse.set_visible(False)
                            pygame.event.set_grab(True)
                            self.state = "game"
-                           pygame.mixer.unpause()
+                           audio.unpause()
 
         return events
 

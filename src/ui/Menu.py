@@ -7,6 +7,7 @@ from ..core import config as _cfg
 from ..core.config import set_resolution, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, TILE_SIZE
 from ..core.paths import list_packs, set_packs, save_active_packs, TEXTURE_PACKS, load_font, load_numeric_font, resolve_asset
 from ..core.theme import theme
+from ..core import audio
 from collections import deque
 from ..core.map_loader import M, WALL_VALUES
 from ..core.minimap import UIT as MINIMAP_UIT, GEZIEN as MINIMAP_GEZIEN, VOLLEDIG as MINIMAP_VOLLEDIG
@@ -1113,7 +1114,7 @@ class Menu:
             if back_target == "game":
                 pygame.mouse.set_visible(False)
                 pygame.event.set_grab(True)
-                pygame.mixer.unpause()
+                audio.unpause()
             elif back_target == "paused":
                 pygame.mouse.set_visible(True)
                 pygame.event.set_grab(False)
@@ -1315,7 +1316,7 @@ class Menu:
             if back_target == "game":
                 pygame.mouse.set_visible(False)
                 pygame.event.set_grab(True)
-                pygame.mixer.unpause()
+                audio.unpause()
                 GAME._play_music()
             elif back_target == "paused":
                 pygame.mouse.set_visible(True)
@@ -1478,7 +1479,7 @@ class Menu:
             pygame.mouse.set_visible(False)
             pygame.event.set_grab(True)
             GAME.state = "game"
-            pygame.mixer.unpause()
+            audio.unpause()
         self._draw_main_button(events, theme.string("button.resume", "RESUME"), _cfg.HEIGHT//2 - int(_cfg.HEIGHT * theme.pos("pause.resume_y", 0.1)), int(_cfg.WIDTH * 0.11), resume, font_size=34)
 
         def open_settings():
@@ -1524,7 +1525,7 @@ class Menu:
                         game.sounds["elev_ding"].play()
                 else:
                     if not is_client:
-                        pygame.mixer.stop()
+                        audio.stop_all()
                         game.escaped = True
                         game.sounds["victory"].set_volume(game.sfx_volume)
                         game.sounds["victory"].play()
@@ -1935,12 +1936,12 @@ class Button:
                     if self.target_state == "reset":
                         self.GAME.reset_game()
                     elif self.target_state == "Stop":
-                        pygame.mixer.stop()
+                        audio.stop_all()
                         self.GAME.running = False
                     elif self.target_state == "game":
-                        pygame.mixer.unpause()
+                        audio.unpause()
                     elif self.target_state == "menu":
-                        pygame.mixer.stop()
+                        audio.stop_all()
 
         bg = self.hover_button_color if hovering else self.button_color
         fg = self.hover_text_color if hovering else self.text_color

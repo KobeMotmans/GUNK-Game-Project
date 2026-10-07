@@ -13,6 +13,7 @@ from ..core.map_loader import WALL_VALUES
 from ..core.theme import theme
 from .objects import RenderObject
 from .enemy_ai import EnemyAI
+from ..core import audio
 
 
 class Enemy(EnemyAI, RenderObject):
@@ -151,7 +152,7 @@ class TankEnemy(Enemy):
                 if TankEnemy._tank_fire_sound is None:
                     try:
                         path = resolve_asset(theme.get("sounds.sfx.tank_enemy", "sounds/sfx/fireball.ogg"))
-                        TankEnemy._tank_fire_sound = pygame.mixer.Sound(path)
+                        TankEnemy._tank_fire_sound = audio.load(path)
                     except (FileNotFoundError, pygame.error):
                         pass
                 if TankEnemy._tank_fire_sound:
@@ -184,7 +185,7 @@ class Fireball(RenderObject):
         if Fireball._hit_sound is None:
             try:
                 path = resolve_asset(theme.get("sounds.sfx.proj_hit", "sounds/sfx/fireball.ogg"))
-                Fireball._hit_sound = pygame.mixer.Sound(path)
+                Fireball._hit_sound = audio.load(path)
             except (FileNotFoundError, pygame.error):
                 return None
         if Fireball._hit_sound:

@@ -150,6 +150,19 @@ python.org.
 De venv zou dan al spullen moeten bevatten die er niet in horen. Gooi hem weg
 en maak hem opnieuw volgens stap 6.
 
+**`pygame.error: mixer not initialized` bij het opstarten**
+De machine heeft geen bruikbaar geluidsuitgang: geen luidsprekers, een
+HDMI-monitor die uitstaat als standaarduitgang, een VM of een
+remote-sessie. SDL weigert dan de mixer, en `pygame.init()` vangt dat
+stilletjes af - de fout komt pas boven bij de eerste `Sound()`, wat in de
+wapens gebeurt, dus meteen bij het openen.
+
+Dat wordt nu opgevangen in `src/core/audio.py`: de mixer wordt vóór de
+wapens geopend en valt terug op de stille driver van SDL, waarna het spel
+gewoon doorloopt zonder geluid. Je ziet het in de melding bij het laden en
+in `gunk.log` naast de exe (`Audio: dummy - ...`). Wil je wél geluid, zet
+dan je standaard geluidsuitgang aan.
+
 **Geluid of video doet het niet in een test**
 De tests draaien headless en zetten daarom zelf `SDL_VIDEODRIVER` en
 `SDL_AUDIODRIVER` op `dummy`. Dat is normaal gedrag, geen fout.

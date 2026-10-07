@@ -2768,6 +2768,112 @@ def spatiebalk_is_een_schietknop():
           f"geen 'SPATIE OK' in de uitvoer:\n{proc.stdout[-500:]}")
 
 
+# ── geen audio-uitgang ───────────────────────────────────────────
+#
+# Zonder geluidsuitgang weigert SDL de mixer, en pygame.init() vangt dat af
+# zonder één woord. De eerste aanroep die het merkte was pygame.mixer.Sound()
+# in de wapens, die bij het opstarten gemaakt wordt: een traceback meteen bij
+# het openen, en alleen op machines zonder geluid. Vandaar een driver die dat
+# nadoet, want dit is precies de situatie die niet op de machine van de
+# ontwikkelaar voorkomt.
+
+AUDIO_DRIVER = r'''
+import os, sys
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "bestaat_niet"   # een machine zonder geluidsuitgang
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import pygame
+import game
+from src.core import audio
+
+fouten = []
+
+
+def check(voorwaarde, bericht):
+    if not voorwaarde:
+        fouten.append(bericht)
+
+
+g = game.Game()
+
+check(audio.status == "dummy",
+      "verwachtte de stille mixer als terugval, kreeg "
+      f"{audio.status!r}: {audio.detail}")
+check(pygame.mixer.get_init() is not None,
+      "de mixer is niet open, dus elk Sound-object zou alsnog crashen")
+for naam, gun in (("pistol", g.pistol), ("minigun", g.minigun),
+                  ("rifle", g.rifle)):
+    check(isinstance(gun.shoot_sound, pygame.mixer.Sound),
+          f"{naam} kreeg geen echt Sound-object: "
+          f"{type(gun.shoot_sound).__name__}")
+check(sorted(g.sounds) == ["ammo", "damage", "drink", "elev_ding", "key",
+                           "victory"],
+      f"niet alle geluiden zijn geladen: {sorted(g.sounds)}")
+check(isinstance(g.main_music_loop, pygame.mixer.Sound),
+      "de muziekloop is niet geladen")
+
+# Alles wat het spel tijdens het spelen aanraakt moet het blijven doen.
+g.pistol.shoot_sound.set_volume(0.3)
+g.pistol.shoot_sound.play()
+g.sounds["damage"].play()
+g.main_music_loop.play(loops=-1)
+audio.stop_all()
+audio.pause()
+audio.unpause()
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("GEEN AUDIO OK")
+'''
+
+
+@test
+def spel_start_zonder_audio_uitgang():
+    """Een machine zonder geluidsuitgang start het spel gewoon op."""
+    path = os.path.join(TEMP_DIR, "gunk_geen_audio_driver.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(AUDIO_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de test zonder geluid liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de test zonder geluid gaf fouten:\n"
+              + "\n".join(tail[-25:]))
+        return
+    check("GEEN AUDIO OK" in proc.stdout,
+          f"geen 'GEEN AUDIO OK' in de uitvoer:\n{proc.stdout[-500:]}")
+
+
+@test
+def stille_sound_doet_wat_een_sound_doet():
+    """SilentSound heeft alles wat het spel op een Sound aanroept."""
+    from src.core.audio import SilentSound
+    s = SilentSound()
+    # play() returnt None omdat game.py dat kanaal bewaart en er get_busy()
+    # aan vraagt; een kanaal dat niet bestaat zou dat laten crashen.
+    check(s.play(loops=-1) is None,
+          "play() returnt geen None")
+    s.stop()
+    s.pause()
+    s.unpause()
+    s.fadeout(100)
+    s.set_volume(0.5)
+    check(s.get_volume() == 0.0, "stil geluid meldt volume")
+    check(s.get_length() == 0.0, "stil geluid meldt lengte")
+    check(s.get_busy() is False, "stil geluid meldt dat er iets speelt")
+
+
 # ── runner ─────────────────────────────────────────────────────
 
 def main():
