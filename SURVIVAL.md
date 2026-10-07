@@ -37,20 +37,20 @@ Gedaan:
 | `b5402dc` | muurtextuurpijplijn (`WALL_TEXTURES`, `WALL_VALUES`, kolomstrips) |
 | `28def8b` | spatiebalk als schietknop + één gedeeld vuurpad `_try_fire()` |
 | `5796162` | `assets/textures/wall/beton.png` ligt er echt |
+| `fbfd9e8` | survivalkaart + generator, health-kleur, `kaart_voor()`, en de mode in `game_start` |
 
-`config.GAMEMODES["survival"]` bestaat al met: `start_health`/`health_cap` 100,
-`start_ammo` 300, `ammo_cap` 400, `level_progression` en `uses_elevator` en
-`run_timer` en `save_pb` allemaal `False`.
+`config.GAMEMODES["survival"]` draagt nu ook `"map"` en `"start_angle"`,
+naast `start_health`/`health_cap` 100, `start_ammo` 300, `ammo_cap` 400, en
+`level_progression`, `uses_elevator`, `run_timer` en `save_pb` allemaal
+`False`. Zie "Koppelen aan de mode" verderop voor hoe de kaart eruit komt.
 
 Nog **niet** gedaan, en dat is de rest van dit document:
 
-- de survival-kaart (PNG) en de generator ervan
-- een health-kleur in `map_loader.color_to_number`
-- het koppelen van die kaart aan de mode
 - de vijandenstroom (incrementeel, zie hieronder)
 - karakter-/spec-keuze
 - een keuzemenu voor de gamemode (nu alleen via de dev-console:
-  `gamemode survival`, of `reset_game(gamemode=...)`)
+  `gamemode survival`, of `reset_game(gamemode=...)`; in multiplayer mag
+  alleen de server hem zetten, via `lobby_options`)
 
 ---
 
@@ -83,15 +83,18 @@ PNG maakt moet elke kleur precies treffen.
 | `K` | 0,0,255 | 5 | keycard |
 | `A` | 255,255,0 | 6 | ammo |
 | `B` | 255,0,255 | 7 | final boss |
-| `H` | 255,128,0 | 8 | **health — nog toe te voegen** |
+| `H` | 255,128,0 | 8 | health |
 
-De eerste acht bestaan; `H` is nieuw voor survival en moet er nog bij in
-`color_to_number` plus een tak in `png_to_list_fast` (`spawns["health"]`),
-en `create_objects()` moet het oppakken. In MP moet `server_game.py` hetzelfde
-doen — die leest dezelfde functie, dus let op dat de twee niet uiteenlopen.
+De eerste acht bestaan; `H` is er inmiddels bij in `color_to_number` met een
+`spawns["health"]`-tak in `png_to_list_fast`, en `create_objects()` pakt hem
+op. `server_game.py` leest dezelfde functie, en omdat het allebei `M.SPAWNS`
+is lopen de twee niet uiteen: er is één plaats die het doet.
 
-De campaign-plaatsing van health (willekeurig, `HEALTH_CHANCE`) blijft
-ongewijzigd: als een kaart geen `H`-tegels heeft, werkt alles zoals nu.
+Health op de kaart staat naast `HEALTH_CHANCE`, en dat bleek iets anders dan
+het hier lang leek. Die kans is de kans dat een **dode vijand** een health-drop
+nalaat (`game.py` en `server_game.py`, `_handle_enemy_death`), geen plaatsing
+op de kaart. De `H`-tegel is dus de enige nieuwe plek waar health vandaan
+komt: een kaart zonder `H` geeft een lege lijst en verandert verder niets.
 
 ### Het grondplan: 32×32, ring en kruis
 
@@ -176,18 +179,42 @@ staat beschreven. Oplossing: `/tools/*` in plaats van `/tools/`, plus
 
 ### Koppelen aan de mode
 
-Nog te doen. De bedoeling: een eigen pad per mode in plaats van een levelindex,
-bijvoorbeeld `GAMEMODES["survival"]["map"]` en `["start_angle"]`
-(`config.START_ANGLES` is nu per level, en survival heeft geen levelnummer).
-`reset_game()` en `server_game.init_world()` laden dan de kaart van de mode.
+Gedaan. Er is één laadplek over: `config.kaart_voor(mode, level)` geeft
+`(pad, hoek)`, en alles wat een kaart nodig heeft vraagt daaraan in plaats van
+zelf `MAP_PATH[level]` te nemen. `GAMEMODES["survival"]` draagt `"map"` en
+`"start_angle"`; survival negeert het levelnummer (er is er maar één) en een
+onbekende modenaam valt terug op de campaign, net als `gamemode()` al deed.
 
-Daarbij hoort ook:
+Dat hoorde bij drie dingen die eromheen moesten:
 
-- `create_enemies()` moet `spawn_enemies_at_start` respecteren (survival wil
-  de vijanden niet allemaal meteen laten staan; de stroom brengt ze).
-- geen exit-object maken als `uses_elevator` False is — anders staat er een
-  lift op (0,0), want zonder groene tegel blijft `spawns["end_point"]` op de
-  standaard (0,0).
+- `create_enemies()` respecteert `spawn_enemies_at_start` — survival zet dus
+  geen vijanden neer bij het begin; de stroom brengt ze.
+- geen exit-object als `uses_elevator` False is. Zonder groene tegel blijft
+  `spawns["end_point"]` op (0,0), dus anders staat er een lift die niets doet.
+  Zowel `create_objects()` (client) als `server_game._setup_level()` (server)
+  doen het, met `exit_pos = None` erbij — wat de elevator-tick en `get_state`
+  al afvinkten.
+- health uit `spawns["health"]`, in dezelfde `{"pos", "amount"}`-vorm als een
+  drop, zodat de client het niet anders hoeft te behandelen. Ook hier weer op
+  beide plekken.
+
+Waar het mis kan gaan: de mode moet **vóór** het laden bekend zijn. In
+multiplayer draait de server zijn eigen `gamemode`, en de client krijgt hem in
+het `game_start`-pakket (`protocol.KEY_TO_ID["gamemode"] = 63`). Zou die
+sleutel ontbreken, dan schrijft de encoder er `255` voor in — en dat is de
+`TERMINATOR`: de decoder stopt midden in het pakket en `gamemode` komt stil
+niet aan, terwijl de waarde er wél nog in staat. Valt de client terug op de
+default, dan tekent hij een campaignkaart terwijl de server survival draait.
+
+Daarom draagt `survival_generator_en_koppeling` een round-trip op precies die
+sleutel, en `survival_werkt_in_multiplayer` de hele keten server → pakket →
+cliënt. Verder draagt `lobby_options` `"gamemode"` zodat een net
+binnengekomen client in de lobby al de juiste modus ziet, en past de client
+hem op één plek toe — `_neem_lobby_options()`, zowel in `apply_state` als in
+de `lobby_info`-handler, zodat de twee niet uiteenlopen. De dev-console
+`gamemode survival` roept nu `reset_game(gamemode=...)` aan: alleen de stats
+omdraaien zou half werk zijn, want de mode bepaalt ook welke kaart er ligt en
+of er een uitgang is.
 
 ---
 
@@ -399,8 +426,10 @@ zetten.
 
 1. **Trapmodel:** besloten om het *na* de rest te kiezen — zie "Stand —
    besloten op 2026-10-07". Alleen het `floor`-veld moet er meteen in.
-2. **Health-kleur:** oranje (255,128,0) is voorgesteld; als de campaign die
-   kleur ooit gebruikt, kies dan iets anders.
+2. **Health-kleur — beslist, oranje (255,128,0), id 8.** Die waarden
+   stonden nergens anders in `color_to_number`, dus het bleef oranje. Dit
+   punt blijft hier staan omdat `map_loader` ernaar verwijst; als de campaign
+   die kleur ooit gaat gebruiken, kies dan hier eerst iets anders.
 3. **Escalatie van de vijandenstroom:** curve, plafond en wat de speler
    wint. Zie "Vijandenstroom".
 
