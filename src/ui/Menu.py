@@ -4,7 +4,7 @@ import pygame
 import tkinter as tk
 from tkinter import filedialog
 from ..core import config as _cfg
-from ..core.config import set_resolution, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, TILE_SIZE, GAMEMODES, DEFAULT_GAMEMODE
+from ..core.config import set_resolution, START_HEALTH, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, TILE_SIZE, GAMEMODES, DEFAULT_GAMEMODE
 from ..core.paths import list_packs, set_packs, save_active_packs, TEXTURE_PACKS, load_font, load_numeric_font, resolve_asset
 from ..core.theme import theme
 from ..core import audio
@@ -1518,24 +1518,61 @@ class Menu:
         )
         Menu_button.draw_button(events)
         
+    def _hud_teksten(self):
+        """De twee getallen op de HUD, als tekst.
+
+        Apart van het tekenen zodat er een test op kan staan. De limiet
+        hieronder was `AMMO_CAP` - de campaignlimiet - en dan staat er in
+        survival 300/100 terwijl de limiet 400 is.
+        """
+        return (f"{round(self.game.global_health)}/{self.game.max_health()}",
+                f"{round(self.game.global_ammo)}/{self.game.max_ammo()}")
+
+    def _hp_breedte(self):
+        """Hoeveel ruimte de HP-tekst naast de minimap heeft.
+
+        De minimap telt mee of hij nu aan staat of niet: anders zou de HP
+        van breedte veranderen zodra iemand hem aanzet. De plek van het
+        vakje komt uit `_minimap_positie`, dezelfde plek als de tekening
+        gebruikt, zodat de twee niet uit elkaar kunnen lopen.
+        """
+        marge = max(8, int(_cfg.WIDTH * theme.pos("hud.hp_margin", 0.013)))
+        mm_size = theme.scaled("minimap.size", 0.12, "min")
+        mm_x, _ = self._minimap_positie(mm_size)
+        return max(1, _cfg.WIDTH - mm_x - mm_size - 2 * marge)
+
     def draw_UI(self, events):
         self.fps_font = load_numeric_font(self._font_px("ui.font.fps", 20), bold=True)
         self.hp_font = load_numeric_font(int(_cfg.HEIGHT * theme.pos("menu.title_y", 0.08)), bold=True)
         _cfg.SCREEN.blit(self.fps_font.render(f"{round(self.game.clock.get_fps())}", True, theme.color("hud.fps", 'green')),(int(_cfg.WIDTH * theme.pos("hud.fps_x", 0.01)), int(_cfg.HEIGHT * theme.pos("hud.fps_y", 0.02))))
-        max_hp = self.game.max_health()
-        _cfg.SCREEN.blit(self.hp_font.render(f"{round(self.game.global_health)}/{max_hp}", True, theme.color("hud.hp", 'red')),(_cfg.WIDTH - int(_cfg.WIDTH * theme.pos("hud.hp_x", 0.15)), int(_cfg.HEIGHT * theme.pos("hud.hp_y", 0.02))))
-        _cfg.SCREEN.blit(self.hp_font.render(f"{round(self.game.global_ammo)}/{AMMO_CAP}", True, theme.color("hud.ammo", 'grey')),(int(_cfg.WIDTH * theme.pos("hud.ammo_x", 0.01)), _cfg.HEIGHT - int(_cfg.HEIGHT * theme.pos("hud.ammo_y", 0.1))))
+        # De HP-tekst staat rechtsboven, maar zijn breedte hangt af van de
+        # cijfers: `10/10` paste op de vaste plek, `100/100` in survival
+        # liep over de rand én over de klok heen. Daarom rechts uitgelijnd
+        # op de marge, en geschaald tot de ruimte naast de minimap.
+        # `hud.hp_x` was de linkerrand van de tekst en kan zoiets niet
+        # dragen; die sleutel wordt niet meer gelezen.
+        hp_tekst, ammo_tekst = self._hud_teksten()
+        marge = max(8, int(_cfg.WIDTH * theme.pos("hud.hp_margin", 0.013)))
+        y_hp = int(_cfg.HEIGHT * theme.pos("hud.hp_y", 0.02))
+        hp = self.hp_font.render(hp_tekst, True, theme.color("hud.hp", 'red'))
+        hp = self._fit_width(hp, self._hp_breedte())
+        _cfg.SCREEN.blit(hp, (_cfg.WIDTH - marge - hp.get_width(), y_hp))
 
-        # Rechtsboven staan de klok en, als de mode dat wil, de kills.
-        # Los van elkaar: `hud_score` mag niet stilletjes stoppen met
-        # werken omdat `run_timer` uit staat, en daarom hangt de plek van
-        # de teller niet aan de klok vast - de rij loopt gewoon door.
+        _cfg.SCREEN.blit(
+            self.hp_font.render(ammo_tekst, True, theme.color("hud.ammo", 'grey')),
+            (int(_cfg.WIDTH * theme.pos("hud.ammo_x", 0.01)),
+             _cfg.HEIGHT - int(_cfg.HEIGHT * theme.pos("hud.ammo_y", 0.1))))
+
+        # De klok staat bovenin het midden, met de kills eronder: samen
+        # zijn ze de stand van de run. Los van elkaar blijven ze getekend,
+        # want `hud_score` mag niet stilletjes stoppen met werken omdat
+        # `run_timer` uit staat - de rij loopt gewoon door.
         klok = getattr(self.game, 'run_timer_active', False)
         kills = self.game.gm("hud_score", False)
         spectate = getattr(self.game, 'spectating', False)
         if klok or kills:
             font = load_font(self._font_px("ui.font.hud", 20), bold=True)
-            rechts = _cfg.WIDTH - 20
+            midden = _cfg.WIDTH // 2
             y = 20
             if klok:
                 # Tijdens het meekijken blauw, zoals het spectate-veld
@@ -1545,7 +1582,7 @@ class Menu:
                 surf = font.render(
                     _formateer_tijd(getattr(self.game, 'run_time_ms', 0)),
                     True, kleur)
-                _cfg.SCREEN.blit(surf, (rechts - surf.get_width(), y))
+                _cfg.SCREEN.blit(surf, (midden - surf.get_width() // 2, y))
                 y += surf.get_height() + 2
             if kills:
                 # Survival matigt op tijd én op hoeveel je opruimde; de
@@ -1555,7 +1592,7 @@ class Menu:
                     theme.string("hud.score_format", "Score:{score}").format(
                         score=self.game.player.score),
                     True, (255, 255, 255))
-                _cfg.SCREEN.blit(surf, (rechts - surf.get_width(), y))
+                _cfg.SCREEN.blit(surf, (midden - surf.get_width() // 2, y))
         in_transition = getattr(self.game, 'elevator_transition', False)
         door_open = getattr(self.game, 'player', None) and self.game.player.door_pos != 0
         if getattr(self.game, 'elevator_waiting', False) and not in_transition and not door_open:

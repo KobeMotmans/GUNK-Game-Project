@@ -1976,7 +1976,7 @@ import pygame
 from src.ui.Menu import Menu_inst, Tekstballon
 from src.network.protocol import encode_packet, decode_packet
 from src.core.map_loader import M
-from src.core.config import TILE_SIZE
+from src.core.config import TILE_SIZE, AMMO_CAP, GAMEMODES
 from src.core import config as _cfg
 from src.core.theme import theme
 from src.core.minimap import Minimap, UIT as MINIMAP_UIT, GEZIEN as MINIMAP_GEZIEN, VOLLEDIG as MINIMAP_VOLLEDIG
@@ -2141,6 +2141,31 @@ try:
     menu.draw_UI([])
     game.gamemode, game.run_timer_active, game.player.score = (
         oude_mode, oude_klok, oude_score)
+
+    # De twee getallen op de HUD moeten uit de mode komen. De limiet hier
+    # stond vast als AMMO_CAP - de campaignlimiet van 200 - en dus zag je
+    # in survival 300/200 terwijl de limiet 400 is. Het eerste checkje is
+    # dat die twee écht verschillen: anders zegt de rest niets.
+    check_ui(AMMO_CAP != GAMEMODES["survival"]["ammo_cap"],
+             f"AMMO_CAP ({AMMO_CAP}) is gelijk aan de survivallimiet; "
+             f"de test kan het verschil dan niet zien")
+    oude_hp, oude_ammo = game.global_health, game.global_ammo
+    game.gamemode = "survival"
+    game.global_health, game.global_ammo = 100, 300
+    check_ui(menu._hud_teksten() == ("100/100", "300/400"),
+             f"de HUD toont {menu._hud_teksten()} voor survival")
+    game.gamemode = "campaign"
+    game.global_health, game.global_ammo = 10, 50
+    check_ui(menu._hud_teksten() == (f"10/{game.max_health()}",
+                                     f"50/{AMMO_CAP}"),
+             f"de HUD toont {menu._hud_teksten()} voor campaign")
+    # En de ruimte naast de minimap waarin de HP geschaald wordt: die moet
+    # er zijn, anders zou het schalen op nul uitkomen.
+    check_ui(menu._hp_breedte() > 0,
+             f"de HP-tekst heeft {menu._hp_breedte()} px naast de minimap")
+    menu.draw_UI([])
+    game.gamemode = oude_mode
+    game.global_health, game.global_ammo = oude_hp, oude_ammo
 
     # ── de minimap ───────────────────────────────────────────
     #
