@@ -169,9 +169,11 @@ GAMEMODES = {
         # Zie src/core/stroom.py.
         "stream": {
             # Hoeveel er tegelijk in leven mogen zijn: 4 bij de start, 16
-            # als plafond. Het plafond is er omdat de map 20 bronnen heeft
-            # en een stapeling tot de boel vastloopt; 16 laat vier plekken
-            # vrij zodat de stroom altijd ergens heen kan.
+            # als plafond. Het plafond is er omdat de map 24 bronnen heeft
+            # en een stapeling tot de boel vastloopt; 16 laat acht plekken
+            # vrij zodat de stroom altijd ergens heen kan. Let op: de kaart
+            # is sinds 2026-10-08 2,25x zo groot terwijl dit plafond hetzelfde
+            # bleef, dus de vijandendichtheid per tegel is gezakt.
             "start_alive": 4,
             "max_alive": 16,
             # Tijd waarin 4 -> 16 en de interval 2 -> 8 doorlopen wordt.

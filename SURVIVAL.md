@@ -73,7 +73,8 @@ kartaart-PNG's, niet de vloertexturen). `map_loader.png_to_list_fast(path)`
 zet zo'n PNG om in een 2D-lijst plus een `spawns`-dict.
 
 Let op: **één pixel per tegel en `TILE_SIZE = 100`**, dus een 32×32 PNG is
-een wereld van 3200×3200 px.
+een wereld van 3200×3200 px. De survivalkaart is 48×48 en is dus
+4800×4800 px.
 
 ### Kleurentabel
 
@@ -104,75 +105,106 @@ nalaat (`game.py` en `server_game.py`, `_handle_enemy_death`), geen plaatsing
 op de kaart. De `H`-tegel is dus de enige nieuwe plek waar health vandaan
 komt: een kaart zonder `H` geeft een lege lijst en verandert verder niets.
 
-### Het grondplan: 32×32, ring en kruis
+### Het grondplan: 48×48, straten en zestien kamers
 
-Indoor, zes kamers, twee gangen die elkaar in het midden kruisen.
+Indoor, zestien kamers van 7×7, straten van één tegel breed en een
+ring-corridor van twee tegels breed die rondom loopt.
 
 - **Buitenmuur** op de rand.
-- **Ring-corridor** van twee tegels breed: x en y in 1-2 en 29-30. Loopt rondom.
-- **Scheidingsmuur** (x=3, x=28, y=3, y=28) tussen ring en binnenblok.
-- **Kruisgang**: verticaal x=15,16 en horizontaal y=15,16, doorlopend van de
-  ring tot de ring. Hij breekt op vier plekken door de scheidingsmuur, zodat
-  het kruis de ring raakt.
-- **Kamermuren** lopen door (x=14, x=17, y=14, y=17), zodat de gangen nergens
-  in een kamer lekken.
-- **Twee extra kamers** door NW te splitsen op x=8 en SE op y=22: zes kamers
-  in totaal.
+- **Ring-corridor** van twee tegels breed: x en y in 1-2 en 45-46. Loopt rondom.
+- **Scheidingsmuur** (x=3, x=44, y=3, y=44) tussen ring en binnenblok.
+- **Straten** van één tegel breed op x én y in 4, 14, 24 en 34. Ze lopen van
+  scheidingsmuur tot scheidingsmuur en breken op alle zestien plekken door
+  de scheidingsmuur heen, zodat er aan geen enkel uiteinde een doodlopend
+  straatje overblijft.
+- **Zestien kamers** van 7×7 tussen de straten: x én y in 6-12, 16-22, 26-32
+  en 36-42. Geen enkele kamer raakt de ring; alle toegang loopt via de
+  straten.
 
-**Eis: elke kamer heeft minstens twee doorgangen.** Geen doodlopende cellen,
-anders zit een speler in survival vast in een hoek. Eén deur naar de
-kruisgang, één naar de ring of naar een buurkamer.
+**Eis: elke kamer heeft minstens twee doorgangen.** Geen doodlopende cel,
+anders zit een speler in survival vast in een hoek. Beide zijn inmiddels
+validaties in de generator, niet alleen afspraken. West- en noorddeur
+bestaan altijd, oost- en zuiddeur als er een straat achter zit: de negen
+binnenkamers hebben er vier, de rand eromheen drie, en de rechtsonderkamer
+heeft er twee.
+
+De deuren staan niet alle vier op het midden van hun wand. Zouden ze dat
+wel doen, dan vielen de deuren van vier kamers op één lijn en keek je van
+straat tot straat door de hele kaart — precies de rechte zichtlijn die
+kamers open trekt. Nu heeft elke deur zijn eigen hoek.
+
+**Waarom 48 en niet 32** (keuze 2026-10-08): de gangen en kamers waren
+ruim maar de wereld zelf klein. 32×32 is 1024 tegels, 48×48 is 2304. De
+kamers gingen van tot ~10 breed naar 7 en de gangen van 2 naar 1, dus
+dezelfde opmerking leverde twee keer zoveel vloer op.
 
 Het skelet is opgebouwd en gevalideerd (rand overal muur, precies één `@`,
 flood-fill bereikbaarheid, vijandspawn niet dichter dan 5 tegels bij de
-speler). De huidige ASCII:
+speler, geen doodlopende cel). De huidige ASCII:
 
 ```
-################################
-#H...A........................H#
-#.X.....X..............X.....X.#
-#..#######..###..#######..###..#
-#..#....#.....#..#..........#..#
-#..#....#.....#XX#..........#..#
-#..#..A.#..A..#..#....A.....#..#
-#..#....#.....#..#..........#..#
-#.X.....#........#..........#X.#
-#.......#........#..........#..#
-#..#....#.....#..#..........#..#
-#..#....#.....#..#..........#..#
-#..#....#.....#..#..........#..#
-#..#....#.....#..#..........#..#
-#..##..########..#####..#####..#
-#....X.................H..X....#
-#....X..H.......@.........X....#
-#..#####..#####..############..#
-#..#..........#..#..........#..#
-#..#..........#.......A.....#..#
-#..#..........#.............#..#
-#..#..........#..#..........#..#
-#.....A.......#..#######..###..#
-#.X...........#..#..........#X.#
-#..#..........#.............#..#
-#..#..........#.......A........#
-#..#..........#XX#.............#
-#..#..........#..#..........#..#
-#..############..############..#
-#.X.....X..............X.....X.#
-#H........................A...H#
-################################
+################################################
+#...........H......................H...........#
+#.X....................X.....................X.#
+#..#.#########.#########.#########.##########..#
+#...X.........X.........A.........X............#
+#..#.######.##.######.##.######.##.######.###..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.........#.........#.........#.........##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#...X...#.#...A...#.#...X...#.#...A...##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#.........#.........#.........#.......##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.##.######.##.######.##.######.##.#######..#
+#...X.........H.........H.........X............#
+#..#.######.##.######.##.######.##.######.###..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.........#.........#.........#.........##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#...A...#.#...X...#.#...A...#.#...X...##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#.........#.........#.........#.......##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#.X#.##.######.##.######.##.######.##.#######X.#
+#...A.........H.........@.........A............#
+#..#.######.##.######.##.######.##.######.###..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.........#.........#.........#.........##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#...X...#.#...A...#.#...X...#.#...A...##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#.........#.........#.........#.......##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.##.######.##.######.##.######.##.#######..#
+#...X.........X.........A.........X............#
+#..#.######.##.######.##.######.##.######.###..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.........#.........#.........#.........##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#...A...#.#...X...#.#...A...#.#...X...##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#.........#.........#.........#.......##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#########.#########.#########.##########..#
+#..#.#########.#########.#########.##########..#
+#.X....................X.....................X.#
+#...........H......................H...........#
+################################################
 ```
 
-20 `X`, 8 `A`, 6 `H`, één `@` op (16,16). Geen `E`, `K` of `B`: survival
+24 `X`, 12 `A`, 7 `H`, één `@` op (24,24). Geen `E`, `K` of `B`: survival
 heeft geen lift, dus geen uitgang en geen keycard.
 
 Verdeling die nu klopt:
 
-- `X` in de ring (hoeken en zijden) en in de armen van de kruisgang — ruim
-  weg van de speler, zodat de eerste vijanden niet meteen op je staan.
-- `A` één per kamer plus twee in de ring: ammo is een beloning voor het
-  verkennen van de kamers.
-- `H` vier in de ringhoeken (leuk: je moet ervoor de rand op) en twee in de
-  gangen.
+- `X` (24): acht kamercentra, acht in de ring (hoeken en midden van de
+  randen) en acht op de kruispunten van de straten — allemaal ruim weg van
+  de speler, zodat de eerste vijanden niet meteen op je staan.
+- `A` (12): één per kamer plus de vier kruispunten op de middenas. Ammo is
+  een beloning voor het verkennen van de kamers.
+- `H` (7): vier op de ringrand boven en onder (leuk: je moet ervoor de rand
+  op) en drie op de kruispunten bij het midden.
 
 ### De generator
 
@@ -410,7 +442,7 @@ modenaamcheck in de gameplay-code.
 | mix | 3 normal, 1 fast, 0 tank | 2 normal, 2 fast, 2 tank | 300 s |
 
 - **Hoeveel** er tegelijk in leven zijn, loopt op mét een plafond. Het
-  plafond staat op 16 terwijl er 20 spawns zijn: vier plekken blijven vrij,
+  plafond staat op 16 terwijl er 24 spawns zijn: 8 plekken blijven vrij,
   zodat de stroom altijd ergens heen kan en er niets vastloopt.
 - **Hoe vaak** er een nieuwe bijkomt, neemt af — de interval wordt juist
   *langer*. Het plafond bepaalt de druk, de interval voorkomt dat er per
@@ -428,8 +460,8 @@ de server aanstuurt.
 ### Wat de kaart al levert
 
 - **Spawn-punten zijn de rode `X`-tegels.** Die komen in
-  `spawns["enemies"]` terecht en dienen als bronlijst voor de stroom. De 20
-  in het grondplan liggen verspreid over ring, kruisgang en de armen, zodat
+  `spawns["enemies"]` terecht en dienen als bronlijst voor de stroom. De 24
+  in het grondplan liggen verspreid over ring, straten en de zestien kamers, zodat
   vijanden niet allemaal uit dezelfde hoek komen en er altijd een bezet kan
   zijn zonder dat de volgende blijft hangen. Ze staan in
   wereldcoördinaten (`map_to_cord(x) + TILE_SIZE/2`), net als `enemy.pos`,

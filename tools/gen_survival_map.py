@@ -36,49 +36,73 @@ from PIL import Image                                     # noqa: E402
 from src.core.map_loader import color_to_number           # noqa: E402
 
 # ── Het grondplan ─────────────────────────────────────────────────────
-# Zes kamers, een ring-corridor van twee tegels breed en twee gangen die
-# elkaar in het midden kruisen. Elke kamer heeft minstens twee
+# Zestien kamers van 7x7, straten van één tegel breed en een ring-corridor
+# van twee tegels breed die rondom loopt. Elke kamer heeft minstens twee
 # doorgangen: een doodlopende cel betekent in survival een speler die
-# vastzit in een hoek.
+# vastzit in een hoek. De straten breken op alle zestien plekken door de
+# scheidingsmuur, zodat er aan geen enkel uiteinde een doodlopend straatje
+# overblijft.
+#
+# Waarom 48 en niet 32: de gangen en kamers waren ruim maar de wereld
+# zelf klein (keuze 2026-10-08). 48x48 is 2,25x het oppervlak, met
+# smallere gangen en kamers van ~10 breed naar 7.
 #
 #   .  leeg        #  muur        @  spelerspawn
 #   X  vijand      A  ammo        H  health
 #
 # Geen E, K of B: survival heeft geen lift, dus geen uitgang, geen
 # keycard en geen boss.
+FORMAAT = 48
+
 GRONDPLAN = """
-################################
-#H...A........................H#
-#.X.....X..............X.....X.#
-#..#######..###..#######..###..#
-#..#....#.....#..#..........#..#
-#..#....#.....#XX#..........#..#
-#..#..A.#..A..#..#....A.....#..#
-#..#....#.....#..#..........#..#
-#.X.....#........#..........#X.#
-#.......#........#..........#..#
-#..#....#.....#..#..........#..#
-#..#....#.....#..#..........#..#
-#..#....#.....#..#..........#..#
-#..#....#.....#..#..........#..#
-#..##..########..#####..#####..#
-#....X.................H..X....#
-#....X..H.......@.........X....#
-#..#####..#####..############..#
-#..#..........#..#..........#..#
-#..#..........#.......A.....#..#
-#..#..........#.............#..#
-#..#..........#..#..........#..#
-#.....A.......#..#######..###..#
-#.X...........#..#..........#X.#
-#..#..........#.............#..#
-#..#..........#.......A........#
-#..#..........#XX#.............#
-#..#..........#..#..........#..#
-#..############..############..#
-#.X.....X..............X.....X.#
-#H........................A...H#
-################################
+################################################
+#...........H......................H...........#
+#.X....................X.....................X.#
+#..#.#########.#########.#########.##########..#
+#...X.........X.........A.........X............#
+#..#.######.##.######.##.######.##.######.###..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.........#.........#.........#.........##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#...X...#.#...A...#.#...X...#.#...A...##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#.........#.........#.........#.......##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.##.######.##.######.##.######.##.#######..#
+#...X.........H.........H.........X............#
+#..#.######.##.######.##.######.##.######.###..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.........#.........#.........#.........##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#...A...#.#...X...#.#...A...#.#...X...##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#.........#.........#.........#.......##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#.X#.##.######.##.######.##.######.##.#######X.#
+#...A.........H.........@.........A............#
+#..#.######.##.######.##.######.##.######.###..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.........#.........#.........#.........##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#...X...#.#...A...#.#...X...#.#...A...##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#.........#.........#.........#.......##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.##.######.##.######.##.######.##.#######..#
+#...X.........X.........A.........X............#
+#..#.######.##.######.##.######.##.######.###..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.........#.........#.........#.........##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#...A...#.#...X...#.#...A...#.#...X...##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#.........#.........#.........#.......##..#
+#..#.#.......#.#.......#.#.......#.#.......##..#
+#..#.#########.#########.#########.##########..#
+#..#.#########.#########.#########.##########..#
+#.X....................X.....................X.#
+#...........H......................H...........#
+################################################
 """
 
 # Alle tekens die in het grondplan mogen voorkomen en hun tegelkleur.
@@ -125,18 +149,73 @@ def vind(rijen, teken):
             if c == teken]
 
 
+def rechthoeken(rijen):
+    """Alle maximale rechthoeken vloer van minstens 3x3, één keer elk.
+
+    Elke linkerbovenhoek levert de breedste rij die daar begint, en die
+    breedte zolang elke rij eronder nog haalt. Zo hoef je niet te weten
+    waar de kamers staan om ze te vinden: een kamer is in dit plan gewoon
+    een blok vloer dat nergens tegen een gang aan ligt zonder muur.
+    """
+    formaat = len(rijen)
+    breedte = [[0] * formaat for _ in range(formaat)]
+    for y in range(formaat):
+        for x in range(formaat - 1, -1, -1):
+            if rijen[y][x] == "#":
+                breedte[y][x] = 0
+            else:
+                # De rechterkolom heeft geen buur meer.
+                rest = breedte[y][x + 1] if x + 1 < formaat else 0
+                breedte[y][x] = 1 + rest
+
+    uit = []
+    for y in range(formaat):
+        for x in range(formaat):
+            b = breedte[y][x]
+            if b < 3:
+                continue
+            hoogte, yy = 0, y
+            while yy < formaat and breedte[yy][x] >= b:
+                hoogte += 1
+                yy += 1
+            if hoogte >= 3:
+                uit.append((x, y, x + b - 1, y + hoogte - 1))
+    return uit
+
+
+def deuren_rond(rijen, vak):
+    """De vloercellen die net buiten het vak liggen: dat zijn de deuren.
+
+    De cellen er net buiten zijn normaal muur, behalve waar een deur zit.
+    """
+    x0, y0, x1, y1 = vak
+    formaat = len(rijen)
+    teller = 0
+    for x in range(x0, x1 + 1):
+        for y in (y0 - 1, y1 + 1):
+            if 0 <= y < formaat and rijen[y][x] != "#":
+                teller += 1
+    for y in range(y0, y1 + 1):
+        for x in (x0 - 1, x1 + 1):
+            if 0 <= x < formaat and rijen[y][x] != "#":
+                teller += 1
+    return teller
+
+
 def valideer(rijen):
     """Alle redenen om deze kaart te weigeren. Lege lijst = in orde."""
     fouten = []
+    formaat = FORMAAT
 
     hoogte = len(rijen)
-    if hoogte != 32:
-        fouten.append(f"{hoogte} rijen in plaats van 32")
+    if hoogte != formaat:
+        fouten.append(f"{hoogte} rijen in plaats van {formaat}")
         return fouten
 
     for y, rij in enumerate(rijen):
-        if len(rij) != 32:
-            fouten.append(f"rij {y} is {len(rij)} tegels breed in plaats van 32")
+        if len(rij) != formaat:
+            fouten.append(f"rij {y} is {len(rij)} tegels breed in plaats "
+                          f"van {formaat}")
 
     # Onbekende tekens: die zouden als muur of leeg doorglippen.
     for y, rij in enumerate(rijen):
@@ -149,15 +228,15 @@ def valideer(rijen):
 
     # De rand is overal muur, anders loopt de speler het plaatje uit en
     # vallen de raycasts buiten de array.
-    for x in range(32):
+    for x in range(formaat):
         if rijen[0][x] != "#":
             fouten.append(f"bovenrand op x={x} is geen muur")
-        if rijen[31][x] != "#":
+        if rijen[formaat - 1][x] != "#":
             fouten.append(f"onderrand op x={x} is geen muur")
-    for y in range(32):
+    for y in range(formaat):
         if rijen[y][0] != "#":
             fouten.append(f"linkerrand op y={y} is geen muur")
-        if rijen[y][31] != "#":
+        if rijen[y][formaat - 1] != "#":
             fouten.append(f"rechterrand op y={y} is geen muur")
 
     # Precies één startpunt.
@@ -180,7 +259,7 @@ def valideer(rijen):
         x, y = stapel.pop()
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             nx, ny = x + dx, y + dy
-            if not (0 <= nx < 32 and 0 <= ny < 32):
+            if not (0 <= nx < formaat and 0 <= ny < formaat):
                 continue
             if (nx, ny) in bereik or rijen[ny][nx] == "#":
                 continue
@@ -192,6 +271,31 @@ def valideer(rijen):
             if c != "#" and (x, y) not in bereik:
                 fouten.append(f"tegel {c!r} op ({x}, {y}) is niet bereikbaar "
                               f"vanaf de spawn")
+
+    # Geen doodlopende cel: een vloertegel met maar één vloerbuur is een
+    # zak waar je in verdwijnt en niet meer uitkomt.
+    for y, rij in enumerate(rijen):
+        for x, c in enumerate(rij):
+            if c == "#":
+                continue
+            buren = sum(1
+                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                        if 0 <= x + dx < formaat and 0 <= y + dy < formaat
+                        and rijen[y + dy][x + dx] != "#")
+            if buren <= 1:
+                fouten.append(f"doodlopende cel op ({x}, {y})")
+
+    # Elke kamer heeft minstens twee doorgangen. Eén deur betekent dat je
+    # je in een hoek laat opjagen en er niet meer uitkomt. Die regel staat
+    # in het dossier, en hier is het dus geen afspraak maar een controle:
+    # een kamer is een blok vloer, en wat er net buiten ligt is muur
+    # behalve bij een deur.
+    for vak in rechthoeken(rijen):
+        deuren = deuren_rond(rijen, vak)
+        if deuren < 2:
+            x0, y0, x1, y1 = vak
+            fouten.append(f"blok ({x0}, {y0})-({x1}, {y1}) heeft maar "
+                          f"{deuren} deur")
 
     # De eerste vijand moet niet al naast je staan.
     for x, y in vind(rijen, "X"):

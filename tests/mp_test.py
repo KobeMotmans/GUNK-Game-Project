@@ -3183,6 +3183,16 @@ def check(voorwaarde, bericht):
 
 
 # ── 1. De generator draait en levert een speelbare kaart ────────
+# De generator is meteen de bron voor wat er op de kaart hoort te staan:
+# formaat en tellingen komen uit zijn eigen GRONDPLAN, zodat een grotere
+# kaart of een extra health-tegel niet op vijf plekken in dit bestand hoeft
+# te worden aangepast.
+spec = importlib.util.spec_from_file_location(
+    "gen_survival", os.path.join(ROOT, "tools", "gen_survival_map.py"))
+gen = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gen)
+telling = gen.samenvatting(gen.lees_grondplan())
+
 proc = subprocess.run([sys.executable, os.path.join("tools",
                                                     "gen_survival_map.py")],
                       capture_output=True, text=True, timeout=300)
@@ -3195,30 +3205,28 @@ pad, _ = kaart_voor("survival", 0)
 check(os.path.exists(pad), f"de survival-kaart bestaat niet: {pad}")
 if os.path.exists(pad):
     lijst, spawns, w, h = png_to_list_fast(pad)
-    check((w, h) == (32, 32), f"kaart is {w}x{h} in plaats van 32x32")
-    check(len(spawns["enemies"]) == 20,
-          f"{len(spawns['enemies'])} vijandspawns in plaats van 20")
-    check(len(spawns["health"]) == 6,
-          f"{len(spawns['health'])} health-tegels in plaats van 6")
-    check(len(spawns["ammo"]) == 8,
-          f"{len(spawns['ammo'])} ammo-tegels in plaats van 8")
+    check((w, h) == (gen.FORMAAT, gen.FORMAAT),
+          f"kaart is {w}x{h} in plaats van "
+          f"{gen.FORMAAT}x{gen.FORMAAT}")
+    for sleutel, teken in (("enemies", "X"), ("health", "H"),
+                           ("ammo", "A")):
+        verwacht = telling.get(teken, 0)
+        check(len(spawns[sleutel]) == verwacht,
+              f"{len(spawns[sleutel])} {sleutel}-tegels in plaats van "
+              f"{verwacht} (het {teken}-aantal in de ASCII)")
     check(not spawns.get("keycard"), "survival heeft geen keycard nodig")
 
 # ── 2. Het document toont dezelfde kaart ────────────────────────
-spec = importlib.util.spec_from_file_location(
-    "gen_survival", os.path.join(ROOT, "tools", "gen_survival_map.py"))
-gen = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(gen)
-
 dossier = open(os.path.join(ROOT, "SURVIVAL.md"), encoding="utf-8").read()
 gevonden = None
 for blok in dossier.split("```"):
     regels = [l for l in blok.splitlines() if l.strip()]
-    if regels and len(regels) == 32 and set(regels[0]) == {"#"}:
+    if regels and len(regels) == gen.FORMAAT and set(regels[0]) == {"#"}:
         gevonden = regels
         break
 check(gevonden is not None,
-      "geen 32x32-grondplanblok in SURVIVAL.md gevonden")
+      f"geen {gen.FORMAAT}x{gen.FORMAAT}-grondplanblok in SURVIVAL.md "
+      f"gevonden")
 if gevonden is not None:
     check(gevonden == gen.lees_grondplan(),
           "de kaart in SURVIVAL.md verschilt van die in "
@@ -3226,8 +3234,9 @@ if gevonden is not None:
 
 # ── 3. De validaties werken echt ────────────────────────────────
 # Een gebroken plan moet geweigerd worden, niet netjes weggeschreven.
+rand = "#" * gen.FORMAAT
 kapot = list(gen.lees_grondplan())
-kapot[0] = "." * 32
+kapot[0] = "." * gen.FORMAAT
 fout = gen.valideer(kapot)
 check(any("bovenrand" in f for f in fout),
       f"gat in de bovenrand werd niet gemeld: {fout}")
@@ -3240,10 +3249,51 @@ check(any("spelerspawns" in f for f in fout),
       f"ontbrekende spawn werd niet gemeld: {fout}")
 
 kapot = list(gen.lees_grondplan())
-for y in range(1, 31):
-    kapot[y] = "#" * 32
+for y in range(1, gen.FORMAAT - 1):
+    kapot[y] = rand
 fout = gen.valideer(kapot)
 check(bool(fout), "een dichtgemetselde kaart werd niet gemeld")
+
+# Doodlopende cellen zijn de reden dat elke kamer twee deuren heeft: een
+# speler die in een zak verdwijnt komt er niet meer uit. Muur één van de
+# twee vloerbuurten van een rechte straatcel dicht en er blijft één over.
+kapot = list(gen.lees_grondplan())
+plek = next((x, y) for y, r in enumerate(kapot)
+            for x, c in enumerate(r)
+            if c == "." and 1 < x < gen.FORMAAT - 2
+            and 1 < y < gen.FORMAAT - 2
+            and sum(kapot[ny][nx] != "#"
+                    for nx, ny in ((x + 1, y), (x - 1, y),
+                                   (x, y + 1), (x, y - 1))) == 2)
+for nx, ny in ((plek[0] + 1, plek[1]), (plek[0] - 1, plek[1]),
+               (plek[0], plek[1] + 1), (plek[0], plek[1] - 1)):
+    if kapot[ny][nx] != "#":
+        kapot[ny] = kapot[ny][:nx] + "#" + kapot[ny][nx + 1:]
+        break
+fout = gen.valideer(kapot)
+check(any("doodlopende cel" in f for f in fout),
+      f"een dode zak werd niet gemeld: {fout}")
+
+# En de andere helft van dezelfde eis: een kamer met maar één deur. Muur
+# drie van de vier dicht en er moet iets van klagen - zou dat niet zo zijn,
+# dan staat de regel alleen nog in het dossier.
+kapot = list(gen.lees_grondplan())
+vak = next(v for v in gen.rechthoeken(kapot)
+           if v[2] - v[0] + 1 >= 5 and v[3] - v[1] + 1 >= 5)
+x0, y0, x1, y1 = vak
+buiten = ([(x, y0 - 1) for x in range(x0, x1 + 1)]
+          + [(x, y1 + 1) for x in range(x0, x1 + 1)]
+          + [(x0 - 1, y) for y in range(y0, y1 + 1)]
+          + [(x1 + 1, y) for y in range(y0, y1 + 1)])
+deuren = [(x, y) for x, y in buiten
+          if 0 <= x < gen.FORMAAT and 0 <= y < gen.FORMAAT
+          and kapot[y][x] != "#"]
+check(len(deuren) >= 2, f"het vak {vak} had maar {len(deuren)} deur")
+for x, y in deuren[1:]:
+    kapot[y] = kapot[y][:x] + "#" + kapot[y][x + 1:]
+fout = gen.valideer(kapot)
+check(any("heeft maar 1 deur" in f for f in fout),
+      f"kamer met één deur werd niet gemeld: {fout}")
 
 # ── 4. Het game_start-pakket draagt de mode echt over ───────────
 check("gamemode" in KEY_TO_ID,
@@ -3274,7 +3324,8 @@ for lvl in range(len(MAP_PATH)):
 
 g.reset_game(gamemode="survival")
 check(g.gamemode == "survival", f"gamemode niet gezet: {g.gamemode}")
-check(len(M.MAP) == 32, f"survival-kaart is {len(M.MAP)} rijen")
+check(len(M.MAP) == gen.FORMAAT,
+      f"survival-kaart is {len(M.MAP)} rijen in plaats van {gen.FORMAAT}")
 check(g.global_health == 100, f"survival start_health {g.global_health}")
 check(g.global_ammo == 300, f"survival start_ammo {g.global_ammo}")
 check(g.objects["exit"] is None,
@@ -3283,10 +3334,12 @@ check(g.objects["exit"] is None,
 check(len(g.objects["enemies"]) == 0,
       f"survival zette {len(g.objects['enemies'])} vijanden neer terwijl "
       f"spawn_enemies_at_start False is")
-check(len(g.objects["health"]) == 6,
-      f"{len(g.objects['health'])} health-objects in plaats van 6")
-check(len(g.objects["ammo"]) == 8,
-      f"{len(g.objects['ammo'])} ammo-objects in plaats van 8")
+check(len(g.objects["health"]) == telling.get("H", 0),
+      f"{len(g.objects['health'])} health-objects in plaats van "
+      f"{telling.get('H', 0)} (de H-tegels in de ASCII)")
+check(len(g.objects["ammo"]) == telling.get("A", 0),
+      f"{len(g.objects['ammo'])} ammo-objects in plaats van "
+      f"{telling.get('A', 0)} (de A-tegels in de ASCII)")
 check(abs(g.player.angle - START_ANGLES[0]) < 1e-6,
       f"survival start op hoek {g.player.angle} in plaats van -pi/2")
 
@@ -3361,6 +3414,14 @@ import game
 from src.core.map_loader import M
 from src.network.server_game import ServerGame
 from src.network.network import ServerIO
+
+# Dezelfde bron als de solo-proef: het formaat van de survivalkaart komt
+# uit de generator, niet uit een getal dat hier kan verouderen.
+import importlib.util
+_gen_spec = importlib.util.spec_from_file_location(
+    "gen_survival", os.path.join(ROOT, "tools", "gen_survival_map.py"))
+gen = importlib.util.module_from_spec(_gen_spec)
+_gen_spec.loader.exec_module(gen)
 from src.network.protocol import decode_packet
 
 fouten = []
@@ -3379,18 +3440,21 @@ sg.set_shared_options(opties)
 check(sg.gamemode == "survival", f"set_shared_options zette {sg.gamemode!r}")
 sg.init_world()
 
-check(len(M.MAP) == 32, f"server draait op een kaart van {len(M.MAP)} rijen")
+check(len(M.MAP) == gen.FORMAAT,
+      f"server draait op een kaart van {len(M.MAP)} rijen in plaats van "
+      f"{gen.FORMAAT}")
 check(sg.objects.get("exit") is None,
       "server heeft een uitgang terwijl uses_elevator False is")
 check(sg.exit_pos is None, f"server exit_pos is {sg.exit_pos}")
 check(len(sg.enemies) == 0,
       f"server zette {len(sg.enemies)} vijanden neer terwijl "
       f"spawn_enemies_at_start False is")
-check(len(sg.objects["health"]) == 6,
-      f"server heeft {len(sg.objects['health'])} health-objects in plaats "
-      f"van 6 uit de kaart")
-check(len(sg.objects["ammo"]) == 8,
-      f"server heeft {len(sg.objects['ammo'])} ammo-objects in plaats van 8")
+check(len(sg.objects["health"]) == len(M.SPAWNS["health"]),
+      f"server heeft {len(sg.objects['health'])} health-objects terwijl de "
+      f"kaart {len(M.SPAWNS['health'])} health-tegels heeft")
+check(len(sg.objects["ammo"]) == len(M.SPAWNS["ammo"]),
+      f"server heeft {len(sg.objects['ammo'])} ammo-objects terwijl de kaart "
+      f"{len(M.SPAWNS['ammo'])} ammo-tegels heeft")
 
 # De elevator-tick mag hier niet op crashen nu exit_pos None is.
 #
@@ -3460,8 +3524,9 @@ g._start_multiplayer_client(terug["level"], terug.get("gamemode"))
 
 check(g.gamemode == "survival",
       f"de client past de mode niet toe: {g.gamemode!r}")
-check(len(M.MAP) == 32,
-      f"de client laadt een kaart van {len(M.MAP)} rijen in plaats van 32")
+check(len(M.MAP) == gen.FORMAAT,
+      f"de client laadt een kaart van {len(M.MAP)} rijen in plaats van "
+      f"{gen.FORMAAT}")
 check(g.objects.get("exit") is None,
       f"de client tekent een uitgang: {g.objects.get('exit')}")
 check(len(g.objects["enemies"]) == 0,
@@ -3551,6 +3616,15 @@ from src.core.map_loader import M
 from src.core.vector import Vector
 from src.network.server_game import ServerGame, ENEMY_TYPES
 
+# Dezelfde bron als de andere survivalproeven: formaat en tellingen komen
+# uit de generator, niet uit getallen die bij een nieuwe kaart verouderen.
+import importlib.util
+_gen_spec = importlib.util.spec_from_file_location(
+    "gen_survival", os.path.join(ROOT, "tools", "gen_survival_map.py"))
+gen = importlib.util.module_from_spec(_gen_spec)
+_gen_spec.loader.exec_module(gen)
+telling = gen.samenvatting(gen.lees_grondplan())
+
 fouten = []
 
 
@@ -3604,8 +3678,14 @@ for t in range(0, ramp + 30, 5):
     check(iv >= vorige_i, f"de interval wordt korter bij t={t}: {vorige_i} -> {iv}")
     vorige_n, vorige_i = n, iv
 
-check(blok["max_alive"] <= 20,
-      f"het plafond ({blok['max_alive']}) ligt boven het aantal spawns (20)")
+# Het plafond mag niet boven het aantal bronnen van de kaart uitkomen:
+# meer levenden dan er spawn-punten zijn betekent dat er altijd wel
+# ergens één bezet blijft. Het aantal komt uit de ASCII, niet uit een
+# getal dat bij een nieuwe kaart zou verouderen.
+aantal_spawns = telling.get("X", 0)
+check(blok["max_alive"] <= aantal_spawns,
+      f"het plafond ({blok['max_alive']}) ligt boven het aantal spawns "
+      f"({aantal_spawns})")
 
 # ── 2. de mix, tegen beide typetabellen ────────────────────────
 r = random.Random(1)
@@ -3640,8 +3720,9 @@ check(stroom.vrije_spawns(spawns, [V(x, y) for x, y in spawns]) == [],
 g.reset_game(gamemode="survival")
 check(len(g.objects["enemies"]) == 0,
       f"bij de start staan al {len(g.objects['enemies'])} vijanden")
-check(len(M.SPAWNS["enemies"]) == 20,
-      f"{len(M.SPAWNS['enemies'])} spawns in plaats van 20")
+check(len(M.SPAWNS["enemies"]) == telling.get("X", 0),
+      f"{len(M.SPAWNS['enemies'])} spawns in plaats van "
+      f"{telling.get('X', 0)}")
 
 
 def ver_vooruit(g, verstreken):
