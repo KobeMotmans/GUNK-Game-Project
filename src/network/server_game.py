@@ -34,6 +34,9 @@ class ServerEnemy(EnemyAI):
         self.target = None
         self._full_path = []
         self._path_timer = 0
+        # Dezelfde waarde als Player.floor en Enemy.floor, zodat de server
+        # straks per speler de juiste wereld kan nemen zonder nieuwe velden.
+        self.floor = 0
 
     def update_ai(self, target_pos):
         self.is_los, dist = self.is_in_los(target_pos)
@@ -251,6 +254,8 @@ class ServerGame:
             "health": self.gm("start_health", START_HEALTH),
             "ammo": self.gm("start_ammo", START_AMMO),
             "at_exit": False,
+            # Zie Player.floor: de verdieping van deze speler, nu altijd 0.
+            "floor": 0,
         }
         self._last_player_seq[pid] = 0
         self._ammo_dropped.discard(pid)

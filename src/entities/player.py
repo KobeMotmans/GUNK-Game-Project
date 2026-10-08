@@ -23,6 +23,11 @@ class Player:
         self.door_pos = 0
         self.velocity = Vector(0, 0)
         self._speed = 0.0
+        # Welke verdieping de speler op staat. Nu altijd 0: survival heeft er
+        # één. Het veld staat er nu, zodat de trap straks neerkomt op "het
+        # tweede grid laden" in plaats van een structuurrefactoring door alle
+        # entities heen. Zie SURVIVAL.md, "Twee verdiepingen en de trap".
+        self.floor = 0
 
     def rotate(self, direction):
         """

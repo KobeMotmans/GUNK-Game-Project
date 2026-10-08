@@ -3340,6 +3340,16 @@ check(len(g.objects["health"]) == telling.get("H", 0),
 check(len(g.objects["ammo"]) == telling.get("A", 0),
       f"{len(g.objects['ammo'])} ammo-objects in plaats van "
       f"{telling.get('A', 0)} (de A-tegels in de ASCII)")
+
+# De verdieping staat er nu al op, al is er maar één: dat is de hele
+# reden dat de trap straks "het tweede grid laden" is in plaats van een
+# refactor door alle entities heen (SURVIVAL.md, "Twee verdiepingen").
+from src.entities.enemies import NormalEnemy
+from src.network.server_game import ServerEnemy
+check(g.player.floor == 0, f"speler.floor = {g.player.floor}")
+check(NormalEnemy(0, 0).floor == 0, "vijand heeft geen floor")
+check(ServerEnemy("normal_enemy", 0, 0, 13, 3, 3).floor == 0,
+      "ServerEnemy heeft geen floor")
 check(abs(g.player.angle - START_ANGLES[0]) < 1e-6,
       f"survival start op hoek {g.player.angle} in plaats van -pi/2")
 
@@ -3455,6 +3465,8 @@ check(len(sg.objects["health"]) == len(M.SPAWNS["health"]),
 check(len(sg.objects["ammo"]) == len(M.SPAWNS["ammo"]),
       f"server heeft {len(sg.objects['ammo'])} ammo-objects terwijl de kaart "
       f"{len(M.SPAWNS['ammo'])} ammo-tegels heeft")
+check(sg.players[0]["floor"] == 0,
+      f"server-speler.floor = {sg.players[0].get('floor')}, expected 0")
 
 # De elevator-tick mag hier niet op crashen nu exit_pos None is.
 #

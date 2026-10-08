@@ -30,6 +30,10 @@ class Enemy(EnemyAI, RenderObject):
         self._path_timer = 0
         self.hit_timer = 0
         self.last_hit_world = None
+        # De verdieping waarop deze vijand staat, zie Player.floor. Nu altijd
+        # 0; de padvinding moet straks het grid van deze laag pakken zolang
+        # M.MAP nog één ding is.
+        self.floor = 0
 
     def draw_health_bar(self, sprite_h, draw_x, draw_y):
         health_ratio = max(0, self.health / self.max_health)

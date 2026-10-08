@@ -358,13 +358,124 @@ Vier punten die na de analyse boven zijn binnengekomen:
    camera 45 graden omhoog, puur voor dat trap-gedeelte. Zo zou je de
    helling "tegenkomen" zonder dat de raycaster een vrij pitch-vlak hoeft
    te ondersteunen.
-4. **Nog te beantwoorden:** wat die 45° in deze renderer precies kost en
-   oplevert. De analyse daarvan was onderbroken en hoort hieronder
-   bijgeschreven te worden voordat er iets gebouwd wordt: of het bij
-   Optie A past, wat het met de vloerloze achtergrond doet (er is geen
-   zichtbare vloerlijn die kan "omhoogschuiven"), en of het
-   trap-gedeelte en het gewone kijkvlak met elkaar te rijmen zijn zonder
-   een zichtbare knik.
+4. **45° omhoog bij de trap** — beantwoord in "Wat 45° kost in deze
+   renderer" hieronder. Die analyse stond als onderbroken te boek en
+   moest er zijn vóór er iets gebouwd werd; hij is er.
+
+### Wat 45° kost in deze renderer — analyse 2026-10-08
+
+Drie vragen stonden open: of het bij Optie A past, wat het met de
+vloerloze achtergrond doet, en of het trap-gedeelte en het gewone
+kijkvlak zonder zichtbare knik te rijmen zijn.
+
+**Het mechanisme is bijna gratis.** De raycaster loopt alleen in het
+horizontale vlak; de verticale positie komt uit één regel,
+`raycaster.py:45`:
+
+```python
+y = cfg.HEIGHT / 2 - wall_height / 2 + y_offset
+```
+
+`y_offset` bestaat al (cam-bob, ±1 px). Een kanteling is in dit raster
+dus exact een verschuiving van de horizon. Geen tweede grid-passage, geen
+z-buffer, geen wijziging aan `dda()` — van Optie B's dure werk is hier
+niets nodig.
+
+**Maar één getal is niet genoeg.** Alles wat op de horizon staat staat
+op `cfg.HEIGHT / 2` en moet hetzelfde getal krijgen:
+
+| wat | waar |
+|---|---|
+| muren | `raycaster.py:45` (heeft `y_offset` al) |
+| objecten en oprapers | `objects.py:102` |
+| spelerssprite en naamlabels | `objects.py:204`, `objects.py:233` |
+| vijanden | `enemies.py:126` |
+| vuurballen | `enemies.py:230` |
+| trefferpunt | `game.py:1094` |
+| ammo-stralen | `game.py:1070` |
+
+Bewust *niet* verschoven: wapen, HUD, minimap en de
+geen-keycard-melding (`objects.py:159`) — dat is schermruimte, geen
+wereld. Laat je één van de zeven staan, dan hangt een vijand 960 px boven
+de muur waar hij naast staat. Het hele project zit in die ene zin: één
+waarde, zeven lezers, nergens een eigen `HEIGHT / 2`. `dda()` krijgt ze
+al mee; de zes andere moeten de parameter aannemen. De formule staat
+bovendien gekopieerd in `tests/wall_texture_test.py:135`, dus die test
+moet meebewegen.
+
+**Wat 45° zelf kost.** `PROJ_DIST = WIDTH / 2 = 960` (FOV 90°, dus
+`tan(FOV/2) = 1`). De horizon schuift met `PROJ_DIST · tan θ`:
+
+| θ | verschuiving | wat er nog in beeld is |
+|---|---|---|
+| 10° | 169 px | alles |
+| 20° | 349 px | alles |
+| 25° | 448 px | alles |
+| 29° | 532 px | alles |
+| 35° | 672 px | alles dichter dan 3,6 tegel |
+| 45° | 960 px (89% van 1080) | alles dichter dan 1,1 tegel |
+
+Een muurkolom is `100 · 960 / dist` px hoog en hangt rond de horizon;
+hij blijft in beeld zolang `h > 2Δ − 1080`. Tot ±29° verandert er niets
+aan de zichtbaarheid. Daarna valt de wereld van buiten naar binnen weg,
+en op de volle 45° is het scherm achtergrond plus een strookje muur op
+minder dan één tegel.
+
+**Dus: 45° is niet bruikbaar als constante.** Wat wél werkt is een ramp
+naar ±25°, waarbij de piek het moment is waarop er gewisseld wordt.
+
+**Wat het met de vloerloze achtergrond doet.** De achtergrond is één
+egale kleur die het hele scherm vult vóór de muren (`game.py:843`), en
+`textures.bg` staat in geen enkele pack — er komt dus geen afbeelding aan
+te pas. Er is geen zichtbare vloerlijn en geen plafondlijn; de enige
+horizon die je ziet is het uiteinde van de muurkolommen. Twee gevolgen:
+
+1. De kanteling wordt volledig gedragen door de randen van muren,
+   sprites en wapen. Er schuift geen "lucht" omhoog; de muren zakken in
+   een egaal vlak. Dat leest als *opkijken*, niet als *ophooggaan*.
+2. **De stijging zelf is onzichtbaar.** Ooghoogte die stijgt verandert
+   alleen iets als er een vloer is die je ziet opschuiven. Die is er
+   niet. Het oplopen-gevoel kan dus alleen komen uit de kanteling plus
+   de wissel, niet uit hoogte. Dat is precies waarom de trap in Optie A
+   een illusie is en geen berekening.
+
+Mocht ooit `textures.bg` gezet worden, dan moet die afbeelding mee
+schuiven (parallax); nu bestaat dat risico niet.
+
+**Kan het zonder zichtbare knik?** De kanteling is een ramp en dus
+continu — daar zit geen knik in. De grid-wissel is dat wel: dat is een
+stap, en met twee verschillende verdiepingsindelingen verandert de muur
+om je heen. Drie feiten daarover:
+
+- Het moment van de wissel ligt voor het grijpen: de piek van de
+  kanteling. Hoe hoger de piek, hoe minder er staat om tegen af te zetten
+  — op 45° is het scherm al leeg, maar dan is de hele traploop leeg.
+- Daarom: piek rond 25° (alles nog in beeld, duidelijk opkijken), wissel
+  op die piek, **met een korte fade** (60-120 ms) als dekking. Optie A
+  noemt die fade al als toegestaan, en een fade is een overgang, geen
+  naad.
+- Wat niet helpt: wisselen aan het begin of het einde van de trap. Dan
+  staat het gewone kijkvlak er al en zie je de plattegrond veranderen.
+
+**Past het bij Optie A?** Ja, en ze raken elkaar niet. Optie A bepaalt
+*wat* er in `M.MAP` staat (welk grid, gewisseld op de traptile); de
+kanteling bepaalt *hoe* dat wordt verpakt. Ze zijn onafhankelijk te
+bouwen en te testen: eerst Optie A kaal (wissel werkt, `floor` gaat mee),
+dan de kanteling eromheen. De volgorde uit dit dossier blijft gelden.
+
+**Waar de constanten horen.** Eén blok naast het kaartladen — de
+traptile, de rampduur en de piekhoek — en niet verspreid over de
+renderlus. De kanteling is bovendien geen mode-ding maar een
+verdiepingsding, dus hij hoort niet in `GAMEMODES`.
+
+**Kost en opbrengt, in het kort.** Eén waarde (`pitch_px`) die uit de
+trapvoortgang komt, doorgegeven aan `dda()` (bestaat al) en aan de zes
+andere lezers; verder niets. Geen wijziging in de DDA-mars, geen tweede
+laag, geen z-buffer. Het duurste postje is het nalopen van elke
+`HEIGHT / 2` in de tekenpaden, en die lijst staat hierboven. Wat het
+oplevert: een trap die niet als teleporteren voelt, met een wissel die
+onzichtbaar blijft, en een renderer die daarna niets extra's hoeft te
+doen zodra de tweede verdieping er is.
 
 ---
 
