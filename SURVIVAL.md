@@ -44,6 +44,9 @@ Gedaan:
 | `71937bb` | de run-timer die per ongeluk twee keer op het scherm stond |
 | `1ae0d01` | geen MEEKIJKEN-knop als het leven gedeeld is |
 | `dca5f8c` | het moduskeuzescherm bij SOLO en de modusknop in de lobby |
+| `47d50bc` | HUD: de HP past op het scherm, de limiet komt uit de mode, de klok middendoor |
+| `6ba7865` | kaart 48×48 met straten en zestien kamers van 7×7, met validaties in de generator |
+| `c9ae24b` | `floor` op speler en vijanden, plus de 45°-analyse |
 
 `config.GAMEMODES["survival"]` draagt nu ook `"map"` en `"start_angle"`,
 naast `start_health`/`health_cap` 100, `start_ammo` 300 en `ammo_cap` 400.
@@ -360,7 +363,8 @@ Vier punten die na de analyse boven zijn binnengekomen:
    te ondersteunen.
 4. **45° omhoog bij de trap** — beantwoord in "Wat 45° kost in deze
    renderer" hieronder. Die analyse stond als onderbroken te boek en
-   moest er zijn vóór er iets gebouwd werd; hij is er.
+   moest er zijn vóór er iets gebouwd werd; hij is er. De uitkomst van
+   die analyse staat onder "Beslist: parallax, geen kanteling".
 
 ### Wat 45° kost in deze renderer — analyse 2026-10-08
 
@@ -382,24 +386,28 @@ z-buffer, geen wijziging aan `dda()` — van Optie B's dure werk is hier
 niets nodig.
 
 **Maar één getal is niet genoeg.** Alles wat op de horizon staat staat
-op `cfg.HEIGHT / 2` en moet hetzelfde getal krijgen:
+op `cfg.HEIGHT / 2` en moet dezelfde verschuiving krijgen. Hoe die
+verschuiving eruitziet hangt af van welk effect we nemen (zie "Beslist"
+hieronder), maar de lezers zijn in beide gevallen dezelfde — en ze
+hebben alle hun eigen `dist` al in scope:
 
-| wat | waar |
-|---|---|
-| muren | `raycaster.py:45` (heeft `y_offset` al) |
-| objecten en oprapers | `objects.py:102` |
-| spelerssprite en naamlabels | `objects.py:204`, `objects.py:233` |
-| vijanden | `enemies.py:126` |
-| vuurballen | `enemies.py:230` |
-| trefferpunt | `game.py:1094` |
-| ammo-stralen | `game.py:1070` |
+| wat | waar | `dist` in scope |
+|---|---|---|
+| muren | `raycaster.py:45` (heeft `y_offset` al) | `draw_wall(dist, ...)` |
+| objecten en oprapers | `objects.py:102` | `render_fast(dist, ...)` |
+| spelerssprite | `objects.py:204` | `render_fast(dist, ...)` |
+| naamlabels | `objects.py:233` | `render_name_through_walls(dist, ...)` |
+| vijanden | `enemies.py:126` | `render_fast(dist, ...)` |
+| vuurballen | `enemies.py:230` | `render_fast(dist, ...)` |
+| trefferpunt | `game.py:1094` | `d` uit de hoekvergelijking |
+| ammo-stralen | `game.py:1070` | `dist = delta.norm()` |
 
 Bewust *niet* verschoven: wapen, HUD, minimap en de
 geen-keycard-melding (`objects.py:159`) — dat is schermruimte, geen
-wereld. Laat je één van de zeven staan, dan hangt een vijand 960 px boven
+wereld. Laat je één van die lezers staan, dan hangt een vijand ver boven
 de muur waar hij naast staat. Het hele project zit in die ene zin: één
-waarde, zeven lezers, nergens een eigen `HEIGHT / 2`. `dda()` krijgt ze
-al mee; de zes andere moeten de parameter aannemen. De formule staat
+formule, acht lezers, nergens een eigen `HEIGHT / 2`. `dda()` krijgt ze
+al mee; de zeven andere moeten de parameter aannemen. De formule staat
 bovendien gekopieerd in `tests/wall_texture_test.py:135`, dus die test
 moet meebewegen.
 
@@ -421,61 +429,139 @@ aan de zichtbaarheid. Daarna valt de wereld van buiten naar binnen weg,
 en op de volle 45° is het scherm achtergrond plus een strookje muur op
 minder dan één tegel.
 
-**Dus: 45° is niet bruikbaar als constante.** Wat wél werkt is een ramp
-naar ±25°, waarbij de piek het moment is waarop er gewisseld wordt.
+**Dus: 45° is niet bruikbaar als constante.** Dat is het antwoord op
+speleropmerking 3. De tweede optie die hieruit volgt — een ramp naar
+±25° — is op 2026-10-08 afgewezen; zie "Beslist" hieronder.
 
 **Wat het met de vloerloze achtergrond doet.** De achtergrond is één
 egale kleur die het hele scherm vult vóór de muren (`game.py:843`), en
 `textures.bg` staat in geen enkele pack — er komt dus geen afbeelding aan
-te pas. Er is geen zichtbare vloerlijn en geen plafondlijn; de enige
-horizon die je ziet is het uiteinde van de muurkolommen. Twee gevolgen:
+te pas. Er is geen doorlopende vloer en geen plafondlijn; de horizon die
+je ziet is de rand van de muurkolommen.
 
-1. De kanteling wordt volledig gedragen door de randen van muren,
-   sprites en wapen. Er schuift geen "lucht" omhoog; de muren zakken in
-   een egaal vlak. Dat leest als *opkijken*, niet als *ophooggaan*.
-2. **De stijging zelf is onzichtbaar.** Ooghoogte die stijgt verandert
-   alleen iets als er een vloer is die je ziet opschuiven. Die is er
-   niet. Het oplopen-gevoel kan dus alleen komen uit de kanteling plus
-   de wissel, niet uit hoogte. Dat is precies waarom de trap in Optie A
-   een illusie is en geen berekening.
+**Correctie, 2026-10-08.** Hier stond eerst dat de stijging zelf
+onzichtbaar zou zijn: "ooghoogte die stijgt verandert alleen iets als er
+een vloer is die je ziet opschuiven, en die is er niet." Dat klopt niet.
+De **onderrand van elke muurkolom is de zichtbare vloerlijn**, en die
+schuift wél mee: een stijging van Δ schuift elke kolom omlaag met
+`PROJ_DIST · Δ / dist`. Wat er *niet* is, is een vloer*vlak* dat naar
+beneden toeschuift; wat er wel is, zijn de randen.
 
-Mocht ooit `textures.bg` gezet worden, dan moet die afbeelding mee
-schuiven (parallax); nu bestaat dat risico niet.
+Dus: **beide effecten zijn zichtbaar.** Ze verschillen niet in kost maar
+in soort:
 
-**Kan het zonder zichtbare knik?** De kanteling is een ramp en dus
-continu — daar zit geen knik in. De grid-wissel is dat wel: dat is een
-stap, en met twee verschillende verdiepingsindelingen verandert de muur
-om je heen. Drie feiten daarover:
+| | kantelen (pitch) | stijgen (parallax) |
+|---|---|---|
+| formule | `PROJ_DIST · tan θ` — één getal voor alles | `PROJ_DIST · Δ / dist` — per kolom |
+| muur op 1,5 tegel | 448 px (bij 25°) | 320 px (bij Δ = ½ tegel) |
+| muur op 3 tegel | 448 px | 160 px |
+| muur op 10 tegel | 448 px | 48 px |
+| leest als | *ik kijk op* | ***ik ga omhoog*** |
 
-- Het moment van de wissel ligt voor het grijpen: de piek van de
-  kanteling. Hoe hoger de piek, hoe minder er staat om tegen af te zetten
-  — op 45° is het scherm al leeg, maar dan is de hele traploop leeg.
-- Daarom: piek rond 25° (alles nog in beeld, duidelijk opkijken), wissel
-  op die piek, **met een korte fade** (60-120 ms) als dekking. Optie A
-  noemt die fade al als toegestaan, en een fade is een overgang, geen
-  naad.
-- Wat niet helpt: wisselen aan het begin of het einde van de trap. Dan
-  staat het gewone kijkvlak er al en zie je de plattegrond veranderen.
+Dat de verschuiving bij stijging met de afstand afneemt is precies het
+dieptesignaal dat "oplopen" heet: nabije wanden zakken verder weg dan
+verre. Bij kanteling beweegt alles met hetzelfde bedrag — daar zit geen
+diepte in, alleen een gedraaide camera. De kanteling wordt bovendien
+volledig gedragen door de randen van muren, sprites en wapen; er schuift
+geen "lucht" omhoog. Dat leest als *opkijken*, niet als *ophooggaan*.
+
+De fout zat dus in beide richtingen, en dat is waarom deze correctie er
+is: de kanteling werd te veel toegeschreven (hij levert geen
+hoogtegevoel), de stijging te weinig (hij is zichtbaar en levert juist
+het dieptesignaal). Wie dit dossier eerder las, had de conclusie
+"kanteling dus" meegekregen; die is omgedraaid.
+
+### Beslist: parallax, geen kanteling — 2026-10-08
+
+**De speler koos het afstandafhankelijke effect.** De kanteling (in
+welke hoek dan ook) komt er niet; het oplopen-gevoel komt uit een
+stijging die per kolom met `dist` wordt berekend. De 45°-vraag is hiermee
+beantwoord met "niet doen", en de ±25°-variant valt daarbij. De analyse
+hierboven blijft staan: ze beantwoordt de vraag wél, en ze laat zien wat
+de afgewezen route zou hebben gekost.
+
+Praktisch verandert er één ding aan de lijst hierboven: waar een
+gedeelde constante (`pitch_px`) zou volstaan, hebben we nu één gedeelde
+*functie* `stijging_px(dist)` die elke lezer op zijn eigen afstand
+toepast. Alle acht hebben die afstand al — zie de tabel — dus er komt
+geen nieuwe parameter door de code heen.
+
+**Δ is een animatie, geen hoogte.** Dit is de enige plek waar het mis
+kan gaan. Wordt Δ vastgelegd als "hoogte boven mijn eigen vloer", dan
+ligt verdieping 1 een tegel boven verdieping 0, en zit je bij een wissel
+midden op de trap met Δ₀ = +½ tegel tegenover Δ₁ = −½ tegel — een sprong
+van `100 · 960 / dist` px, op 3 tegel afstand 320 px. Die zie je.
+Δ moet daarom een puur visuele parameter zijn die de trap overloopt en
+weer op 0 uitkomt als je eraf bent, **zonder verwijzing naar welke
+verdieping dan ook**. De twee grids hebben elk hun eigen oorsprong; Δ
+heeft er geen.
+
+**Kan het zonder zichtbare knik?** De trap is één tegel, dus Δ loopt
+0 → piek → 0 over één tegel lopen. Dat is één beweging, geen knik. De
+grid-wissel is wél een stap, en met twee verschillende
+verdiepingsindelingen verandert de muur om je heen. Drie feiten
+daarover:
+
+- **De wissel hoort op de piek, en de piek zit in het midden.** Δ loopt
+  door over het moment van wisselen (hij hangt immers nergens aan vast),
+  dus op dat zelfde moment is er geen verschuivings-sprong — alleen de
+  geometrie die verandert, op het moment dat er het meest in beweging
+  is. Dit bevestigt de eis van een wissel midden op de trap.
+- Wat niet helpt: wisselen aan het begin of het einde. Dan staat het
+  gewone kijkvlak er al en zie je de plattegrond veranderen.
+- Een korte fade (60-120 ms) op de piek blijft toegestaan als extra
+  dekking. Optie A noemt die al; een fade is een overgang, geen naad.
 
 **Past het bij Optie A?** Ja, en ze raken elkaar niet. Optie A bepaalt
 *wat* er in `M.MAP` staat (welk grid, gewisseld op de traptile); de
-kanteling bepaalt *hoe* dat wordt verpakt. Ze zijn onafhankelijk te
+parallax bepaalt *hoe* dat wordt verpakt. Ze zijn onafhankelijk te
 bouwen en te testen: eerst Optie A kaal (wissel werkt, `floor` gaat mee),
-dan de kanteling eromheen. De volgorde uit dit dossier blijft gelden.
+dan de parallax eromheen. De volgorde uit dit dossier blijft gelden.
 
 **Waar de constanten horen.** Eén blok naast het kaartladen — de
-traptile, de rampduur en de piekhoek — en niet verspreid over de
-renderlus. De kanteling is bovendien geen mode-ding maar een
-verdiepingsding, dus hij hoort niet in `GAMEMODES`.
+traptile, de rampduur en de piek-Δ (`stijging_px`, de opvolger van
+`pitch_px`) — en niet verspreid over de renderlus. De parallax is
+bovendien geen mode-ding maar een verdiepingsding, dus hij hoort niet in
+`GAMEMODES`.
 
-**Kost en opbrengt, in het kort.** Eén waarde (`pitch_px`) die uit de
-trapvoortgang komt, doorgegeven aan `dda()` (bestaat al) en aan de zes
-andere lezers; verder niets. Geen wijziging in de DDA-mars, geen tweede
-laag, geen z-buffer. Het duurste postje is het nalopen van elke
-`HEIGHT / 2` in de tekenpaden, en die lijst staat hierboven. Wat het
-oplevert: een trap die niet als teleporteren voelt, met een wissel die
-onzichtbaar blijft, en een renderer die daarna niets extra's hoeft te
-doen zodra de tweede verdieping er is.
+**Kost en opbrengt, in het kort.** Eén functie `stijging_px(dist)` die
+uit de trapvoortgang komt en op acht plekken wordt toegepast; verder
+niets. Geen wijziging in de DDA-mars, geen tweede laag, geen z-buffer,
+geen verandering aan de camera-besturing. Het duurste postje blijft het
+nalopen van elke `HEIGHT / 2` in de tekenpaden, plus de kopie in
+`tests/wall_texture_test.py:135`. Wat het oplevert: een trap die niet
+als teleporteren voelt — mét diepte, dus met het gevoel dat je echt
+omhoog gaat — en een renderer die daarna niets extra's hoeft te doen
+zodra de tweede verdieping er is.
+
+### Wat vastligt aan de tweede verdieping — 2026-10-08
+
+Drie voorwaarden die uit de wissel en uit de minimap volgen, en die het
+tweede grondplan al vóór het getekend wordt beperken:
+
+1. **De traptile is op beide grids vloer, op exact dezelfde coördinaat.**
+   De wissel laat `player.pos` staan; als die tegel op verdieping 1 muur
+   is, wissel je in een muur. Dit is de enige plek die de twee plannen
+   verplicht deelt. De rest mag en moet verschillen — de eis "twee echte
+   verschillende plattegronden" blijft staan.
+2. **Beide verdiepingen zijn 48×48.** De minimap-stippen delen één
+   coördinatenstelsel (tegel × 100). Andere afmetingen maken posities
+   op verschillende niveaus niet vergelijkbaar, en dan werkt een
+   gedeelde minimap niet. Andere *indeling* mag, andere *maat* niet.
+3. **De minimap filtert niet op verdieping.** Achtergrond en
+   "gezien"-mist blijven van je eigen verdieping; de stippen tonen
+   élke speler, ook als die op een ander niveau zit. Dit staat bewust
+   tegenover de filterlijst bij Optie A: de minimap is informatie, geen
+   interactie. Markeer wel dat diegene op een ander niveau staat, zodat
+   duidelijk is dat je er niet naartoe kunt lopen.
+
+Voorwaarde 3 kost één regel in de netwerk-state. `"players"` in
+`server_game.py` draagt nu `id, pos, angle, name, skin_id, got_keycard,
+state, score` en **geen `floor`**. Zonder `floor` weet de client niet op
+welk niveau iemand zit: geen markering op de minimap, geen juiste
+vijand-filtering, geen juiste wereld bij meekijken of spectaten. Die
+hoort erbij zodra Optie A ook in multiplayer gaat — samen met het
+filteren dat Optie A sowieso al vraagt.
 
 ---
 
@@ -709,8 +795,17 @@ enige.
 
 ## Openstaande keuzes
 
-1. **Trapmodel:** besloten om het *na* de rest te kiezen — zie "Stand —
-   besloten op 2026-10-07". Alleen het `floor`-veld moet er meteen in.
+1. **Trapmodel — grotendeels beslist op 2026-10-08.** Het *effect* is
+   vastgelegd: **parallax (stijging per kolom), geen kanteling**; zie
+   "Beslist: parallax, geen kanteling". Daarnaast staan er drie harde
+   voorwaarden aan het tweede grondplan: de traptile is op beide grids
+   vloer op dezelfde coördinaat, beide verdiepingen zijn 48×48, en de
+   minimap filtert niet op verdieping (wat `floor` in de netwerk-state
+   nodig maakt). Zie "Wat vastligt aan de tweede verdieping".
+
+   Wat bewust ná de rest blijft: Optie A *tegenover* Optie B en de
+   vraag of in MP los per speler wordt gewisseld. `floor` staat er
+   inmiddels in (`c9ae24b`), dus die refactor is alvast van de baan.
 2. **Health-kleur — beslist, oranje (255,128,0), id 8.** Die waarden
    stonden nergens anders in `color_to_number`, dus het bleef oranje. Dit
    punt blijft hier staan omdat `map_loader` ernaar verwijst; als de campaign
