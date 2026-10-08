@@ -1986,6 +1986,8 @@ class Game:
                self.Menu.draw_settings(events, self)
             elif self.state == 'pack_select':
                self.Menu.draw_pack_select(events, self)
+            elif self.state == 'mode_select':
+               self.Menu.draw_mode_select(events, self)
 
             self._maybe_start_main_loop()
 

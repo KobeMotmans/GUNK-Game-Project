@@ -4,7 +4,7 @@ import pygame
 import tkinter as tk
 from tkinter import filedialog
 from ..core import config as _cfg
-from ..core.config import set_resolution, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, TILE_SIZE
+from ..core.config import set_resolution, START_HEALTH, AMMO_CAP, ELEV_SPEED, MAX_LEVEL, ELEV_TIME, DEFAULT_PORT, TILE_SIZE, GAMEMODES, DEFAULT_GAMEMODE
 from ..core.paths import list_packs, set_packs, save_active_packs, TEXTURE_PACKS, load_font, load_numeric_font, resolve_asset
 from ..core.theme import theme
 from ..core import audio
@@ -58,6 +58,50 @@ MINIMAP_LABELS = (
     ("settings.minimap_all", "MINIMAP: ALL"),
 )
 MINIMAP_KLEUREN = ((60, 60, 70), (40, 100, 160), (120, 90, 30))
+
+# ── Instellingen in de lobby ────────────────────────────────────
+# (sleutel, label, domein). Zonder domein klapt de knop om, wat de twee
+# schakelaars zijn. Met domein loopt de knop door de waarden heen: dat is
+# hoe de gamemode hier werkt, want die heeft er meer dan twee en zou een
+# omklapper maar twee geven.
+#
+# Het domein staat er bewust in plaats van "als dit een modenaam is": dan
+# zouden we raden, en een gok zou de server op een onbekende modenaam
+# kunnen zetten. Nu komt het uit dezelfde tabel als de rest van het spel.
+LOBBY_OPTIES = (
+    ("gamemode", "MODE", tuple(GAMEMODES)),
+    ("shared_health", "Shared Health", None),
+    ("shared_ammo", "Shared Ammo", None),
+)
+
+
+def _volgende_lobby_waarde(huidige, domein):
+    """Wat een klik op een lobby-instelling oplevert."""
+    if domein is None:
+        return not bool(huidige)
+    # Een waarde die niet meer bestaat (een mode die weg is) valt terug op
+    # het begin, zodat de knop nooit vast komt te zitten.
+    index = domein.index(huidige) if huidige in domein else -1
+    return domein[(index + 1) % len(domein)]
+
+
+def _toon_lobby_waarde(waarde, domein):
+    """Zoals de waarde in de knoptekst verschijnt."""
+    if domein is None:
+        return "ON" if waarde else "OFF"
+    return str(waarde).upper()
+
+
+def _lobby_waarde(opts, sleutel, domein):
+    """Stand van een instelling, met terugval als hij nog niet meekomt.
+
+    Eén plek die de standaard kent: het tekenen en het klikken moeten het
+    over dezelfde waarde hebben, anders klikt de knop op iets anders dan
+    er staat.
+    """
+    if sleutel in opts:
+        return opts[sleutel]
+    return domein[0] if domein else True
 
 
 def _fit_width(surf, max_width):
@@ -135,7 +179,8 @@ class Menu:
         self.lobby_countdown = 0
         self.lobby_game_active = False
         self.host_pid = -1
-        self.lobby_options = {"shared_health": True, "shared_ammo": True}
+        self.lobby_options = {"shared_health": True, "shared_ammo": True,
+                              "gamemode": DEFAULT_GAMEMODE}
         self.waiting_text = theme.string("multiplayer.connecting", "Verbinden...")
         self.mp_status = ""
         self._skin_thumbnails = {}
@@ -261,11 +306,64 @@ class Menu:
         c = _cfg.WIDTH//2
         btn_w = theme.size("menu.btn_wide", int(_cfg.WIDTH * 0.16))
         gap = theme.size("menu.btn_gap", int(_cfg.WIDTH * 0.03))
-        self._draw_main_button(events, theme.string("menu.solo", "SOLO"), int(_cfg.HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: GAME.reset_game("campaign"), font_size=36, x=c - btn_w - gap//2)
+        self._draw_main_button(events, theme.string("menu.solo", "SOLO"), int(_cfg.HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: setattr(GAME, 'state', 'mode_select'), font_size=36, x=c - btn_w - gap//2)
         self._draw_main_button(events, theme.string("menu.multiplayer", "MULTIPLAYER"), int(_cfg.HEIGHT * theme.pos("menu.solo_mp_y", 0.38)), btn_w, lambda: setattr(GAME, 'state', 'multiplayer_menu'), font_size=36, x=c + gap//2)
         self._draw_main_button(events, theme.string("menu.options", "OPTIONS"), int(_cfg.HEIGHT * theme.pos("menu.options_y", 0.47)), int(_cfg.WIDTH * 0.11), lambda: setattr(GAME, 'state', 'settings'), font_size=36)
         self._draw_main_button(events, theme.string("menu.credits", "CREDITS"), int(_cfg.HEIGHT * theme.pos("menu.credits_y", 0.54)), int(_cfg.WIDTH * 0.11), lambda: setattr(GAME, 'state', 'credits'), font_size=36)
         self._draw_main_button(events, theme.string("menu.quit", "QUIT"), int(_cfg.HEIGHT * theme.pos("menu.quit_y", 0.62)), int(_cfg.WIDTH * 0.11), lambda: setattr(GAME, 'running', False), font_size=36)
+
+    def draw_mode_select(self, events, GAME):
+        """Welke mode de volgende solo-run is.
+
+        De SOLO-knop begon met 'campaign' ingebakken. In plaats van die
+        keuze te verstoppen in de dev-console staat hij hier: één regel per
+        mode, uit GAMEMODES zelf, zodat er een volgende bij kan komen zonder
+        dat dit scherm aangepast hoeft te worden. De regel zelf is ook de
+        uitleg - een mode die niets uitlegt is niet te kiezen.
+        """
+        self.game = GAME
+        self._fill_bg()
+        c = _cfg.WIDTH // 2
+
+        title_font = load_font(theme.size("settings.title_font", int(_cfg.HEIGHT * 0.07)), bold=True)
+        title_surf = title_font.render(theme.string("mode_select.title", "CHOOSE A MODE"), True, theme.color("text.title", 'white'))
+        _cfg.SCREEN.blit(title_surf, (c - title_surf.get_width() // 2, int(_cfg.HEIGHT * theme.pos("mp.title_y", 0.04))))
+
+        namen = list(GAMEMODES)
+        btn_w = theme.size("mode_select.btn_w", int(_cfg.WIDTH * 0.24))
+        btn_h = theme.size("menu.btn_h", int(_cfg.HEIGHT * 0.04))
+        col_w = int(_cfg.WIDTH * 0.34)
+        kolom_gap = self._gap_px(20)
+        rij_h = btn_h + self._gap_px(16)
+        # Alles op een rij gecentreerd: knop links, uitleg rechts. Zo blijft
+        # er ruimte over voor een derde mode zonder dat het scherm verbreed
+        # hoeft te worden.
+        x_knop = c - (btn_w + kolom_gap + col_w) // 2
+        y = int(_cfg.HEIGHT * theme.pos("mode_select.list_y", 0.34))
+
+        desc_font = load_font(self._font_px("mode_select.font.desc", 20))
+        for naam in namen:
+            self._draw_main_button(
+                events, theme.string(f"mode_select.{naam}", naam.upper()), y, btn_w,
+                lambda m=naam: GAME.reset_game(gamemode=m),
+                h=btn_h, font_size=30, x=x_knop)
+            omschrijving = GAMEMODES[naam].get("omschrijving", "")
+            if omschrijving:
+                surf = desc_font.render(omschrijving, True, theme.color("text.subtitle", (200, 200, 200)))
+                surf = self._fit_width(surf, col_w)
+                _cfg.SCREEN.blit(surf, (x_knop + btn_w + kolom_gap,
+                                        y + (btn_h - surf.get_height()) // 2))
+            y += rij_h
+
+        y += self._gap_px(20)
+        self._draw_main_button(
+            events, theme.string("common.back", "BACK"), y, btn_w,
+            lambda: setattr(GAME, 'state', 'menu'),
+            h=btn_h, font_size=24, x=c - btn_w // 2)
+
+        for ev in events:
+            if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+                GAME.state = 'menu'
     # --- Multiplayer UI ----------------------------------------
 
     def _draw_text_input(self, events, label, current_text, x, y, width, height=None, field_id=None, numeric=False):
@@ -911,10 +1009,10 @@ class Menu:
                     if self._skin_next_rect and self._skin_next_rect.collidepoint(mouse) and self._skin_next_page:
                         self._skin_page += 1
 
-                for opt_key, opt_rect in getattr(self, '_lobby_option_rects', []):
+                for opt_key, opt_rect, domein in getattr(self, '_lobby_option_rects', []):
                     if opt_rect.collidepoint(mouse):
-                        new_val = not self.lobby_options.get(opt_key, True)
-                        GAME._set_lobby_option(opt_key, new_val)
+                        huidige = _lobby_waarde(self.lobby_options, opt_key, domein)
+                        GAME._set_lobby_option(opt_key, _volgende_lobby_waarde(huidige, domein))
 
         # ── Countdown banner ───────────────────────────────────────────
         if self.lobby_countdown > 0:
@@ -945,10 +1043,16 @@ class Menu:
             sy += set_label.get_height() + self._gap_px(8)
 
             self._lobby_option_rects = []
-            for opt_key, opt_display in [("shared_health", "Shared Health"), ("shared_ammo", "Shared Ammo")]:
-                val = opts.get(opt_key, True)
-                txt = f"{opt_display}: {'ON' if val else 'OFF'}"
-                col = theme.color("lobby.ready", (0, 200, 0)) if val else theme.color("lobby.not_ready", (200, 80, 80))
+            for opt_key, opt_display, domein in LOBBY_OPTIES:
+                val = _lobby_waarde(opts, opt_key, domein)
+                txt = f"{opt_display}: {_toon_lobby_waarde(val, domein)}"
+                # Een schakelaar kleurt op zijn stand. De modusnaam is geen
+                # oordeel (survival is niet 'aan'), die krijgt de gewone
+                # tekstkleur; de hoverrand maakt duidelijk dat het klikt.
+                if domein is None:
+                    col = theme.color("lobby.ready", (0, 200, 0)) if val else theme.color("lobby.not_ready", (200, 80, 80))
+                else:
+                    col = theme.color("text.title", 'white')
                 rect = pygame.Rect(sx, sy, int(_cfg.WIDTH * 0.14), set_h)
                 if is_host:
                     hover = rect.collidepoint(mouse)
@@ -956,7 +1060,7 @@ class Menu:
                     pygame.draw.rect(_cfg.SCREEN, bg, rect, border_radius=4)
                     if hover:
                         pygame.draw.rect(_cfg.SCREEN, (180, 180, 180), rect, 1, border_radius=4)
-                    self._lobby_option_rects.append((opt_key, rect))
+                    self._lobby_option_rects.append((opt_key, rect, domein))
                 else:
                     pygame.draw.rect(_cfg.SCREEN, (40, 40, 40), rect, border_radius=4)
                 opt_surf = set_font.render(txt, True, col)

@@ -114,6 +114,9 @@ AMMO_PICKUP_AMOUNT = 50
 # sleutel, en de rest van de game gaat vanzelf mee.
 GAMEMODES = {
     "campaign": {
+        # Wat er in het moduskeuzescherm onder de knop staat. Korte zin,
+        # in het Nederlands, zoals de rest van de toelichting.
+        "omschrijving": "Verlaag elke verdieping en ontsnap via de lift.",
         "start_health": 10,
         "health_cap": 10,
         "start_ammo": START_AMMO,
@@ -132,6 +135,7 @@ GAMEMODES = {
         "hud_score": False,
     },
     "survival": {
+        "omschrijving": "Blijf in leven. De stroom houdt niet op.",
         # Ruime HP-balk zodat damage in echte stappen kan lopen
         # (17, 24, ...) in plaats van tikjes van 10.
         "start_health": 100,

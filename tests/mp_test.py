@@ -43,7 +43,8 @@ from src.network.server_game import ServerGame                # noqa: E402
 from src.network.network import NetworkClient                  # noqa: E402
 from src.core.config import (MAX_PLAYERS, ELEVATOR_WAIT_DIST,   # noqa: E402
                              ELEVATOR_WAIT_FRAMES, ELEVATOR_STUCK_FRAMES,
-                             TILE_SIZE, MAX_LEVEL, MAP_PATH)  # noqa: E402
+                             TILE_SIZE, MAX_LEVEL, MAP_PATH,
+                             GAMEMODES, DEFAULT_GAMEMODE)  # noqa: E402
 from src.core.map_loader import M                         # noqa: E402
 from math import hypot, pi  # noqa: E402
 
@@ -4014,6 +4015,282 @@ def meekijken_bij_gedeeld_leven_biedt_niet_aan():
         return
     check("SPECTATE OK" in proc.stdout,
           f"geen 'SPECTATE OK' in de uitvoer:\n{proc.stdout[-800:]}")
+
+
+# ── het moduskeuzescherm en de knop in de lobby ─────────────────
+# Twee ingangen voor survival, want dat was de hele opdracht: de SOLO-knop
+# liep vast op 'campaign' ingebakken, en de lobby toonde alleen de twee
+# schakelaars. Alles komt uit GAMEMODES, zodat een derde mode er ook
+# gewoon bij hoort zonder dat dit scherm aangepast hoeft te worden.
+
+MODE_DRIVER = r'''
+import os, sys
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import pygame
+import types
+from src.ui.Menu import Menu_inst, LOBBY_OPTIES, _lobby_waarde, _volgende_lobby_waarde
+from src.core.config import GAMEMODES, DEFAULT_GAMEMODE
+from src.core.theme import theme
+
+fouten = []
+def check_ui(cond, msg):
+    if not cond:
+        fouten.append(msg)
+
+
+class FakeGame:
+    """Noteert alleen welke mode er gestart zou worden."""
+    state = "menu"
+    player_id = 0
+    player_name = "jij"
+    skin_id = 100
+    discovery_listener = None
+    hosted_server = None
+    hosted_address = None
+    hosted_port = None
+    network_client = None
+    is_host = False
+
+    def __init__(self):
+        self.gestart = []
+        self.opties = []
+
+    def reset_game(self, gamemode=None):
+        self.gestart.append(gamemode)
+        self.state = "game"
+
+    def _set_lobby_option(self, key, value):
+        self.opties.append((key, value))
+
+
+menu = Menu_inst
+g = FakeGame()
+
+# Eerst met de echte knoppen tekenen: het scherm moet ook een mode met een
+# lange uitleg wegkrijgen, en een mode zonder uitleg hoort hier te vallen -
+# zo'n knop is niet te kiezen.
+menu.draw_mode_select([], g)
+menu.draw_main_menu([], g)
+check_ui(g.state == "menu", f"het tekenen zette de staat op {g.state!r}")
+for naam, cfg in GAMEMODES.items():
+    check_ui(bool(cfg.get("omschrijving")),
+             f"{naam} heeft geen omschrijving op het modusscherm")
+
+# De lobby als host: daar staat de modusknop, en die moet ook echt
+# doorklikken. Twee keer tekenen, want het zijn de rechthoeken van de
+# vorige tekenbeurt waarop geklikt wordt.
+g2 = FakeGame()
+g2.is_host = True
+g2.hosted_server = object()
+g2.hosted_port = 5555
+g2.state = "waiting_lobby"
+menu.client_list = [
+    {"pid": 0, "name": "jij", "skin_id": 100, "ready": True},
+    {"pid": 1, "name": "gast", "skin_id": 100, "ready": False},
+]
+menu.host_pid = 0
+menu.lobby_options = {"shared_health": True, "shared_ammo": True,
+                      "gamemode": "campaign"}
+menu.lobby_game_active = False
+menu.draw_waiting_lobby([], g2)
+recten = dict((k, r) for k, r, d in getattr(menu, "_lobby_option_rects", []))
+check_ui("gamemode" in recten, "de host ziet geen modusknop in de lobby")
+if "gamemode" in recten:
+    r = recten["gamemode"]
+    # De dummy videodriver van de tests ondersteunt set_pos niet: dan blijft
+    # de muis op (0,0) en landt de klik nergens. We vervangen daarom
+    # get_pos - dat is waar de lobby de klikpositie uitleest.
+    oude_pos = pygame.mouse.get_pos
+    pygame.mouse.get_pos = lambda: r.center
+    try:
+        klik = pygame.event.Event(pygame.MOUSEBUTTONDOWN,
+                                  {"button": 1, "pos": r.center})
+        menu.draw_waiting_lobby([klik], g2)
+    finally:
+        pygame.mouse.get_pos = oude_pos
+    domein_klik = tuple(GAMEMODES)
+    verwacht = _volgende_lobby_waarde("campaign", domein_klik)
+    check_ui(g2.opties == [("gamemode", verwacht)],
+             f"de modusknop leverde {g2.opties} in plaats van "
+             f"[('gamemode', {verwacht!r})]")
+
+# Nu de bedrading: de knoppen onderscheppen en hun actie uitvoeren. Zo
+# testen we wat er bij een klik gebeurt zonder de exacte pixelpositie na
+# te moeten rekenen - die verschilt per resolutie en thema.
+gevonden = []
+def onderschepper(self, events, text, y_pos, w, action=None, h=None,
+                  font_size=None, x=None):
+    gevonden.append((text, action))
+    return False
+
+# MethodType: een gewone functie in de instance-dict wordt niet gebonden,
+# en dan schuiven alle argumenten één op - wat eerder resulteerde in knoppen
+# die hun y-positie als tekst meegaven.
+Menu_inst._draw_main_button = types.MethodType(onderschepper, Menu_inst)
+try:
+    # Het hoofdmenu: SOLO opent het keuzescherm in plaats van meteen een
+    # campaign te starten.
+    g.state = "menu"
+    g.gestart = []
+    gevonden[:] = []
+    menu.draw_main_menu([], g)
+    solo = [a for t, a in gevonden
+            if a is not None and t == theme.string("menu.solo", "SOLO")]
+    check_ui(len(solo) == 1, f"{len(solo)} SOLO-knoppen gevonden")
+    if solo:
+        solo[0]()
+        check_ui(g.state == "mode_select",
+                 f"SOLO zette de staat op {g.state!r} in plaats van mode_select")
+        check_ui(g.gestart == [],
+                 f"SOLO startte meteen {g.gestart} in plaats van te kiezen")
+
+    # En het keuzescherm start de mode die je aanklikt.
+    for naam in GAMEMODES:
+        g.state = "menu"
+        g.gestart = []
+        gevonden[:] = []
+        menu.draw_mode_select([], g)
+        acties = [a for t, a in gevonden
+                  if a is not None
+                  and t == theme.string("mode_select." + naam, naam.upper())]
+        check_ui(len(acties) == 1, f"{len(acties)} knoppen voor {naam}")
+        if acties:
+            acties[0]()
+            check_ui(g.gestart == [naam], f"{naam} leverde {g.gestart}")
+            check_ui(g.state == "game", f"de staat werd {g.state!r}")
+
+    # Terug kan ook.
+    g.state = "mode_select"
+    gevonden[:] = []
+    menu.draw_mode_select([], g)
+    terug = [a for t, a in gevonden
+             if a is not None and t == theme.string("common.back", "BACK")]
+    check_ui(len(terug) == 1, f"{len(terug)} terugknoppen gevonden")
+    if terug:
+        terug[0]()
+        check_ui(g.state == "menu", f"terug zette de staat op {g.state!r}")
+finally:
+    Menu_inst.__dict__.pop("_draw_main_button", None)
+
+# De lobbyknop voor de mode loopt door alle modes heen en komt weer bij het
+# begin uit; de schakelaars klappen om. Bewust als domein gespecificeerd:
+# raden welke waarde een tekstwaarde zou moeten hebben kan de server op een
+# onbekende modenaam zetten.
+sleutels = [k for k, _, _ in LOBBY_OPTIES]
+check_ui("gamemode" in sleutels, "de lobby toont geen modusknop")
+domein = dict((k, d) for k, _, d in LOBBY_OPTIES)["gamemode"]
+keten = []
+waarde = domein[0]
+for _ in range(len(domein)):
+    waarde = _volgende_lobby_waarde(waarde, domein)
+    keten.append(waarde)
+# Rond en zonder herhaling: elke mode één keer, en daarna weer de eerste.
+check_ui(len(set(keten)) == len(domein) and keten[-1] == domein[0],
+         f"de modusknop loopt {keten} in plaats van rond langs alle modes")
+check_ui(_volgende_lobby_waarde("onbekend", domein) == domein[0],
+         "een waarde die niet meer bestaat laat de knop vastlopen")
+check_ui(_volgende_lobby_waarde(True, None) is False
+         and _volgende_lobby_waarde(False, None) is True,
+         "de schakelaars klappen niet om")
+
+# De terugval is de standaardmodus. Dat ligt vast omdat een lobby die de
+# mode nog niet meestuurt anders op het eerste element zou beginnen, en dat
+# is een volgorde in een dict - niet een afspraak.
+check_ui(_lobby_waarde({}, "gamemode", domein) == DEFAULT_GAMEMODE,
+         f"de terugval is {_lobby_waarde({}, 'gamemode', domein)!r} in "
+         f"plaats van DEFAULT_GAMEMODE ({DEFAULT_GAMEMODE!r})")
+check_ui(domein[0] == DEFAULT_GAMEMODE,
+         "GAMEMODES begint niet meer met de standaardmodus; de terugval "
+         "in _lobby_waarde vertrouwt daarop")
+check_ui(_lobby_waarde({"gamemode": "survival"}, "gamemode", domein) == "survival",
+         "de stand uit de lobby gaat verloren")
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("MODE OK")
+'''
+
+
+@test
+def moduskeuze_start_de_juiste_mode():
+    """SOLO opent een keuzescherm, en dat start de mode die je kiest."""
+    path = os.path.join(TEMP_DIR, "gunk_mode_driver.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(MODE_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de moduskeuzetest liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de moduskeuzetest gaf fouten:\n" + "\n".join(tail[-30:]))
+        return
+    check("MODE OK" in proc.stdout,
+          f"geen 'MODE OK' in de uitvoer:\n{proc.stdout[-800:]}")
+
+
+@test
+def lobby_zet_de_modus_van_de_server():
+    """De host kiest de mode in de lobby; onbekende namen komen er niet door.
+
+    De validatie van `set_lobby_option` staat er al sinds de survival-keten,
+    maar we stuurden die sleutel nog nooit: alleen de twee schakelaars. Dit
+    is de eerste test die die tak van de whitelist raakt - met een naam die
+    niet bestaat, met een gast die het niet mag, en met de mode die de
+    servergame er daadwerkelijk op gaat draaien.
+    """
+    laatste = list(GAMEMODES)[-1]
+    with LocalServer() as srv:
+        clients = join(srv, 2)
+        # Een naam die niet bestaat mag de lobby niet in: dan zou de server
+        # een kaart laden die bij die mode hoort en die er niet is.
+        clients[0].send({"type": "set_lobby_option",
+                         "option_key": "gamemode",
+                         "option_value": "niet_bestaand"})
+        time.sleep(0.3)
+        check(srv.lobby_options.get("gamemode") == DEFAULT_GAMEMODE,
+              f"de server accepteerde een onbekende mode: "
+              f"{srv.lobby_options.get('gamemode')!r}")
+
+        # De modes die wél bestaan gaan door, allemaal.
+        for naam in GAMEMODES:
+            clients[0].send({"type": "set_lobby_option",
+                             "option_key": "gamemode",
+                             "option_value": naam})
+            deadline = time.time() + 3.0
+            while time.time() < deadline and \
+                    srv.lobby_options.get("gamemode") != naam:
+                time.sleep(0.02)
+            check(srv.lobby_options.get("gamemode") == naam,
+                  f"mode {naam!r} kwam niet in de lobby aan: "
+                  f"{srv.lobby_options.get('gamemode')!r}")
+
+        # Een gast mag dit niet: dan zou hij de hele groep op een andere
+        # kaart zetten dan de host denkt.
+        clients[1].send({"type": "set_lobby_option",
+                         "option_key": "gamemode",
+                         "option_value": DEFAULT_GAMEMODE})
+        time.sleep(0.3)
+        check(srv.lobby_options.get("gamemode") == laatste,
+              f"een gast veranderde de modus naar "
+              f"{srv.lobby_options.get('gamemode')!r}")
+
+        sg = ready_all(srv, clients)
+        check(sg.gamemode == laatste,
+              f"de servergame draait op {sg.gamemode!r} in plaats van {laatste!r}")
+        for c in clients:
+            c.close()
 
 
 # ── runner ─────────────────────────────────────────────────────
