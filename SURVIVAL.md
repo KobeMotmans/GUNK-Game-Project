@@ -6,7 +6,7 @@ wat er al is en welke keuzes nog openstaan, zodat een verse context (nieuwe
 sessie, nieuwe hulp) in één keer op de hoogte is en niet alles opnieuw hoeft
 uit te zoeken.
 
-Bijgewerkt op 2026-10-07.
+Bijgewerkt op 2026-10-08.
 
 ---
 
@@ -43,11 +43,11 @@ Gedaan:
 
 `config.GAMEMODES["survival"]` draagt nu ook `"map"` en `"start_angle"`,
 naast `start_health`/`health_cap` 100, `start_ammo` 300 en `ammo_cap` 400.
-`level_progression` en `uses_elevator` staan op `False`, `run_timer` en
-`save_pb` staan op `True` — maar die twee worden nog nergens gelezen, zie
-"Wat er nog moet" onder "Vijandenstroom". En er is het `stream`-blok voor
-de vijandenstroom. Zie "Koppelen aan de mode" en "Vijandenstroom"
-verderop.
+`level_progression` en `uses_elevator` staan op `False`. Daarnaast dragen
+`run_timer`, `save_pb`, `pb_bij` en `hud_score` de run-afhandeling en de
+HUD — alle vier gelezen door de code, zie "De run is de klok". En er is
+het `stream`-blok voor de vijandenstroom. Zie "Koppelen aan de mode" en
+"Vijandenstroom" verderop.
 
 Nog **niet** gedaan, en dat is de rest van dit document:
 
@@ -55,8 +55,6 @@ Nog **niet** gedaan, en dat is de rest van dit document:
 - een keuzemenu voor de gamemode (nu alleen via de dev-console:
   `gamemode survival`, of `reset_game(gamemode=...)`; in multiplayer mag
   alleen de server hem zetten, via `lobby_options`)
-- `run_timer`/`save_pb` daadwerkelijk laten werken voor survival, en tijd
-  én kills op het scherm naast elkaar
 
 ---
 
@@ -449,14 +447,60 @@ de server aanstuurt.
   zodra er één vrij komt krijgt die meteen een vijand — anders zou een volle
   kaart de klok voorgoed stilzetten.
 
-### Wat er nog moet
+### De run is de klok
 
-Het blok staat er en de stroom draait, maar de twee dingen die eruit
-komen zijn nog niet afgewerkt: `run_timer` en `save_pb` staan inmiddels
-op `True` voor survival, maar de code leest die twee nog niet (ze worden
-nergens vergeleken, en een PB wordt alleen bewaard bij `escaped` — wat in
-survival nooit gebeurt). En de weergave van tijd én kills naast elkaar
-op het scherm moet nog bekeken worden.
+`run_timer`, `save_pb`, `pb_bij` en `hud_score` zijn de vier sleutels die
+bepalen wat een run oplevert en wat je ervan ziet. Ze zijn bewust config
+en geen `if gamemode == "survival"`: de campaign en de survival verschillen
+hier alleen in hun waarden, niet in welke code er draait.
+
+Eén plek handelt een beëindigde run af — `Game._einde_run(reden)` in
+`game.py`, met `reden` = `"escape"` of `"death"`. Dat er daar één plek voor
+is, maakt uit: er komen **drie** meldingen op die plek af, niet één.
+Ontsnappen is er één, en overlijden wordt vanuit twee richtingen gemeld —
+`handle_network()` voor de gezondheid die van de server komt, en de
+hoofdlus voor `player.death`. Zouden die drie hun eigen kopie van
+"klok stil + PB bewaren" hebben, dan was het een kwestie van hopen welke
+van de drie het als eerste deed. Daarom is `_einde_run` idempotent: de
+eerste melding wint.
+
+De tweede reden voor één plek is het verschil tussen de modes. In de
+campaign telt alleen een **uitgespeelde** run; een run die op de vloer
+eindigt was geen volle run en levert dus geen PB op. In survival is er
+geen uitgang om uit te komen, dus telt elke run — en die eindigt bij het
+overlijden. Zou dat onderschap alleen bij de ontsnapping zitten, dan werd
+in survival **nooit** iets opgeslagen en zou `save_pb: True` een leugen
+zijn. Vandaar `pb_bij`: `"escape"` voor de campaign, `"death"` voor
+survival.
+
+Zie je tijdens het spelen:
+
+- de **klok** rechtsboven (allebei de modes; `run_timer` zet hem uit), en
+- eronder het aantal **kills** als `hud_score` aan staat — in survival
+  `True`, in de campaign `False` zodat die HUD ongewijzigd blijft.
+
+Beide komen ook samen op het **dodescherm**: `Score:N  00:00:00` naast
+elkaar, op één regel zodat er niets bij de MENU-knop terechtkomt. Dat is
+de keuze uit punt 3 van "Openstaande keuzes" — de klok ís de run, de kills
+staan ernaast als ranglijst — en die regel geldt ook als je het verloren
+hebt. Verschijnt er `NEW PB!` bij, dan is er daadwerkelijk een bewaard;
+dat kan alleen bij een mode die dat wil, dus een campaigndood ziet dat
+nooit. Op het **ontsnapscherm** veranderde er niets.
+
+De tijdopmaak staat in `_formateer_tijd()` in `src/ui/Menu.py`. Die stond
+voorheen vier keer ingebouwd (HUD, meekijken, ontsnappen, dodescherm) en
+zou nu vijf keer kunnen staan — de test telt de ingebouwde varianten en
+valt af als er naast de functie nog één bijkomt, want het verschil zou pas
+opvallen als er twee verschillende tijden naast elkaar stonden.
+
+**Test:** `run_timer_en_pb_volgen_de_mode` in `tests/mp_test.py` (61/61).
+Hij draait in een eigen subprocess en buigt `_runs_path()` naar de
+temp-map om — anders schrijft de test over `runs.json` naast `game.py` en
+is het record van de speler weg. Wat hij bewijst: de vier sleutels bestaan
+en verschillen per mode, `run_timer` zet de klok echt uit, een
+survivaldood levert wél een PB op en een campaigndood niet (ook geen
+bestand), een tweede melding verandert niets, en de tijdopmaak staat op
+precies één plek.
 
 ---
 
@@ -483,9 +527,11 @@ zetten.
    die kleur ooit gaat gebruiken, kies dan hier eerst iets anders.
 3. **Escalatie van de vijandenstroom — beslist op 2026-10-07.** Tijd-gedreven
    met plafond 16, de klok is de run en de kills staan ernaast, en bij volle
-   spawns wachten we. Zie "Vijandenstroom" voor de getallen. Wat er ná die
-   beslissing nog rest (de code die `run_timer`/`save_pb` nog niet leest)
-   staat daar ook.
+   spawns wachten we. Zie "Vijandenstroom" voor de getallen. Afgerond op
+   2026-10-08: de code leest `run_timer`/`save_pb` nu, de run-afhandeling
+   zit in `_einde_run`, en tijd én kills staan naast elkaar op de HUD en
+   op het dodescherm. Zie "De run is de klok". Wat er van deze keuze nog
+   rest, is het keuzemenu voor de mode zelf (zie "Karakter- en spec-keuze").
 4. **Gemengde versies, deze build naast 1.0.12.** Er is geen protocolversie;
    `discovery.VERSION` dekt alleen de LAN-broadcast-indeling en die is niet
    veranderd. `decode_packet` doet `ID_TO_KEY.get(kid, f"key_{kid}")`, dus

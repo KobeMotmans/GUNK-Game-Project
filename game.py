@@ -354,6 +354,39 @@ class Game:
             return True
         return False
 
+    def _einde_run(self, reden):
+        """De run is voorbij: klok stil, resultaat bewaren als de mode dat wil.
+
+        Eén plek voor alle drie de meldingen. Er zijn er drie: ontsnappen, en
+        overlijden dat via twee verschillende plekken gemeld wordt
+        (`handle_network` voor de health die van de server komt, en de
+        hoofdlus voor `player.death`). Zou dit er drie keer in staan, dan
+        was het een kwestie van hopen welke van de drie de klok stopte en
+        welke de PB bewaart.
+
+        `reden` is `"escape"` of `"death"`. Of het resultaat telt staat in
+        de mode zelf: de campaign telt alleen een uitgespeelde run, survival
+        telt elke run - er is daar geen uitgang om uit te komen, dus zonder
+        dit zou er nooit iets opgeslagen worden.
+
+        Het is idempotent: de eerste melding wint. Bij overlijden komen
+        soms twee paden door (handle_network én de hoofdlus), en die mogen
+        de tijd niet twee keer opnieuw vastleggen.
+        """
+        if not self.run_timer_active:
+            return
+        # Eerst de tijd fris rekenen. handle_network roept dit aan vóór de
+        # gebruikelijke klokupdate verderop in dezelfde frame, en dan zou de
+        # PB 16 milliseconden achterlopen - onzichtbaar bij survival, wel
+        # het verschil tussen winnen en verliezen in een speedrun.
+        self.run_time_ms = pygame.time.get_ticks() - self.run_start_ms
+        self.run_timer_active = False
+        if not self.gm("save_pb", True):
+            return
+        if self.gm("pb_bij", "escape") != reden:
+            return
+        self.run_is_pb = self._save_pb_if_better(self.run_time_ms)
+
     def save_settings(self):
         data = {
             "sfx_volume": self.sfx_volume,
@@ -1162,8 +1195,10 @@ class Game:
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
 
-        # Start run timer (alleen voor campaign/speedrun-achtige runs)
-        self.run_timer_active = True
+        # De klok loopt alleen als de mode dat wil. Beide huidige modes
+        # willen het, maar het sleutel staat erom gelezen te worden - een
+        # configwaarde die nergens vergeleken wordt is misleidend.
+        self.run_timer_active = self.gm("run_timer", True)
         self.run_start_ms = pygame.time.get_ticks()
         self.run_time_ms = 0
         self.run_is_pb = False
@@ -1805,6 +1840,7 @@ class Game:
         if self.global_health <= 0 and self.state in ("game", "paused"):
             self.global_health = 0
             pygame.mouse.set_visible(True)
+            self._einde_run("death")
             self.state = "dead"
 
     #  Main loop 
@@ -1899,9 +1935,7 @@ class Game:
                     cfg.SCREEN.blit(kc_surf, (cfg.WIDTH - kc_surf.get_width() - int(cfg.WIDTH * 0.04), cfg.HEIGHT - int(cfg.HEIGHT * 0.06)))
                     
                 if self.escaped:
-                    if self.run_timer_active:
-                        self.run_timer_active = False
-                        self.run_is_pb = self._save_pb_if_better(self.run_time_ms)
+                    self._einde_run("escape")
                     self.Menu.draw_escaped_screen(events, self)
                 
                 if self.player.door_pos != 0:
@@ -1942,6 +1976,11 @@ class Game:
 
             if self.player.death and self.state == "game":
                 pygame.mouse.set_visible(True)
+                # Dit is de melding die in solo altijd aankomt; in
+                # multiplayer is handle_network er soms al doorheen
+                # geweest, en dan wint die dankzij de dubbelcontrole in
+                # _einde_run.
+                self._einde_run("death")
                 self.state = "dead"
             if self.state == "game":
                 self._paused_frame = cfg.SCREEN.copy()

@@ -121,8 +121,15 @@ GAMEMODES = {
         # De lift jaagt de volgende floor aan.
         "level_progression": True,
         "uses_elevator": True,
+        # De klok loopt en een betere tijd wordt bewaard, maar alleen als
+        # je er ook echt uitkomt: een run die op de vloer eindigt is geen
+        # volle run. Daarom "escape" en niet "death" - zie _einde_run().
         "run_timer": True,
         "save_pb": True,
+        "pb_bij": "escape",
+        # Geen teller van de kills tijdens het spelen: de campaign-HUD
+        # blijft zoals hij is. Het scoretje op de eindschermen blijft wel.
+        "hud_score": False,
     },
     "survival": {
         # Ruime HP-balk zodat damage in echte stappen kan lopen
@@ -136,12 +143,15 @@ GAMEMODES = {
         # Geen floors: je blijft op de kaart tot je valt.
         "level_progression": False,
         "uses_elevator": False,
-        # De klok ís de run en de tijd wordt bewaard, naast de kills die
-        # als ranglijst ernaast staan (keuze in SURVIVAL.md). Let op: deze
-        # twee worden pas gelezen zodra de code ze respecteert - ze staan
-        # hier nu al goed omdat het de bedoeling is.
+        # De klok ís de run: hij loopt, en de tijd wordt bewaard zodra de
+        # run voorbij is. De kills staan ernaast als ranglijst. In survival
+        # eindigt een run bij het overlijden - er is geen uitgang - dus daar
+        # is "death" en niet "escape"; anders werd nooit iets opgeslagen.
         "run_timer": True,
         "save_pb": True,
+        "pb_bij": "death",
+        # Tijdens het spelen het aantal kills erbij, naast de tijd.
+        "hud_score": True,
         # Eén eigen kaart. Daardoor is er geen levelnummer om af te leiden
         # en ook geen START_ANGLES[level]: pad en hoek komen hier vandaan.
         # Zie kaart_voor().

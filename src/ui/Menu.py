@@ -74,6 +74,22 @@ def _fit_width(surf, max_width):
         surf, (max(1, int(surf.get_width() * factor)), surf.get_height()))
 
 
+def _formateer_tijd(ms):
+    """`00:00.00` uit milliseconden.
+
+    Staat op vier plekken: de HUD, het scherm tijdens het meekijken, het
+    ontsnapscherm, en het dodescherm (dat er de tijd bij kreeg omdat die
+    in survival de run ís). Zou de opmaak er vier keer in staan, dan had je
+    vier keer dezelfde drie delen - en het verschil zou pas opvallen als er
+    twee verschillende tijden naast elkaar stonden. De test telt de
+    ingebouwde varianten, zodat een vijfde er niet ongemerkt bijkomt.
+    """
+    totaal = int(ms)
+    seconden = totaal // 1000
+    honderdste = (totaal % 1000) // 10
+    return f"{seconden // 60:02d}:{seconden % 60:02d}.{honderdste:02d}"
+
+
 def _draw_arrow(screen, rect, direction, color):
     cx = rect.x + rect.w // 2
     cy = rect.y + rect.h // 2
@@ -1406,18 +1422,31 @@ class Menu:
         _cfg.SCREEN.blit(self.hp_font.render(f"{round(self.game.global_health)}/{max_hp}", True, theme.color("hud.hp", 'red')),(_cfg.WIDTH - int(_cfg.WIDTH * theme.pos("hud.hp_x", 0.15)), int(_cfg.HEIGHT * theme.pos("hud.hp_y", 0.02))))
         _cfg.SCREEN.blit(self.hp_font.render(f"{round(self.game.global_ammo)}/{AMMO_CAP}", True, theme.color("hud.ammo", 'grey')),(int(_cfg.WIDTH * theme.pos("hud.ammo_x", 0.01)), _cfg.HEIGHT - int(_cfg.HEIGHT * theme.pos("hud.ammo_y", 0.1))))
 
-        # Run timer
-        if getattr(self.game, 'run_timer_active', False):
-            t = getattr(self.game, 'run_time_ms', 0)
-            total_ms = int(t)
-            s = total_ms // 1000
-            ms = (total_ms % 1000) // 10
-            m = s // 60
-            s_rem = s % 60
-            timer_str = f"{m:02d}:{s_rem:02d}.{ms:02d}"
-            timer_font = load_font(self._font_px("ui.font.hud", 20), bold=True)
-            timer_surf = timer_font.render(timer_str, True, (255, 255, 255))
-            _cfg.SCREEN.blit(timer_surf, (_cfg.WIDTH - timer_surf.get_width() - 20, 20))
+        # Rechtsboven staan de klok en, als de mode dat wil, de kills.
+        # Los van elkaar: `hud_score` mag niet stilletjes stoppen met
+        # werken omdat `run_timer` uit staat, en daarom hangt de plek van
+        # de teller niet aan de klok vast - de rij loopt gewoon door.
+        klok = getattr(self.game, 'run_timer_active', False)
+        kills = self.game.gm("hud_score", False)
+        if klok or kills:
+            font = load_font(self._font_px("ui.font.hud", 20), bold=True)
+            rechts = _cfg.WIDTH - 20
+            y = 20
+            if klok:
+                surf = font.render(
+                    _formateer_tijd(getattr(self.game, 'run_time_ms', 0)),
+                    True, (255, 255, 255))
+                _cfg.SCREEN.blit(surf, (rechts - surf.get_width(), y))
+                y += surf.get_height() + 2
+            if kills:
+                # Survival matigt op tijd én op hoeveel je opruimde; de
+                # campaign laat de HUD ongewijzigd (hud_score staat daar
+                # op False) en houdt het scoretje op de eindschermen.
+                surf = font.render(
+                    theme.string("hud.score_format", "Score:{score}").format(
+                        score=self.game.player.score),
+                    True, (255, 255, 255))
+                _cfg.SCREEN.blit(surf, (rechts - surf.get_width(), y))
         in_transition = getattr(self.game, 'elevator_transition', False)
         door_open = getattr(self.game, 'player', None) and self.game.player.door_pos != 0
         if getattr(self.game, 'elevator_waiting', False) and not in_transition and not door_open:
@@ -1462,15 +1491,10 @@ class Menu:
 
         # Run timer tijdens spectate (volgt dezelfde run)
         if getattr(self.game, 'run_timer_active', False):
-            t = getattr(self.game, 'run_time_ms', 0)
-            total_ms = int(t)
-            s = total_ms // 1000
-            ms = (total_ms % 1000) // 10
-            m = s // 60
-            s_rem = s % 60
-            timer_str = f"{m:02d}:{s_rem:02d}.{ms:02d}"
             font = load_font(self._font_px("ui.font.hud", 18), bold=True)
-            surf = font.render(timer_str, True, (200, 220, 255))
+            surf = font.render(
+                _formateer_tijd(getattr(self.game, 'run_time_ms', 0)),
+                True, (200, 220, 255))
             _cfg.SCREEN.blit(surf, (_cfg.WIDTH - surf.get_width() - 20, 20))
     def draw_paused_screen(self, events, GAME):
         self.game = GAME
@@ -1571,8 +1595,41 @@ class Menu:
                 hover_text_color="white", hover_button_color="black",
                 game=self.game, function="spectate")
             spectate_button.draw_button(events)
-        score_surf = self.score_font.render(theme.string("hud.score_format", "Score:{score}").format(score=self.game.player.score), True, theme.color("hud.score_dead", 'black'))
-        _cfg.SCREEN.blit(score_surf, (_cfg.WIDTH//2 - score_surf.get_width()//2, _cfg.HEIGHT//2 - int(_cfg.HEIGHT * theme.pos("mp.title_y", 0.04))))
+        # Score en tijd naast elkaar: dat is waar een run op matigt, en bij
+        # survival is de tijd de run zelf, dus die hoort ook als je het
+        # verloren hebt erbij. NEW PB! erbij alleen als er echt een bewaard
+        # is - dat gebeurt alleen als de mode het wil (zie _einde_run), dus
+        # een campaignrun die op de vloer eindigt telt niet en ziet dit
+        # nooit. Alles op één regel, zodat er niets bij de MENU-knop komt.
+        rij = [
+            self.score_font.render(
+                theme.string("hud.score_format", "Score:{score}").format(
+                    score=self.game.player.score),
+                True, theme.color("hud.score_dead", 'black')),
+            self.score_font.render(
+                _formateer_tijd(getattr(GAME, 'run_time_ms', 0)),
+                True, theme.color("hud.score_dead", 'black')),
+        ]
+        if getattr(GAME, 'run_is_pb', False):
+            pb_font = load_font(self._font_px("ui.font.hud", 32), bold=True)
+            # Zelfde kleur als de rest van deze regel: die is gekozen om
+            # op deze achtergrond te werken, en goud als op het
+            # ontsnapscherm zou hier weg kunnen vallen. Het verschil zit in
+            # de woorden, niet in de kleur.
+            rij.append(pb_font.render(
+                "NEW PB!", True,
+                theme.color("hud.pb_dead",
+                            theme.color("hud.score_dead", 'black'))))
+
+        breedte = sum(s.get_width() for s in rij) + 16 * (len(rij) - 1)
+        rij_h = max(s.get_height() for s in rij)
+        x = _cfg.WIDTH//2 - breedte // 2
+        y = _cfg.HEIGHT//2 - int(_cfg.HEIGHT * theme.pos("mp.title_y", 0.04))
+        for s in rij:
+            # Kleiner naast groter: op de hoogte van de grootste lijn
+            # uitlijnen, zodat de score op precies zijn oude plek blijft.
+            _cfg.SCREEN.blit(s, (x, y + (rij_h - s.get_height()) // 2))
+            x += s.get_width() + 16
         title_surf = self.title_font.render(theme.string("hud.game_over", "GAME OVER"), True, theme.color("hud.title_dead", 'black'))
         _cfg.SCREEN.blit(title_surf, (_cfg.WIDTH//2 - title_surf.get_width()//2, _cfg.HEIGHT//3 - int(_cfg.HEIGHT * theme.pos("dead.title_y", 0.05))))
         
@@ -1590,27 +1647,17 @@ class Menu:
         _cfg.SCREEN.blit(score_surf, (_cfg.WIDTH//2 - score_surf.get_width()//2, _cfg.HEIGHT//2 + int(_cfg.HEIGHT * theme.pos("escaped.score_y", 0.01))))
 
         # Run timer + PB
-        t = getattr(GAME, 'run_time_ms', 0)
-        total_ms = int(t)
-        s = total_ms // 1000
-        ms = (total_ms % 1000) // 10
-        m = s // 60
-        s_rem = s % 60
-        timer_str = f"{m:02d}:{s_rem:02d}.{ms:02d}"
         time_font = load_font(self._font_px("ui.font.hud", 24), bold=True)
-        time_surf = time_font.render(timer_str, True, (255, 255, 255))
+        time_surf = time_font.render(
+            _formateer_tijd(getattr(GAME, 'run_time_ms', 0)), True,
+            (255, 255, 255))
         _cfg.SCREEN.blit(time_surf, (_cfg.WIDTH//2 - time_surf.get_width()//2, _cfg.HEIGHT//2 + int(_cfg.HEIGHT * theme.pos("escaped.score_y", 0.08))))
         if getattr(GAME, 'run_is_pb', False):
             pb_font = load_font(self._font_px("ui.font.hud", 20), bold=True)
             pb_surf = pb_font.render("NEW PB!", True, (255, 215, 0))
             _cfg.SCREEN.blit(pb_surf, (_cfg.WIDTH//2 - pb_surf.get_width()//2, _cfg.HEIGHT//2 + int(_cfg.HEIGHT * theme.pos("escaped.score_y", 0.14))))
         elif getattr(GAME, 'run_pb_ms', 0) > 0:
-            pb_total = int(GAME.run_pb_ms)
-            p_s = pb_total // 1000
-            p_ms = (pb_total % 1000) // 10
-            p_m = p_s // 60
-            p_s_rem = p_s % 60
-            pb_str = f"PB {p_m:02d}:{p_s_rem:02d}.{p_ms:02d}"
+            pb_str = f"PB {_formateer_tijd(GAME.run_pb_ms)}"
             pb_font = load_font(self._font_px("ui.font.hud", 18))
             pb_surf = pb_font.render(pb_str, True, (200, 200, 200))
             _cfg.SCREEN.blit(pb_surf, (_cfg.WIDTH//2 - pb_surf.get_width()//2, _cfg.HEIGHT//2 + int(_cfg.HEIGHT * theme.pos("escaped.score_y", 0.14))))

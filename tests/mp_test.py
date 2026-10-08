@@ -2121,6 +2121,26 @@ try:
     menu.draw_UI([])
     game.spectating = False
 
+    # De twee takken die nieuw zijn voor dit scherm en de HUD: de PB-regel
+    # op het dodescherm (met een eigen kleur) en de kills onder de klok.
+    # Zonder dit zou de test alleen de oude paden tekenen en zou een
+    # typefout in de nieuwe pas in de game zelf opvallen. We zetten het
+    # weer terug zoals het was, want hierna volgen nog meer schermen.
+    oude_mode, oude_klok, oude_score = (game.gamemode, game.run_timer_active,
+                                        game.player.score)
+    game.run_is_pb = True
+    game.run_time_ms = 123456
+    game.player.score = 7
+    menu.draw_dead_screen([], game)
+    game.run_is_pb = False
+
+    game.gamemode = "survival"
+    game.run_timer_active = True
+    game.run_time_ms = 123456
+    menu.draw_UI([])
+    game.gamemode, game.run_timer_active, game.player.score = (
+        oude_mode, oude_klok, oude_score)
+
     # ── de minimap ───────────────────────────────────────────
     #
     # De standaard is uit, en dat is een eis: de kaart onthoudt alleen wat je
@@ -3701,6 +3721,207 @@ def vijandenstroom_vult_de_map_binnen_het_plafond():
         return
     check("STROOM OK" in proc.stdout,
           f"geen 'STROOM OK' in de uitvoer:\n{proc.stdout[-800:]}")
+
+
+# ── run-timer, PB en de HUD ──────────────────────────────────────
+# Vier sleutels in GAMEMODES die eerder nergens vergeleken werden:
+# run_timer, save_pb, pb_bij en hud_score. Een configwaarde die niemand
+# leest is misleidender dan geen waarde, dus hier bewijs dat ze alle vier
+# het verschil maken - inclusief dat de PB voor survival wél en voor de
+# campaign niet bij het overlijden bewaard wordt.
+#
+# Twee dingen die hier vastliggen omdat ze makkelijk uiteenlopen:
+#   * _einde_run moet idempotent zijn, want bij het overlijden komen er
+#     soms twee paden door (handle_network én de hoofdlus);
+#   * de tijdopmaak hoort op precies één plek te staan, terwijl die nu op
+#     vier plekken staat (HUD, spectate, ontsnappen, overlijden).
+
+TIMER_DRIVER = r'''
+import os, sys, tempfile
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import pygame
+import game
+from src.core.config import GAMEMODES
+from src.ui.Menu import _formateer_tijd
+
+fouten = []
+
+
+def check(voorwaarde, bericht):
+    if not voorwaarde:
+        fouten.append(bericht)
+
+
+# ── 1. de sleutels bestaan en verschillen per mode ───────────────
+for naam in ("campaign", "survival"):
+    for sleutel in ("run_timer", "save_pb", "pb_bij", "hud_score"):
+        check(sleutel in GAMEMODES[naam], f"{naam} mist {sleutel}")
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+
+check(GAMEMODES["campaign"]["pb_bij"] == "escape",
+      f"campaign pb_bij is {GAMEMODES['campaign']['pb_bij']!r}")
+check(GAMEMODES["survival"]["pb_bij"] == "death",
+      f"survival pb_bij is {GAMEMODES['survival']['pb_bij']!r}")
+check(GAMEMODES["survival"]["hud_score"] is True,
+      "survival hoort de kills tijdens het spelen te tonen")
+check(GAMEMODES["campaign"]["hud_score"] is False,
+      "de campaign-HUD hoort ongewijzigd te blijven")
+
+# ── 2. de klok volgt run_timer ───────────────────────────────────
+# Zonder dit is de sleutel dood.
+GAMEMODES["survival"]["run_timer"] = False
+GAMEMODES["campaign"]["run_timer"] = False
+
+g = game.Game()
+# Anders schrijft deze test over runs.json naast game.py, en dan is het
+# record van de speler weg. Elk pad dat hieronder opgeslagen wordt gaat
+# naar de temp-map.
+tmp = os.path.join(tempfile.gettempdir(), "gunk_pb_test.json")
+g._runs_path = lambda: tmp
+try:
+    os.remove(tmp)
+except OSError:
+    pass
+
+g.reset_game(gamemode="survival")
+check(g.run_timer_active is False,
+      f"run_timer=False, maar de klok staat op {g.run_timer_active}")
+g.reset_game(gamemode="campaign")
+check(g.run_timer_active is False,
+      f"idem voor de campaign: {g.run_timer_active}")
+
+GAMEMODES["survival"]["run_timer"] = True
+GAMEMODES["campaign"]["run_timer"] = True
+g.reset_game(gamemode="survival")
+check(g.run_timer_active is True,
+      f"run_timer=True, maar de klok staat op {g.run_timer_active}")
+
+# ── 3. survival: overlijden telt ─────────────────────────────────
+g.run_pb_ms = 0
+g.run_is_pb = False
+g.run_start_ms = pygame.time.get_ticks() - 123456
+g.run_time_ms = 0
+g._einde_run("death")
+
+check(g.run_timer_active is False, "de klok loopt nog na het overlijden")
+check(g.run_time_ms >= 123456,
+      f"de tijd is {g.run_time_ms} ms, terwijl de run 123456 ms duurde")
+check(g.run_is_pb is True,
+      "de eerste survivalrun hoort als PB opgeslagen te worden")
+check(g.run_pb_ms == g.run_time_ms,
+      f"PB is {g.run_pb_ms} terwijl deze run {g.run_time_ms} duurde")
+check(os.path.exists(tmp), "de PB is niet weggeschreven")
+
+# Idempotent: dit is de tweede melding (handle_network én de hoofdlus).
+g.run_time_ms = 0
+g._einde_run("death")
+check(g.run_time_ms == 0,
+      f"de tweede melding rekende de tijd opnieuw: {g.run_time_ms} ms")
+check(g.run_is_pb is True, "de tweede melding wiste de PB-vlag")
+
+# ── 4. campaign: overlijden telt niet, ontsnappen wel ────────────
+g.reset_game(gamemode="campaign")
+g.run_pb_ms = 0
+g.run_is_pb = False
+g.run_start_ms = pygame.time.get_ticks() - 999999
+try:
+    os.remove(tmp)
+except OSError:
+    pass
+g._einde_run("death")
+
+check(g.run_timer_active is False,
+      "de klok loopt nog na een campaigndood")
+check(g.run_is_pb is False,
+      "een campaigndood leverde een PB op, terwijl dat geen volle run is")
+check(g.run_pb_ms == 0, f"de PB staat toch op {g.run_pb_ms}")
+check(not os.path.exists(tmp),
+      "er is toch een runs-bestand weggeschreven na een campaigndood")
+
+g.reset_game(gamemode="campaign")
+g.run_pb_ms = 0
+g.run_is_pb = False
+g.run_start_ms = pygame.time.get_ticks() - 500000
+g._einde_run("escape")
+check(g.run_is_pb is True,
+      "een uitgespeelde campaign hoort als PB opgeslagen te worden")
+check(g.run_timer_active is False, "de klok loopt nog na het ontsnappen")
+check(os.path.exists(tmp), "de PB van een volledige run is niet weggeschreven")
+
+# ── 5. de HUD volgt hud_score ────────────────────────────────────
+g.reset_game(gamemode="survival")
+check(g.gm("hud_score", False) is True,
+      "de client leest hud_score niet voor survival")
+g.reset_game(gamemode="campaign")
+check(g.gm("hud_score", False) is False,
+      "de client leest hud_score niet voor de campaign")
+
+# ── 6. de tijdopmaak staat op precies één plek ───────────────────
+check(_formateer_tijd(0) == "00:00.00",
+      f"0 ms -> {_formateer_tijd(0)}")
+check(_formateer_tijd(1500) == "00:01.50",
+      f"1500 ms -> {_formateer_tijd(1500)}")
+check(_formateer_tijd(61500) == "01:01.50",
+      f"61500 ms -> {_formateer_tijd(61500)}")
+check(_formateer_tijd(3600000) == "60:00.00",
+      f"een uur -> {_formateer_tijd(3600000)}")
+
+with open(os.path.join(ROOT, "src", "ui", "Menu.py"), encoding="utf-8") as f:
+    menu_bron = f.read()
+ingebouwd = menu_bron.count('f"{m:02d}:{s_rem:02d}.{ms:02d}"')
+check(ingebouwd == 0,
+      f"de tijdopmaak staat nog {ingebouwd} keer naast _formateer_tijd; "
+      f"dan krijg je drie schermen die elkaar tegenspreken")
+check(menu_bron.count("_formateer_tijd(") - 1 >= 3,
+      f"_formateer_tijd wordt {menu_bron.count('_formateer_tijd(') - 1} "
+      f"keer gebruikt, verwacht op zijn minst 3")
+
+# En de oude inline PB-opslag mag nergens meer staan: die hing aan de
+# ontsnapping alleen, en dat is precies wat er in survival misging.
+with open(os.path.join(ROOT, "game.py"), encoding="utf-8") as f:
+    game_bron = f.read()
+check(game_bron.count("def _save_pb_if_better(") == 1,
+      "_save_pb_if_better staat vaker in de bron dan verwacht")
+check(game_bron.count("_save_pb_if_better(") == 2,
+      f"de PB-opslag wordt {game_bron.count('_save_pb_if_better(') - 1} "
+      f"keer apart aangeroepen; hoorde er één in _einde_run te zijn")
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("TIMER OK")
+'''
+
+
+@test
+def run_timer_en_pb_volgen_de_mode():
+    """De vier configwaarden worden gelezen en _einde_run is idempotent."""
+    path = os.path.join(TEMP_DIR, "gunk_timer_driver.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(TIMER_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de run-timertest liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de run-timertest gaf fouten:\n" + "\n".join(tail[-30:]))
+        return
+    check("TIMER OK" in proc.stdout,
+          f"geen 'TIMER OK' in de uitvoer:\n{proc.stdout[-800:]}")
 
 
 # ── runner ─────────────────────────────────────────────────────
