@@ -40,6 +40,9 @@ Gedaan:
 | `fbfd9e8` | survivalkaart + generator, health-kleur, `kaart_voor()`, en de mode in `game_start` |
 | `79432bd` | terugval op de default bij een game_start zonder mode, plus de lift-test die eindelijk de bewaker bereikte |
 | `097239c` | de vijandenstroom: `GAMEMODES["survival"]["stream"]`, `src/core/stroom.py`, cliént én server |
+| `d5e93f5` | de run-afhandeling: `pb_bij`/`hud_score`, `_einde_run()`, en tijd én kills naast elkaar |
+| `71937bb` | de run-timer die per ongeluk twee keer op het scherm stond |
+| `1ae0d01` | geen MEEKIJKEN-knop als het leven gedeeld is |
 
 `config.GAMEMODES["survival"]` draagt nu ook `"map"` en `"start_angle"`,
 naast `start_health`/`health_cap` 100, `start_ammo` 300 en `ammo_cap` 400.
@@ -493,7 +496,7 @@ zou nu vijf keer kunnen staan — de test telt de ingebouwde varianten en
 valt af als er naast de functie nog één bijkomt, want het verschil zou pas
 opvallen als er twee verschillende tijden naast elkaar stonden.
 
-**Test:** `run_timer_en_pb_volgen_de_mode` in `tests/mp_test.py` (61/61).
+**Test:** `run_timer_en_pb_volgen_de_mode` in `tests/mp_test.py` (62/62).
 Hij draait in een eigen subprocess en buigt `_runs_path()` naar de
 temp-map om — anders schrijft de test over `runs.json` naast `game.py` en
 is het record van de speler weg. Wat hij bewijst: de vier sleutels bestaan
