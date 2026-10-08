@@ -43,6 +43,7 @@ Gedaan:
 | `d5e93f5` | de run-afhandeling: `pb_bij`/`hud_score`, `_einde_run()`, en tijd én kills naast elkaar |
 | `71937bb` | de run-timer die per ongeluk twee keer op het scherm stond |
 | `1ae0d01` | geen MEEKIJKEN-knop als het leven gedeeld is |
+| `dca5f8c` | het moduskeuzescherm bij SOLO en de modusknop in de lobby |
 
 `config.GAMEMODES["survival"]` draagt nu ook `"map"` en `"start_angle"`,
 naast `start_health`/`health_cap` 100, `start_ammo` 300 en `ammo_cap` 400.
@@ -55,9 +56,9 @@ het `stream`-blok voor de vijandenstroom. Zie "Koppelen aan de mode" en
 Nog **niet** gedaan, en dat is de rest van dit document:
 
 - karakter-/spec-keuze
-- een keuzemenu voor de gamemode (nu alleen via de dev-console:
-  `gamemode survival`, of `reset_game(gamemode=...)`; in multiplayer mag
-  alleen de server hem zetten, via `lobby_options`)
+
+Het **moduskeuzescherm is er wel** (afgerond 2026-10-08), zie "De
+ingangen van een mode".
 
 ---
 
@@ -496,7 +497,7 @@ zou nu vijf keer kunnen staan — de test telt de ingebouwde varianten en
 valt af als er naast de functie nog één bijkomt, want het verschil zou pas
 opvallen als er twee verschillende tijden naast elkaar stonden.
 
-**Test:** `run_timer_en_pb_volgen_de_mode` in `tests/mp_test.py` (62/62).
+**Test:** `run_timer_en_pb_volgen_de_mode` in `tests/mp_test.py` (64/64).
 Hij draait in een eigen subprocess en buigt `_runs_path()` naar de
 temp-map om — anders schrijft de test over `runs.json` naast `game.py` en
 is het record van de speler weg. Wat hij bewijst: de vier sleutels bestaan
@@ -520,6 +521,49 @@ zetten.
 
 ---
 
+## De ingangen van een mode
+
+Afgerond op 2026-10-08. Er zijn er twee, en geen van beide noemt de
+modenaam in de code die hem aanroept — alles komt uit `GAMEMODES`.
+
+**Solo.** De SOLO-knop begon met `reset_game("campaign")` ingebakken; die
+roept nu `state = "mode_select"` aan. `Menu.draw_mode_select` tekent
+vervolgens per mode één regel: de knop met de modenaam en daarnaast de
+`omschrijving` uit de mode-config. Die omschrijving is verplicht in de
+praktijk — een mode zonder uitleg is een knop die je niet durft te drukken,
+en de test (`moduskeuze_start_de_juiste_mode`) laat dat vallen. BACK en
+Escape gaan terug naar het hoofdmenu.
+
+**Multiplayer.** De host kiest in de lobby, waar al `shared_health` en
+`shared_ammo` stonden. De lijst heet nu `LOBBY_OPTIES` en elke regel draagt
+een domein:
+
+```python
+LOBBY_OPTIES = (
+    ("gamemode", "MODE", tuple(GAMEMODES)),
+    ("shared_health", "Shared Health", None),
+    ("shared_ammo", "Shared Ammo", None),
+)
+```
+
+Zonder domein klapt de knop om (de twee schakelaars); met domein loopt hij
+door de waarden heen. Dat `domein` staat er bewust in plaats van "als dit
+een modenaam is": dan zouden we raden, en een gok zou de knop op een
+onbekende naam kunnen zetten. Nu komt het uit dezelfde tabel als de rest
+van het spel, en `_lobby_waarde()` is de enige plek die de terugval kent —
+tekenen en klikken moeten het over dezelfde stand hebben.
+
+De server wist dit al te accepteren (`set_lobby_option` in `network.py`
+toetst `key == "gamemode" and value in GAMEMODES`), maar die tak was nog
+nooit gestuurd: alleen de twee schakelaars. `lobby_zet_de_modus_van_de_server`
+is de eerste die hem raakt — met een naam die niet bestaat, met een gast
+die het niet mag, en met de mode die de servergame erop draait.
+
+De dev-console werkt nog steeds; die is nu de derde ingang in plaats van de
+enige.
+
+---
+
 ## Openstaande keuzes
 
 1. **Trapmodel:** besloten om het *na* de rest te kiezen — zie "Stand —
@@ -534,8 +578,14 @@ zetten.
    2026-10-08: de code leest `run_timer`/`save_pb` nu, de run-afhandeling
    zit in `_einde_run`, en tijd én kills staan naast elkaar op de HUD en
    op het dodescherm. Zie "De run is de klok". Wat er van deze keuze nog
-   rest, is het keuzemenu voor de mode zelf (zie "Karakter- en spec-keuze").
-4. **Gemengde versies, deze build naast 1.0.12.** Er is geen protocolversie;
+   rest, is de karakter-/spec-keuze; het keuzemenu voor de mode zelf is
+   er (zie "De ingangen van een mode").
+4. **Gemengde versies — beslist op 2026-10-08: accepteren.** De gebruiker
+   speelt nooit met oudere versies ("ik update altijd"), dus dit punt is
+   hiermee afgehandeld en hoeft niet meer open te staan. De analyse eronder
+   blijft staan als iemand het toch tegenkomt.
+
+   Er is geen protocolversie;
    `discovery.VERSION` dekt alleen de LAN-broadcast-indeling en die is niet
    veranderd. `decode_packet` doet `ID_TO_KEY.get(kid, f"key_{kid}")`, dus
    een oudere client leest de nieuwe sleutel `gamemode` om tot `key_63` en
@@ -553,11 +603,11 @@ zetten.
 
    Alleen de rechterbovenhoek is kapot: een oudere client die bij een
    nieuwe survivalserver komt, tekent de campaignkaart. Niet te verhelpen
-   vanaf deze kant — die client is al uitgeleverd en leest de sleutel simpelweg
-   niet. Keuze: `discovery.VERSION` van 1 naar 2 (dan zien de versies elkaar
-   helemaal niet, en de drie werkende cellen sneuvelen mee), een echte
-   capaciteitsafspraaak toevoegen, of het accepteren en hier noteren. Dit is
-   een keuze van de gebruiker, niet iets om stil in te bouwen.
+   vanaf deze kant — die client is al uitgeleverd en leest de sleutel
+   simpelweg niet. **Gekozen: accepteren.** `discovery.VERSION` opschroeven
+   zou de drie werkende cellen ook breken, en een capaciteitsafspraaak is
+   protocolwerk dat niemand nodig heeft zolang er geen gemengde versies
+   bestaan.
 
 ## Ver in de toekomst
 
