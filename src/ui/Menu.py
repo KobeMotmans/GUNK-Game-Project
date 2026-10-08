@@ -1428,14 +1428,19 @@ class Menu:
         # de teller niet aan de klok vast - de rij loopt gewoon door.
         klok = getattr(self.game, 'run_timer_active', False)
         kills = self.game.gm("hud_score", False)
+        spectate = getattr(self.game, 'spectating', False)
         if klok or kills:
             font = load_font(self._font_px("ui.font.hud", 20), bold=True)
             rechts = _cfg.WIDTH - 20
             y = 20
             if klok:
+                # Tijdens het meekijken blauw, zoals het spectate-veld
+                # eronder: dat zegt dat de run doorgaat terwijl jij er
+                # niet meer in zit.
+                kleur = (200, 220, 255) if spectate else (255, 255, 255)
                 surf = font.render(
                     _formateer_tijd(getattr(self.game, 'run_time_ms', 0)),
-                    True, (255, 255, 255))
+                    True, kleur)
                 _cfg.SCREEN.blit(surf, (rechts - surf.get_width(), y))
                 y += surf.get_height() + 2
             if kills:
@@ -1489,13 +1494,16 @@ class Menu:
                 _cfg.WIDTH // 2 - spectate_surf.get_width() // 2,
                 int(_cfg.HEIGHT * 0.06)))
 
-        # Run timer tijdens spectate (volgt dezelfde run)
-        if getattr(self.game, 'run_timer_active', False):
-            font = load_font(self._font_px("ui.font.hud", 18), bold=True)
-            surf = font.render(
-                _formateer_tijd(getattr(self.game, 'run_time_ms', 0)),
-                True, (200, 220, 255))
-            _cfg.SCREEN.blit(surf, (_cfg.WIDTH - surf.get_width() - 20, 20))
+        # Hier stond een tweede run-timer, bedoeld voor het meekijken. Die
+        # was niet náást de hierboven getekende komen te staan maar er
+        # bovenop: dezelfde cijfers, rechts uitgelijnd op dezelfde x en
+        # ook nog eens op y=20, alleen in een ander font (18 px lichtblauw
+        # tegenover 20 px wit). Het thema bepaalt beide maten via
+        # _font_px(), dus ofwel kreeg je 20 tegen 18 en oogde het als een
+        # scheve schaduw, ofwel waren ze gelijk en verstopte het blauwe
+        # exemplaar het witte. De blauwe bedoeling is nu de kleurkeuze
+        # hierboven; het tekenen zelf staat op precies één plek.
+
     def draw_paused_screen(self, events, GAME):
         self.game = GAME
         c = _cfg.WIDTH//2
