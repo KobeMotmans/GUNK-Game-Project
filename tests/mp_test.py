@@ -3924,6 +3924,98 @@ def run_timer_en_pb_volgen_de_mode():
           f"geen 'TIMER OK' in de uitvoer:\n{proc.stdout[-800:]}")
 
 
+# ── meekijken bij gedeeld leven ──────────────────────────────────
+# Twee dingen liepen hier tegelijk mis en ze verbergen elkaar: de server
+# zet bij gedeeld leven alleen de voorraad op nul en laat de andére spelers
+# op "game" staan, en de dode tak van de hoofdlus haalt het netwerk niet
+# meer aan. De lijst kandidaten is daardoor op het verkeerde moment
+# bevroren - precies op de stand waarin de MEEKIJKEN-knop niets kan
+# betekenen. Dit legt beide kanten vast: zonder gedeeld leven moet er nog
+# wél iemand zijn, anders repareren we dit door de knop weg te halen.
+
+SPECTATE_DRIVER = r'''
+import os, sys
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ.pop("GUNK_HEADLESS", None)
+ROOT = sys.argv[1]
+os.chdir(ROOT)
+sys.path.insert(0, ROOT)
+sys.argv = ["game.py"]
+
+import game
+
+fouten = []
+
+
+def check(voorwaarde, bericht):
+    if not voorwaarde:
+        fouten.append(bericht)
+
+
+g = game.Game()
+g.multiplayer = True
+# Alleen de poort voorbij: er wordt niets verstuurd, het veld moet maar
+# gevuld zijn anders stopt spectate_candidates al in de eerste regel.
+g.network_client = object()
+g.player_id = 0
+# Precies de stand die de server oplevert als de groep samen sterft: jij
+# bent al dood, de rest nog niet.
+g._spectate_info = {
+    0: {"name": "jij", "state": "dead"},
+    1: {"name": "teamgenoot", "state": "game"},
+}
+
+# Zonder gedeeld leven valt er maar één, en dan is er wel iemand om te
+# volgen. Dit is de kant die kapotgaat als je dit te grof dichtzet.
+g.lobby_options["shared_health"] = False
+check(g.can_spectate() is True,
+      "zonder gedeeld leven is er niemand meer om te kijken")
+check(g.spectate_candidates() == [(1, "teamgenoot")],
+      f"onverwachte kandidaten: {g.spectate_candidates()}")
+
+# Met gedeeld leven is jouw dood iedereens dood.
+g.lobby_options["shared_health"] = True
+check(g.spectate_candidates() == [],
+      f"toch kandidaten bij gedeeld leven: {g.spectate_candidates()}")
+check(g.can_spectate() is False,
+      "het dodescherm zou een MEEKIJKEN-knop tonen bij gedeeld leven")
+
+# En de knop mag ook niet alsnog overschakelen: dat was het tweede
+# gat, want de melding "iedereen is dood" komt pas ná het drukken.
+g._start_spectating()
+check(g.spectating is False, "_start_spectating ging toch aan de slag")
+check(g.state != "spectating",
+      f"state werd {g.state} terwijl er niemand is om te volgen")
+
+if fouten:
+    for f in fouten:
+        print("FOUT:", f)
+    sys.exit(1)
+print("SPECTATE OK")
+'''
+
+
+@test
+def meekijken_bij_gedeeld_leven_biedt_niet_aan():
+    """Gedeeld leven = iedereen dood, dus geen meekijkknop op dat scherm."""
+    path = os.path.join(TEMP_DIR, "gunk_spectate_driver.py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(SPECTATE_DRIVER)
+    try:
+        proc = subprocess.run([sys.executable, path, ROOT],
+                              capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        check(False, "de meekijktest liep vast (time-out)")
+        return
+    if proc.returncode != 0:
+        tail = (proc.stdout + "\n" + proc.stderr).splitlines()
+        check(False, "de meekijktest gaf fouten:\n" + "\n".join(tail[-30:]))
+        return
+    check("SPECTATE OK" in proc.stdout,
+          f"geen 'SPECTATE OK' in de uitvoer:\n{proc.stdout[-800:]}")
+
+
 # ── runner ─────────────────────────────────────────────────────
 
 def main():

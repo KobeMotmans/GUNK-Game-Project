@@ -1436,8 +1436,23 @@ class Game:
 
         Alleen in multiplayer: in je eentje is er niemand om mee te leven.
         Dode spelers vallen eruit, want je kijkt naar iemand die nog vecht.
+
+        Met gedeeld leven valt er per definitie niets te kijken. Jouw dood
+        is daar het einde van de run voor de hele groep (de server zet dan
+        de voorraad op nul), en dat moet hier expliciet staan omdat de lijst
+        bevroren is op het moment dat jij doodgaat: de dode tak van de
+        hoofdlus trekt het netwerk niet meer aan, dus in het laatste pakket
+        dat je ontving staan je teamgenoten nog als "game". Zou dit niet
+        hier staan, dan zou het dodescherm een MEEKIJKEN-knop aanbieden
+        die nergens heen kan - de melding van _start_spectating komt te
+        laat, want dan is de knop al gedrukt.
+
+        Dit is dezelfde regel als de server houdt, alleen daar afgeleid uit
+        `shared_health` en hier uit de lobby-optie; niet uit de modenaam.
         """
         if not self.multiplayer or not self.network_client:
+            return []
+        if self.lobby_options.get("shared_health", True):
             return []
         out = []
         for pid, info in getattr(self, "_spectate_info", {}).items():
