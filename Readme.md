@@ -144,3 +144,18 @@ python tests/mp_test.py elevator  # alleen tests met 'elevator' in de naam
 De tests draaien headless, starten zelf een echte server op 127.0.0.1 en praten
 er nep-clients mee. Ze raken je eigen bestanden niet aan: mp_config.json en
 server_skins/ worden na afloop teruggezet.
+
+Drie dingen die eruit zien als een fout, maar dat niet zijn:
+
+- **`alles groen` onderaan is de maat, niet de exitcode.** PowerShell geeft
+  exitcode 1 zodra er iets op stderr staat; een `NativeCommandError` is zo'n
+  geval terwijl de test zelf geslaagd is. Kijk naar de uitvoer.
+- **`[SKIN] bg download skin 108: FAILED`** hoort bij de skin-tests en komt
+  altijd voor — de regel erboven (`server has no such skin`) is de reden.
+  Het overzicht eronder zegt of het goed ging.
+- **`mp_config.json` staat in `git status` als gewijzigd** met jouw eigen
+  laatste sessie (naam, poort, skin), niet met testresten: de tests zetten
+  hem na afloop terug naar hoe hij vóór de run was. Niet committen.
+
+Voor de valkuilen die je tegenkomt bij het *schrijven* van een test, zie
+`SETUP.md` §8.

@@ -166,3 +166,38 @@ dan je standaard geluidsuitgang aan.
 **Geluid of video doet het niet in een test**
 De tests draaien headless en zetten daarom zelf `SDL_VIDEODRIVER` en
 `SDL_AUDIODRIVER` op `dummy`. Dat is normaal gedrag, geen fout.
+
+## 8. Tests schrijven
+
+De valkuilen die bij het schrijven van een nieuwe test in dit project
+steeds opnieuw naar boven komen. Allemaal al een keer tegenaan gelopen.
+
+**Je driver vindt `tools/` niet.** De drivers in `tests/mp_test.py` zijn
+raw strings (`r'''...'''`) die los worden uitgevoerd; daarin bestaan de
+imports van het hoofdscript niet. Elke driver importeert dus zelf wat hij
+nodig heeft, met `importlib.util.spec_from_file_location` — zie
+`SURVIVAL_DRIVER` rond regel 3160. Vergeet die ene regel en de test
+faalt op `NameError: gen`.
+
+**Een functie in een instance-`__dict__` is geen methode.** Zet je een
+functie rechtstreeks in `obj.__dict__`, dan wordt `self` niet
+meegegeven: je roept hem aan als losse functie en de test faalt met een
+verkeerd argumentaantal. Wikkel hem in `types.MethodType(f, obj)`.
+
+**`pygame.mouse.set_pos` doet niets.** Onder `SDL_VIDEODRIVER=dummy`
+wordt de muis niet echt verplaatst, dus `get_pos()` blijft staan waar
+hij stond. Patch `pygame.mouse.get_pos` in plaats van te proberen de
+positie te zetten.
+
+**De regel-eindes verschillen per bestand.** `Menu.py` is CRLF; de
+generator, `SURVIVAL.md` en `SETUP.md` zijn LF; `Readme.md` is
+gemengd — de ene sectie LF, de andere CRLF. Bij het byte-identiek
+terugzetten van een gemuteerd bestand of bij het vergelijken van twee
+versies maakt dat uit: `read_bytes()` ziet het verschil, `read()` zonder
+normalisatie niet. Nieuwe tekst in de docs in LF houden, zodat een sectie
+bij zichzelf blijft passen.
+
+**Commitberichten via een bestand.** De consolecodepagina is cp1252 en
+kan geen box-tekens, `é` of `—` aan; zo'n teken in je bericht geeft een
+encodeerfout. Schrijf het bericht met `write` en commit met
+`git commit -F <pad>`.
