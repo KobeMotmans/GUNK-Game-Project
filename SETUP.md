@@ -197,6 +197,17 @@ versies maakt dat uit: `read_bytes()` ziet het verschil, `read()` zonder
 normalisatie niet. Nieuwe tekst in de docs in LF houden, zodat een sectie
 bij zichzelf blijft passen.
 
+**Een mutatierunner schiet zichzelf neer bij het herschrijven van een
+bronbestand.** In `open(pad, "w").write(oud.replace(...))` evalueert
+Python de ontvanger eerst: het bestand wordt geopend, en dus meteen
+leeg, vóórdat de `.replace()` in het argument aan de beurt is. Barst die
+replace, dan staat er 0 bytes. Een `finally` helpt dan niet meer, want
+die komt pas ná de regel die het bestand leegmaakt. Doe de nieuwe
+inhoud eerst in een variabele en open het bestand dan pas.
+`src/ui/Menu.py` is hierdoor een keer 0 bytes geweest en moest terug uit
+de commit — daarom werd die fix meteen apart gecommit en niet aan het
+einde.
+
 **Commitberichten via een bestand.** De consolecodepagina is cp1252 en
 kan geen box-tekens, `é` of `—` aan; zo'n teken in je bericht geeft een
 encodeerfout. Schrijf het bericht met `write` en commit met
