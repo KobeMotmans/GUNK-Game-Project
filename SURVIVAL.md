@@ -855,3 +855,11 @@ enige.
   maar het hoort hier wel bij: zo'n scherm raakt dezelfde invoercode als de
   spatiebalk die er net bij kwam, dus houd `handle_input()` / `_try_fire()`
   leesbaar.
+
+## Ideeën
+
+Losse notities, nog niet uitgewerkt:
+
+- Currency om weapon upgrades mee te kopen
+- Werkende trap
+- Gevarieerdere map
